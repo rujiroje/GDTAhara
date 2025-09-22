@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🔧 GD Tahara API Test Suite</title>
+    <meta charset="UTF-8">
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group { 
+            margin-bottom: 15px; 
+        }
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            font-weight: bold;
+        }
+        input, select { 
+            width: 100%; 
+            padding: 8px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button { 
+            padding: 10px 20px; 
+            background-color: #4CAF50; 
+            color: white; 
+            border: none; 
+            border-radius: 4px;
+            cursor: pointer; 
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button.clear {
+            background-color: #f44336;
+        }
+        button.clear:hover {
+            background-color: #da190b;
+        }
+        #result { 
+            margin-top: 20px; 
+            border: 1px solid #ddd; 
+            padding: 15px; 
+            white-space: pre-wrap; 
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .status-success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .status-error {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .api-selector {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .endpoint-group {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin: 10px 0;
+            padding: 15px;
+        }
+        .endpoint-group h3 {
+            margin-top: 0;
+            color: #2196F3;
+        }
+        .endpoint-btn {
+            background-color: #2196F3;
+            margin: 5px;
+            padding: 8px 15px;
+        }
+        .endpoint-btn:hover {
+            background-color: #1976D2;
+        }
+        .auth-status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .auth-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .auth-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 GD Tahara API Test Suite</h1>
+        <p>ระบบทดสอบ API สำหรับโปรเจกต์ GD Tahara Backend</p>
+        
+        <!-- Token Management Section -->
+        <div class="api-selector">
+            <h3>🔐 Authentication</h3>
+            <div class="form-group">
+                <label for="token">JWT Token:</label>
+                <input type="password" id="token" placeholder="วาง JWT token ของคุณที่นี่">
+                <small>💡 Token จะถูกบันทึกใน localStorage อัตโนมัติ</small>
+            </div>
+            <div id="authStatus" class="auth-status" style="display: none;"></div>
+            <button onclick="loadTokenFromStorage()">📥 โหลด Token</button>
+            <button onclick="validateToken()">✅ ตรวจสอบ Token</button>
+            <button onclick="clearToken()">🗑️ ลบ Token</button>
+        </div>
+
+        <!-- API Endpoints Section -->
+        <div class="api-selector">
+            <h3>🎯 เลือก API Endpoint ที่ต้องการทดสอบ</h3>
+            
+            <div class="endpoint-group">
+                <h3>📊 Production Control APIs</h3>
+                <button class="endpoint-btn" onclick="setEndpoint('/api/pc/production/dashboard-summary')">Dashboard Summary</button>
+                <button class="endpoint-btn" onclick="setEndpoint('/api/pc/production/reports/active')">Active Reports</button>
+                <button class="endpoint-btn" onclick="setEndpoint('/api/pc/production/machines')">Machines List</button>
+                <button class="endpoint-btn" onclick="setEndpoint('/api/pc/production/products')">Products List</button>
+                <button class="endpoint-btn" onclick="showHistoricalForm()">Historical Reports</button>
+            </div>
+
+            <div class="endpoint-group">
+                <h3>🔧 Technician APIs</h3>
+                <button class="endpoint-btn" onclick="showTechnicianForm()">Parameter Records</button>
+                <button class="endpoint-btn" onclick="setEndpoint('/api/technician/reports/{reportId}/downtime', 'POST')">Record Downtime</button>
+                <button class="endpoint-btn" onclick="setEndpoint('/api/technician/reports/{reportId}/scrap-weight', 'POST')">Record Scrap Weight</button>
+                <button class="endpoint-btn" onclick="setEndpoint('/api/technician/reports/{reportId}/ng-logs', 'POST')">Record NG Log</button>
+            </div>
+        </div>
+
+        <!-- Dynamic Form Section -->
+        <div id="dynamicForm"></div>
+        
+        <!-- Results Section -->
+        <div style="margin: 20px 0;">
+            <button onclick="executeTest()">🚀 ทดสอบ API</button>
+            <button onclick="clearResult()" class="clear">🗑️ ล้างผลลัพธ์</button>
+            <button onclick="exportResults()">📋 Export ผลลัพธ์</button>
+        </div>
+        
+        <div id="result">เลือก API Endpoint และกดปุ่ม "ทดสอบ API" เพื่อเริ่มการทดสอบ...</div>
+    </div>
+    
+    <script>
+        let currentEndpoint = '';
+        let currentMethod = 'GET';
+        let testData = {};
+
+        // ตั้งค่าวันที่เริ่มต้น
+        function initializeDates() {
+            const today = new Date();
+            const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            
+            document.getElementById('startDate').value = lastWeek.toISOString().split('T')[0];
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+        }
+        
+        // โหลด token จาก localStorage
+        function loadTokenFromStorage() {
+            const storedToken = localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (storedToken) {
+                document.getElementById('token').value = storedToken;
+                showMessage('✅ โหลด token จาก storage สำเร็จ', 'success');
+            } else {
+                showMessage('⚠️ ไม่พบ token ใน storage', 'error');
+            }
+        }
+        
+        // แสดงข้อความสถานะ
+        function showMessage(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `<span class="status-${type}">${message}</span>\n\n${resultDiv.innerHTML}`;
+        }
+        
+        // ล้างผลลัพธ์
+        function clearResult() {
+            document.getElementById('result').innerHTML = 'ผลลัพธ์ถูกล้างแล้ว...';
+        }
+        
+        // ตั้งค่า endpoint
+        function setEndpoint(endpoint, method = 'GET') {
+            currentEndpoint = endpoint;
+            currentMethod = method;
+            showMessage(`🎯 เลือก ${method} ${endpoint}`, 'success');
+            document.getElementById('dynamicForm').innerHTML = '';
+        }
+
+        // แสดงฟอร์มสำหรับ Historical Reports
+        function showHistoricalForm() {
+            currentEndpoint = '/api/pc/production/reports/production-historical';
+            currentMethod = 'GET';
+            
+            document.getElementById('dynamicForm').innerHTML = `
+                <div class="endpoint-group">
+                    <h3>📈 Historical Reports Parameters</h3>
+                    <div class="grid">
+                        <div class="form-group">
+                            <label for="startDate">วันที่เริ่มต้น:</label>
+                            <input type="date" id="startDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="endDate">วันที่สิ้นสุด:</label>
+                            <input type="date" id="endDate" required>
+                        </div>
+                    </div>
+                    <div class="grid">
+                        <div class="form-group">
+                            <label for="machineId">Machine ID (ไม่บังคับ):</label>
+                            <input type="number" id="machineId" placeholder="เลือก Machine ID">
+                        </div>
+                        <div class="form-group">
+                            <label for="productId">Product ID (ไม่บังคับ):</label>
+                            <input type="number" id="productId" placeholder="เลือก Product ID">
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            initializeDates();
+            showMessage('📈 เลือก Historical Reports API', 'success');
+        }
+
+        // แสดงฟอร์มสำหรับ Technician APIs
+        function showTechnicianForm() {
+            document.getElementById('dynamicForm').innerHTML = `
+                <div class="endpoint-group">
+                    <h3>🔧 Technician API Parameters</h3>
+                    <div class="form-group">
+                        <label for="reportId">Report ID:</label>
+                        <input type="number" id="reportId" placeholder="กรอก Report ID" required>
+                    </div>
+                    <div class="form-group">
+                        <label>เลือก Action:</label>
+                        <select id="techAction" onchange="updateTechnicianEndpoint()">
+                            <option value="">-- เลือก Action --</option>
+                            <option value="parameters">Get Parameter Records</option>
+                            <option value="create-parameters">Create Parameter Record</option>
+                            <option value="downtime">Record Downtime</option>
+                            <option value="scrap-weight">Record Scrap Weight</option>
+                            <option value="ng-logs">Record NG Log</option>
+                        </select>
+                    </div>
+                    <div id="technicianData"></div>
+                </div>
+            `;
+            
+            showMessage('🔧 เลือก Technician API', 'success');
+        }
+
+        // อัปเดต Technician endpoint ตาม action
+        function updateTechnicianEndpoint() {
+            const action = document.getElementById('techAction').value;
+            const reportId = document.getElementById('reportId').value || '{reportId}';
+            
+            switch(action) {
+                case 'parameters':
+                    currentEndpoint = `/api/technician/reports/${reportId}/parameters`;
+                    currentMethod = 'GET';
+                    break;
+                case 'create-parameters':
+                    currentEndpoint = `/api/technician/reports/${reportId}/parameters`;
+                    currentMethod = 'POST';
+                    showParameterForm();
+                    break;
+                case 'downtime':
+                    currentEndpoint = `/api/technician/reports/${reportId}/downtime`;
+                    currentMethod = 'POST';
+                    showDowntimeForm();
+                    break;
+                case 'scrap-weight':
+                    currentEndpoint = `/api/technician/reports/${reportId}/scrap-weight`;
+                    currentMethod = 'POST';
+                    showScrapWeightForm();
+                    break;
+                case 'ng-logs':
+                    currentEndpoint = `/api/technician/reports/${reportId}/ng-logs`;
+                    currentMethod = 'POST';
+                    showNgLogForm();
+                    break;
+            }
+            
+            showMessage(`🎯 เลือก ${currentMethod} ${currentEndpoint}`, 'success');
+        }
+
+        // แสดงฟอร์มสำหรับ Parameter Record
+        function showParameterForm() {
+            document.getElementById('technicianData').innerHTML = `
+                <h4>📊 Parameter Record Data</h4>
+                <div class="form-group">
+                    <label for="recordType">Record Type:</label>
+                    <select id="recordType">
+                        <option value="STANDARD">Standard</option>
+                        <option value="STARTUP">Startup</option>
+                        <option value="SHUTDOWN">Shutdown</option>
+                        <option value="CHANGEOVER">Changeover</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Sample Parameter Data:</label>
+                    <textarea id="parameterData" rows="8" style="width: 100%; font-family: monospace;">
+{
+  "extruderScrew": {
+    "main": {"screwRpm": 45.5, "loLimit": 10.2, "resinPress": 25.1, "resinTemp": 185.5, "motorCurrent": 12.3},
+    "virgin": {"screwRpm": 42.1, "loLimit": 9.8, "resinPress": 23.5, "resinTemp": 180.2, "motorCurrent": 11.8}
+  },
+  "temperature": {
+    "main": {"fb": 185.5, "c1": 190.2, "c2": 195.1, "c3": 200.5, "c4": 205.2, "c5": 210.1},
+    "head": {"d1_1": 220.5, "d2_1": 225.2, "l1": 215.8, "l2": 218.5}
+  },
+  "otherValues": {
+    "cycleTime": 12.5, "moldTemp": 25.5, "highBlow": 1.2, "lowPressure": 0.8, "blowRatio": 2.5
+  },
+  "otherChecks": {
+    "emergencySw": true, "sqssCheck": true
+  }
+}
+                    </textarea>
+                </div>
+            `;
+        }
+
+        // แสดงฟอร์มสำหรับ Downtime
+        function showDowntimeForm() {
+            document.getElementById('technicianData').innerHTML = `
+                <h4>⏱️ Downtime Event Data</h4>
+                <div class="form-group">
+                    <label>Sample Downtime Data:</label>
+                    <textarea id="downtimeData" rows="6" style="width: 100%; font-family: monospace;">
+{
+  "startTime": "${new Date().toISOString()}",
+  "endTime": "${new Date(Date.now() + 30*60000).toISOString()}",
+  "reason": "Machine Maintenance",
+  "description": "Routine maintenance check",
+  "category": "PLANNED"
+}
+                    </textarea>
+                </div>
+            `;
+        }
+
+        // ตรวจสอบความถูกต้องของ Token
+        function validateToken() {
+            const token = document.getElementById('token').value.trim();
+            if (!token) {
+                showAuthStatus('❌ กรุณากรอก JWT Token', 'error');
+                return;
+            }
+
+            try {
+                // ตรวจสอบรูปแบบ JWT (3 ส่วนคั่นด้วย .)
+                const parts = token.split('.');
+                if (parts.length !== 3) {
+                    showAuthStatus('❌ รูปแบบ JWT Token ไม่ถูกต้อง', 'error');
+                    return;
+                }
+
+                // ตรวจสอบ payload (ส่วนที่ 2)
+                const payload = JSON.parse(atob(parts[1]));
+                const now = Math.floor(Date.now() / 1000);
+                
+                if (payload.exp && payload.exp < now) {
+                    showAuthStatus('⚠️ JWT Token หมดอายุแล้ว', 'error');
+                    return;
+                }
+
+                showAuthStatus(`✅ JWT Token ถูกต้อง (User: ${payload.sub || 'Unknown'})`, 'success');
+                localStorage.setItem('token', token);
+                
+            } catch (error) {
+                showAuthStatus('❌ ไม่สามารถตรวจสอบ JWT Token ได้', 'error');
+            }
+        }
+
+        // แสดงสถานะการ Authentication
+        function showAuthStatus(message, type) {
+            const authStatus = document.getElementById('authStatus');
+            authStatus.style.display = 'block';
+            authStatus.className = `auth-status auth-${type}`;
+            authStatus.textContent = message;
+        }
+
+        // ลบ Token
+        function clearToken() {
+            document.getElementById('token').value = '';
+            localStorage.removeItem('token');
+            sessionStorage.removeItem('token');
+            showAuthStatus('🗑️ Token ถูกลบแล้ว', 'success');
+        }
+
+        // ดำเนินการทดสอบ API
+        function executeTest() {
+            const token = document.getElementById('token').value.trim();
+            
+            if (!token) {
+                showMessage('❌ กรุณากรอก JWT Token', 'error');
+                return;
+            }
+
+            if (!currentEndpoint) {
+                showMessage('❌ กรุณาเลือก API Endpoint', 'error');
+                return;
+            }
+
+            let url = currentEndpoint;
+            let requestBody = null;
+
+            // สร้าง URL และ request body ตาม endpoint
+            if (currentEndpoint.includes('production-historical')) {
+                url = buildHistoricalUrl();
+                if (!url) return;
+            } else if (currentEndpoint.includes('technician')) {
+                const result = buildTechnicianRequest();
+                if (!result) return;
+                url = result.url;
+                requestBody = result.body;
+            }
+
+            // บันทึก token
+            localStorage.setItem('token', token);
+            
+            showMessage('🔄 กำลังเรียก API...', 'success');
+            const startTime = Date.now();
+            
+            // ตั้งค่า fetch options
+            const fetchOptions = {
+                method: currentMethod,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            };
+
+            if (requestBody) {
+                fetchOptions.body = JSON.stringify(requestBody);
+            }
+
+            // เรียก API
+            fetch(url, fetchOptions)
+                .then(response => {
+                    const endTime = Date.now();
+                    const duration = endTime - startTime;
+                    
+                    const headers = {};
+                    response.headers.forEach((value, name) => {
+                        headers[name] = value;
+                    });
+                    
+                    return response.text().then(text => {
+                        let data;
+                        try {
+                            data = JSON.parse(text);
+                        } catch {
+                            data = text;
+                        }
+                        
+                        return {
+                            status: response.status,
+                            statusText: response.statusText,
+                            headers: headers,
+                            data: data,
+                            duration: duration
+                        };
+                    });
+                })
+                .then(result => {
+                    displayResult(result, url, requestBody);
+                })
+                .catch(error => {
+                    const endTime = Date.now();
+                    const duration = endTime - startTime;
+                    displayError(error, url, duration);
+                });
+        }
+
+        // สร้าง URL สำหรับ Historical Reports
+        function buildHistoricalUrl() {
+            const startDate = document.getElementById('startDate')?.value;
+            const endDate = document.getElementById('endDate')?.value;
+            const machineId = document.getElementById('machineId')?.value;
+            const productId = document.getElementById('productId')?.value;
+            
+            if (!startDate || !endDate) {
+                showMessage('❌ กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด', 'error');
+                return null;
+            }
+            
+            if (new Date(startDate) > new Date(endDate)) {
+                showMessage('❌ วันที่เริ่มต้นต้องไม่มากกว่าวันที่สิ้นสุด', 'error');
+                return null;
+            }
+            
+            let url = `/api/pc/production/reports/production-historical?startDate=${startDate}&endDate=${endDate}`;
+            if (machineId) url += `&machineId=${machineId}`;
+            if (productId) url += `&productId=${productId}`;
+            
+            return url;
+        }
+
+        // สร้าง request สำหรับ Technician APIs
+        function buildTechnicianRequest() {
+            const reportId = document.getElementById('reportId')?.value;
+            if (!reportId) {
+                showMessage('❌ กรุณากรอก Report ID', 'error');
+                return null;
+            }
+
+            let url = currentEndpoint.replace('{reportId}', reportId);
+            let body = null;
+
+            if (currentMethod === 'POST') {
+                const action = document.getElementById('techAction')?.value;
+                
+                if (action === 'create-parameters') {
+                    const recordType = document.getElementById('recordType')?.value || 'STANDARD';
+                    const paramData = document.getElementById('parameterData')?.value;
+                    
+                    try {
+                        const parameters = JSON.parse(paramData);
+                        body = {
+                            recordType: recordType,
+                            parameters: parameters
+                        };
+                    } catch (error) {
+                        showMessage('❌ Parameter data ไม่ใช่ JSON ที่ถูกต้อง', 'error');
+                        return null;
+                    }
+                } else if (action === 'downtime') {
+                    const downtimeData = document.getElementById('downtimeData')?.value;
+                    try {
+                        body = JSON.parse(downtimeData);
+                    } catch (error) {
+                        showMessage('❌ Downtime data ไม่ใช่ JSON ที่ถูกต้อง', 'error');
+                        return null;
+                    }
+                }
+            }
+
+            return { url, body };
+        }
+
+        // แสดงผลลัพธ์
+        function displayResult(result, url, requestBody) {
+            const statusClass = result.status >= 200 && result.status < 300 ? 'success' : 'error';
+            const statusIcon = result.status >= 200 && result.status < 300 ? '✅' : '❌';
+            
+            showMessage(`${statusIcon} การเรียก API เสร็จสิ้น (${result.duration}ms)`, statusClass);
+            
+            document.getElementById('result').innerHTML += `
+📊 ผลลัพธ์การเรียก API:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 Method: ${currentMethod}
+🔗 URL: ${url}
+📟 Status: ${result.status} ${result.statusText}
+⏱️ Response Time: ${result.duration}ms
+📦 Data Count: ${Array.isArray(result.data) ? result.data.length : 'N/A'} records
+
+${requestBody ? `📤 Request Body:\n${JSON.stringify(requestBody, null, 2)}\n\n` : ''}📋 Response Headers:
+${JSON.stringify(result.headers, null, 2)}
+
+📄 Response Data:
+${typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+        }
+
+        // แสดง Error
+        function displayError(error, url, duration) {
+            showMessage(`❌ เกิดข้อผิดพลาด (${duration}ms): ${error.message}`, 'error');
+            
+            document.getElementById('result').innerHTML += `
+🚨 ข้อผิดพลาด:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❌ Error: ${error.message}
+🔗 URL: ${url}
+⏱️ Duration: ${duration}ms
+📱 Method: ${currentMethod}
+
+💡 แนวทางการแก้ไข:
+- ตรวจสอบ JWT Token ให้ถูกต้องและไม่หมดอายุ
+- ตรวจสอบว่า Backend Server ทำงานอยู่
+- ตรวจสอบสิทธิ์การเข้าถึง API Endpoint
+- ตรวจสอบพารามิเตอร์และ Request Body ที่ส่งไป
+- ตรวจสอบ Network Connection
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+        }
+
+        // Export ผลลัพธ์
+        function exportResults() {
+            const results = document.getElementById('result').textContent;
+            const blob = new Blob([results], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `api-test-results-${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showMessage('📋 Export ผลลัพธ์เรียบร้อย', 'success');
+        }
+
+        // เริ่มต้นเมื่อหน้าเว็บโหลดเสร็จ
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTokenFromStorage();
+            showMessage('🚀 ระบบพร้อมทดสอบ API', 'success');
+        });
+    </script>
+</body>
+</html>

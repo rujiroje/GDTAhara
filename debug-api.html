@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Materials API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .debug-title { font-weight: bold; margin-bottom: 10px; color: #333; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 5px; background: #007cba; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #005a87; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GD Tahara - Debug Materials API</h1>
+        
+        <div class="debug-section">
+            <div class="debug-title">API Testing</div>
+            <button onclick="testMaterialsAPI()">Test /api/master-data/materials</button>
+            <button onclick="testActiveReportsAPI()">Test /api/pc/reports/active</button>
+            <button onclick="clearResults()">Clear Results</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8082/api';
+        
+        function logResult(title, data, isError = false) {
+            const resultsDiv = document.getElementById('results');
+            const section = document.createElement('div');
+            section.className = 'debug-section';
+            section.innerHTML = `
+                <div class="debug-title ${isError ? 'error' : 'success'}">${title}</div>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            resultsDiv.appendChild(section);
+        }
+        
+        async function testMaterialsAPI() {
+            try {
+                console.log('Testing Materials API...');
+                const response = await fetch(`${API_BASE}/master-data/materials`);
+                const data = await response.json();
+                
+                logResult('Materials API Response', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: data,
+                    count: Array.isArray(data) ? data.length : 'Not an array',
+                    sample: Array.isArray(data) ? data.slice(0, 3) : 'N/A',
+                    materialTypes: Array.isArray(data) ? [...new Set(data.map(m => m.materialType).filter(t => t))] : 'N/A'
+                });
+                
+                // Debug log ใน console
+                console.log('Materials Response:', data);
+                if (Array.isArray(data)) {
+                    console.log('Material count:', data.length);
+                    console.log('Material types:', data.map(m => m.materialType));
+                    console.log('Unique types:', [...new Set(data.map(m => m.materialType).filter(t => t))]);
+                }
+                
+            } catch (error) {
+                console.error('Materials API Error:', error);
+                logResult('Materials API Error', {
+                    error: error.message,
+                    stack: error.stack
+                }, true);
+            }
+        }
+        
+        async function testActiveReportsAPI() {
+            try {
+                console.log('Testing Active Reports API...');
+                const response = await fetch(`${API_BASE}/pc/reports/active`);
+                const data = await response.json();
+                
+                logResult('Active Reports API Response', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: data,
+                    count: data?.data ? data.data.length : 'No data array'
+                });
+                
+                console.log('Active Reports Response:', data);
+                
+            } catch (error) {
+                console.error('Active Reports API Error:', error);
+                logResult('Active Reports API Error', {
+                    error: error.message,
+                    stack: error.stack
+                }, true);
+            }
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+        
+        // Auto-test เมื่อโหลดหน้า
+        window.addEventListener('load', () => {
+            console.log('Debug page loaded - ready to test APIs');
+        });
+    </script>
+</body>
+</html>
