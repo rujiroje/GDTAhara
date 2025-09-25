@@ -3,7 +3,7 @@
 -- สร้าง indexes เพิ่มเติมเพื่อเพิ่มประสิทธิภาพการค้นหาข้อมูล
 -- =================================================================
 
-USE GDTahara_DB;
+USE GDTahara;
 GO
 
 -- 🔥 PERFORMANCE INDEXES: Production Reports
