@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบ Historical Reports API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .card { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background: #2c3e50; color: white; padding: 15px; text-align: center; border-radius: 8px; }
+        .btn { background: #3498db; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .btn:hover { background: #2980b9; }
+        .error { color: #e74c3c; background: #fadbd8; padding: 10px; border-radius: 4px; }
+        .success { color: #27ae60; background: #d4edda; padding: 10px; border-radius: 4px; }
+        .loading { color: #f39c12; background: #fef9e7; padding: 10px; border-radius: 4px; }
+        pre { background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        .form-group { margin: 15px 0; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .flex { display: flex; gap: 15px; }
+        .flex .form-group { flex: 1; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 ทดสอบ Historical Reports API</h1>
+            <p>ทดสอบการค้นหารายงานย้อนหลัง - แก้ไข API path แล้ว</p>
+        </div>
+
+        <div class="card">
+            <h2>🔍 ค้นหารายงานย้อนหลัง</h2>
+            <form id="searchForm">
+                <div class="flex">
+                    <div class="form-group">
+                        <label>วันที่เริ่มต้น:</label>
+                        <input type="date" id="startDate" value="2025-09-01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>วันที่สิ้นสุด:</label>
+                        <input type="date" id="endDate" value="2025-10-03" required>
+                    </div>
+                </div>
+                
+                <div class="flex">
+                    <div class="form-group">
+                        <label>เครื่องจักร (ไม่บังคับ):</label>
+                        <select id="machineId">
+                            <option value="">-- เลือกเครื่องจักร --</option>
+                            <option value="1">Machine 1</option>
+                            <option value="2">Machine 2</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>ผลิตภัณฑ์ (ไม่บังคับ):</label>
+                        <select id="productId">
+                            <option value="">-- เลือกผลิตภัณฑ์ --</option>
+                            <option value="1">Product 1</option>
+                            <option value="2">Product 2</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn">🔍 ค้นหา</button>
+                <button type="button" class="btn" onclick="clearResults()" style="background: #95a5a6;">🗑️ ล้างผลลัพธ์</button>
+            </form>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api';
+        
+        document.getElementById('searchForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await testHistoricalReports();
+        });
+        
+        async function testHistoricalReports() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const machineId = document.getElementById('machineId').value;
+            const productId = document.getElementById('productId').value;
+            
+            if (!startDate || !endDate) {
+                showError('กรุณาระบุวันที่เริ่มต้นและสิ้นสุด');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading">⏳ กำลังค้นหาข้อมูล...</div>';
+            
+            // สร้าง URL parameters
+            const params = new URLSearchParams({
+                startDate: startDate,
+                endDate: endDate
+            });
+            
+            if (machineId) params.append('machineId', machineId);
+            if (productId) params.append('productId', productId);
+            
+            try {
+                // Test both old and new endpoints
+                await testEndpoint('/production/reports/production-historical', params, 'New Correct Endpoint');
+                await testEndpoint('/pc/production/reports/production-historical', params, 'Old Incorrect Endpoint (should fail)');
+                
+            } catch (error) {
+                showError('เกิดข้อผิดพลาดในการทดสอบ: ' + error.message);
+            }
+        }
+        
+        async function testEndpoint(endpoint, params, description) {
+            try {
+                const url = `${API_BASE}${endpoint}?${params.toString()}`;
+                console.log(`Testing: ${url}`);
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + (localStorage.getItem('token') || 'test-token'),
+                    },
+                });
+                
+                const result = document.createElement('div');
+                result.className = 'card';
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    result.innerHTML = `
+                        <h3>✅ ${description} - สำเร็จ</h3>
+                        <div class="success">
+                            HTTP ${response.status} - พบข้อมูล ${data.length} รายการ<br>
+                            URL: <code>${url}</code>
+                        </div>
+                        
+                        ${data.length > 0 ? `
+                        <h4>📋 ตัวอย่างข้อมูล:</h4>
+                        <table>
+                            <tr>
+                                <th>วันที่</th>
+                                <th>เครื่องจักร</th>
+                                <th>ผลิตภัณฑ์</th>
+                                <th>ยอดผลิต</th>
+                                <th>Yield</th>
+                            </tr>
+                            ${data.slice(0, 5).map(item => `
+                                <tr>
+                                    <td>${item.reportDate || 'N/A'}</td>
+                                    <td>${item.machineName || 'N/A'}</td>
+                                    <td>${item.productName || 'N/A'}</td>
+                                    <td>${(item.goodQty || 0).toLocaleString()}</td>
+                                    <td>${item.yield || 'N/A'}</td>
+                                </tr>
+                            `).join('')}
+                        </table>
+                        ${data.length > 5 ? `<p><em>... และอีก ${data.length - 5} รายการ</em></p>` : ''}
+                        ` : '<p><em>ไม่พบข้อมูลในช่วงเวลาที่เลือก</em></p>'}
+                        
+                        <details>
+                            <summary>🔍 JSON Response แบบเต็ม</summary>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    `;
+                } else {
+                    result.innerHTML = `
+                        <h3>❌ ${description} - ล้มเหลว</h3>
+                        <div class="error">
+                            HTTP ${response.status} - ${response.statusText}<br>
+                            URL: <code>${url}</code>
+                        </div>
+                        <p>${response.status === 404 ? 
+                            '❌ Endpoint ไม่พบ - ตรวจสอบ URL path' : 
+                            '❌ เกิดข้อผิดพลาดอื่นๆ'}</p>
+                    `;
+                }
+                
+                document.getElementById('results').appendChild(result);
+                
+            } catch (error) {
+                const result = document.createElement('div');
+                result.className = 'card';
+                result.innerHTML = `
+                    <h3>❌ ${description} - เกิดข้อผิดพลาด</h3>
+                    <div class="error">
+                        ข้อผิดพลาด: ${error.message}<br>
+                        URL: <code>${API_BASE}${endpoint}?${params.toString()}</code>
+                    </div>
+                    <p>ตรวจสอบว่า backend server ทำงานอยู่ที่ port 8080</p>
+                `;
+                document.getElementById('results').appendChild(result);
+            }
+        }
+        
+        function showError(message) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `<div class="card"><div class="error">❌ ${message}</div></div>`;
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+        
+        // Set default dates
+        window.onload = function() {
+            const today = new Date();
+            const lastMonth = new Date();
+            lastMonth.setMonth(today.getMonth() - 1);
+            
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+            document.getElementById('startDate').value = lastMonth.toISOString().split('T')[0];
+            
+            setTimeout(() => {
+                if (!document.getElementById('results').innerHTML) {
+                    document.getElementById('results').innerHTML = '<div class="card"><p>👆 กรอกข้อมูลและกดปุ่ม "ค้นหา" เพื่อทดสอบ</p></div>';
+                }
+            }, 100);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>🔧 Quick API Test - Historical Reports</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .card { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background: #e74c3c; color: white; padding: 15px; text-align: center; border-radius: 8px; }
+        .btn { background: #3498db; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        .success { color: #27ae60; background: #d4edda; padding: 10px; border-radius: 4px; }
+        .error { color: #e74c3c; background: #fadbd8; padding: 10px; border-radius: 4px; }
+        .loading { color: #f39c12; background: #fef9e7; padding: 10px; border-radius: 4px; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚨 URGENT FIX TEST</h1>
+        <p>ทดสอบ Historical Reports API หลังแก้ไข baseURL conflict</p>
+    </div>
+
+    <div class="card">
+        <h2>🔍 ทดสอบ API Endpoints</h2>
+        <button class="btn" onclick="testAllEndpoints()">🧪 ทดสอบทั้งหมด</button>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        async function testAllEndpoints() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading">⏳ กำลังทดสอบ...</div>';
+            
+            const tests = [
+                {
+                    name: 'Historical Reports (ถูกต้อง)',
+                    url: 'http://localhost:8080/api/production/reports/production-historical?startDate=2025-09-01&endDate=2025-10-03',
+                    expected: 'success'
+                },
+                {
+                    name: 'Historical Reports (เก่า - ผิด)',
+                    url: 'http://localhost:8080/api/api/production/reports/production-historical?startDate=2025-09-01&endDate=2025-10-03',
+                    expected: 'error'
+                },
+                {
+                    name: 'Dashboard Summary',
+                    url: 'http://localhost:8080/api/production/dashboard-summary',
+                    expected: 'success'
+                }
+            ];
+            
+            let html = '<h3>ผลการทดสอบ:</h3>';
+            
+            for (const test of tests) {
+                try {
+                    console.log(`Testing: ${test.url}`);
+                    const response = await fetch(test.url, {
+                        headers: {
+                            'Authorization': 'Bearer ' + (localStorage.getItem('token') || 'test-token'),
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        html += `
+                            <div class="success">
+                                ✅ <strong>${test.name}</strong><br>
+                                Status: ${response.status}<br>
+                                Data: ${Array.isArray(data) ? data.length + ' records' : 'Object'}
+                            </div>
+                        `;
+                    } else {
+                        html += `
+                            <div class="error">
+                                ❌ <strong>${test.name}</strong><br>
+                                Status: ${response.status} ${response.statusText}<br>
+                                ${test.expected === 'error' ? '(คาดว่าจะ error - ถูกต้อง)' : ''}
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    html += `
+                        <div class="error">
+                            💥 <strong>${test.name}</strong><br>
+                            Error: ${error.message}<br>
+                            ${test.expected === 'error' ? '(คาดว่าจะ error - ถูกต้อง)' : ''}
+                        </div>
+                    `;
+                }
+            }
+            
+            html += `
+                <div class="card">
+                    <h4>🔗 URL Mappings ที่ถูกต้อง:</h4>
+                    <pre>
+✅ Correct URLs:
+/api/production/dashboard-summary
+/api/production/reports/production-historical
+/api/production/machines
+/api/production/products
+
+❌ Wrong URLs (ให้หลีกเลี่ยง):
+/api/api/production/... (baseURL ซ้ำ)
+/api/pc/production/... (path เก่า)
+                    </pre>
+                </div>
+            `;
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        // Auto test on load
+        setTimeout(testAllEndpoints, 1000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CM Operator API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        button { margin: 5px; padding: 10px 15px; }
+        .result { margin: 10px 0; padding: 10px; background: #f5f5f5; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        input { margin: 5px; padding: 8px; width: 200px; }
+    </style>
+</head>
+<body>
+    <h1>CM Operator API Tester</h1>
+    
+    <div class="section">
+        <h2>1. Authentication</h2>
+        <div>
+            <input type="text" id="username" placeholder="Username (cmoperator)" value="cmoperator">
+            <input type="password" id="password" placeholder="Password (test123)" value="test123">
+            <button onclick="login()">Login</button>
+        </div>
+        <div class="result" id="loginResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>2. Test API Endpoints</h2>
+        <button onclick="testMaterials()">Test Materials API</button>
+        <button onclick="testActiveReports()">Test Active Reports</button>
+        <button onclick="testLotNumbers()">Test Lot Numbers (Material ID: 1)</button>
+        <button onclick="testProductionReports()">Test Production Reports</button>
+        <div class="result" id="apiResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>3. Stock-Out Test</h2>
+        <div>
+            <input type="number" id="reportId" placeholder="Production Report ID" value="1">
+            <input type="number" id="materialId" placeholder="Material ID" value="1">
+            <input type="text" id="lotNumber" placeholder="Lot Number" value="LOT001PE">
+            <input type="number" id="quantity" placeholder="Quantity" value="10.5" step="0.1">
+            <button onclick="testStockOut()">Test Stock-Out</button>
+        </div>
+        <div class="result" id="stockOutResult"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8080/api';
+        let authToken = localStorage.getItem('token');
+
+        function displayResult(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = 'result ' + (isError ? 'error' : 'success');
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.token;
+                    localStorage.setItem('token', authToken);
+                    displayResult('loginResult', `✅ Login successful! Token: ${authToken.substring(0, 20)}...`);
+                } else {
+                    const error = await response.text();
+                    displayResult('loginResult', `❌ Login failed: ${error}`, true);
+                }
+            } catch (error) {
+                displayResult('loginResult', `❌ Network error: ${error.message}`, true);
+            }
+        }
+
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            if (!authToken) {
+                return { error: 'Please login first' };
+            }
+
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                };
+
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+
+                const response = await fetch(`${API_URL}${endpoint}`, options);
+                
+                if (response.ok) {
+                    return await response.json();
+                } else {
+                    const errorText = await response.text();
+                    return { error: `${response.status}: ${errorText}` };
+                }
+            } catch (error) {
+                return { error: `Network error: ${error.message}` };
+            }
+        }
+
+        async function testMaterials() {
+            const result = await apiCall('/master-data/materials');
+            if (result.error) {
+                displayResult('apiResult', `❌ Materials API: ${result.error}`, true);
+            } else {
+                displayResult('apiResult', `✅ Materials API: Found ${result.length} materials\n${JSON.stringify(result.slice(0, 2), null, 2)}`);
+            }
+        }
+
+        async function testActiveReports() {
+            const result = await apiCall('/pc/reports/active');
+            if (result.error) {
+                displayResult('apiResult', `❌ Active Reports API: ${result.error}`, true);
+            } else {
+                displayResult('apiResult', `✅ Active Reports API: Found ${result.data ? result.data.length : 0} reports\n${JSON.stringify(result, null, 2)}`);
+            }
+        }
+
+        async function testProductionReports() {
+            const result = await apiCall('/pc/production/reports');
+            if (result.error) {
+                displayResult('apiResult', `❌ Production Reports API: ${result.error}`, true);
+            } else {
+                displayResult('apiResult', `✅ Production Reports API: Found ${result.data ? result.data.length : 0} reports\n${JSON.stringify(result.data ? result.data.slice(0, 2) : [], null, 2)}`);
+            }
+        }
+
+        async function testLotNumbers() {
+            const result = await apiCall('/cm-operator/materials/1/lot-numbers');
+            if (result.error) {
+                displayResult('apiResult', `❌ Lot Numbers API: ${result.error}`, true);
+            } else {
+                displayResult('apiResult', `✅ Lot Numbers API: Found ${result.length} lot numbers\n${JSON.stringify(result, null, 2)}`);
+            }
+        }
+
+        async function testStockOut() {
+            const reportId = parseInt(document.getElementById('reportId').value);
+            const materialId = parseInt(document.getElementById('materialId').value);
+            const lotNumber = document.getElementById('lotNumber').value;
+            const quantity = parseFloat(document.getElementById('quantity').value);
+
+            const requestBody = {
+                productionReportId: reportId,
+                materialId: materialId,
+                lotNumber: lotNumber,
+                quantity: quantity
+            };
+
+            const result = await apiCall('/cm-operator/stock-out', 'POST', requestBody);
+            if (result.error) {
+                displayResult('stockOutResult', `❌ Stock-Out API: ${result.error}`, true);
+            } else {
+                displayResult('stockOutResult', `✅ Stock-Out successful!\n${JSON.stringify(result, null, 2)}`);
+            }
+        }
+
+        // Auto-populate token if exists
+        if (authToken) {
+            displayResult('loginResult', `✅ Token found: ${authToken.substring(0, 20)}...`);
+        }
+    </script>
+</body>
+</html>

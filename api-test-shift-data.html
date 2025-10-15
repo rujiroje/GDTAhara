@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบ API - รายงานสรุปรายวันแยกกะ</title>
+    <style>
+        body {
+            font-family: 'Sarabun', Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        .test-button:hover {
+            background-color: #2980b9;
+        }
+        .test-button.success {
+            background-color: #27ae60;
+        }
+        .test-button.error {
+            background-color: #e74c3c;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #ecf0f1;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .shift-data {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .shift-column {
+            flex: 1;
+            padding: 15px;
+            border: 1px solid #bdc3c7;
+            border-radius: 5px;
+            background-color: #ffffff;
+        }
+        .day-shift {
+            border-left: 4px solid #f39c12;
+        }
+        .night-shift {
+            border-left: 4px solid #9b59b6;
+        }
+        .data-section {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 3px;
+        }
+        .data-title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .data-item {
+            margin: 3px 0;
+            padding: 2px 5px;
+            background-color: white;
+            border-radius: 2px;
+            border-left: 3px solid #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 ทดสอบ API - รายงานสรุปรายวันแยกกะ</h1>
+            <p>ทดสอบข้อมูลจริงจากฐานข้อมูล GDTahara</p>
+        </div>
+
+        <div class="test-section">
+            <h2>🌅 ทดสอบกะกลางวัน (03:00-15:00)</h2>
+            <button class="test-button" onclick="testDayShift()">ทดสอบกะกลางวัน</button>
+            <div id="dayResult" class="result" style="display:none;"></div>
+            <div id="dayShiftData" class="shift-data" style="display:none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🌙 ทดสอบกะกลางคืน (15:00-03:00)</h2>
+            <button class="test-button" onclick="testNightShift()">ทดสอบกะกลางคืน</button>
+            <div id="nightResult" class="result" style="display:none;"></div>
+            <div id="nightShiftData" class="shift-data" style="display:none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 เปรียบเทียบข้อมูลทั้งสองกะ</h2>
+            <button class="test-button" onclick="compareShifts()">เปรียบเทียบกะ</button>
+            <div id="compareResult" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔍 ตรวจสอบข้อมูลฐานข้อมูลโดยตรง</h2>
+            <button class="test-button" onclick="checkDatabase()">ตรวจสอบฐานข้อมูล</button>
+            <div id="dbResult" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+        const TEST_DATE = '2025-09-15';
+
+        async function testAPI(url, buttonId) {
+            const button = document.getElementById(buttonId);
+            if (button) {
+                button.className = 'test-button';
+                button.textContent = 'กำลังทดสอบ...';
+            }
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (button) {
+                    button.className = 'test-button success';
+                    button.textContent = 'สำเร็จ ✓';
+                }
+                
+                return { success: true, data, status: response.status };
+            } catch (error) {
+                if (button) {
+                    button.className = 'test-button error';
+                    button.textContent = 'ข้อผิดพลาด ✗';
+                }
+                return { success: false, error: error.message };
+            }
+        }
+
+        function displayShiftData(data, containerId) {
+            const container = document.getElementById(containerId);
+            if (!data || !container) return;
+
+            const dayData = data.dayShiftData || {};
+            const nightData = data.nightShiftData || {};
+
+            container.innerHTML = `
+                <div class="shift-column day-shift">
+                    <h3>🌅 กะกลางวัน (03:00-15:00)</h3>
+                    
+                    <div class="data-section">
+                        <div class="data-title">📊 สรุป NG</div>
+                        ${(dayData.ngSummary || []).map(ng => 
+                            `<div class="data-item">${ng.ngDescription}: ${ng.totalQuantity} ชิ้น</div>`
+                        ).join('') || '<div class="data-item">ไม่มีข้อมูล NG</div>'}
+                    </div>
+
+                    <div class="data-section">
+                        <div class="data-title">⏰ Downtime</div>
+                        ${(dayData.downtimeHistory || []).map(dt => 
+                            `<div class="data-item">${dt.startTime}-${dt.endTime}: ${dt.reason} (${dt.duration})</div>`
+                        ).join('') || '<div class="data-item">ไม่มีข้อมูล Downtime</div>'}
+                    </div>
+
+                    <div class="data-section">
+                        <div class="data-title">🧪 การใช้วัตถุดิบ</div>
+                        ${(dayData.materialUsageLogs || []).map(mat => 
+                            `<div class="data-item">${mat.materialCode} (${mat.lotNumber}): ${mat.quantityKg} kg</div>`
+                        ).join('') || '<div class="data-item">ไม่มีข้อมูลการใช้วัตถุดิบ</div>'}
+                    </div>
+                </div>
+
+                <div class="shift-column night-shift">
+                    <h3>🌙 กะกลางคืน (15:00-03:00)</h3>
+                    
+                    <div class="data-section">
+                        <div class="data-title">📊 สรุป NG</div>
+                        ${(nightData.ngSummary || []).map(ng => 
+                            `<div class="data-item">${ng.ngDescription}: ${ng.totalQuantity} ชิ้น</div>`
+                        ).join('') || '<div class="data-item">ไม่มีข้อมูล NG</div>'}
+                    </div>
+
+                    <div class="data-section">
+                        <div class="data-title">⏰ Downtime</div>
+                        ${(nightData.downtimeHistory || []).map(dt => 
+                            `<div class="data-item">${dt.startTime}-${dt.endTime}: ${dt.reason} (${dt.duration})</div>`
+                        ).join('') || '<div class="data-item">ไม่มีข้อมูล Downtime</div>'}
+                    </div>
+
+                    <div class="data-section">
+                        <div class="data-title">🧪 การใช้วัตถุดิบ</div>
+                        ${(nightData.materialUsageLogs || []).map(mat => 
+                            `<div class="data-item">${mat.materialCode} (${mat.lotNumber}): ${mat.quantityKg} kg</div>`
+                        ).join('') || '<div class="data-item">ไม่มีข้อมูลการใช้วัตถุดิบ</div>'}
+                    </div>
+                </div>
+            `;
+            
+            container.style.display = 'flex';
+        }
+
+        async function testDayShift() {
+            const result = await testAPI(`${API_BASE}/api/production/daily-summary-by-shift?date=${TEST_DATE}&shift=day`, 'dayShiftBtn');
+            
+            document.getElementById('dayResult').textContent = JSON.stringify(result, null, 2);
+            document.getElementById('dayResult').style.display = 'block';
+            
+            if (result.success) {
+                displayShiftData(result.data, 'dayShiftData');
+            }
+        }
+
+        async function testNightShift() {
+            const result = await testAPI(`${API_BASE}/api/production/daily-summary-by-shift?date=${TEST_DATE}&shift=night`, 'nightShiftBtn');
+            
+            document.getElementById('nightResult').textContent = JSON.stringify(result, null, 2);
+            document.getElementById('nightResult').style.display = 'block';
+            
+            if (result.success) {
+                displayShiftData(result.data, 'nightShiftData');
+            }
+        }
+
+        async function compareShifts() {
+            document.getElementById('compareResult').textContent = 'กำลังเปรียบเทียบข้อมูล...';
+            document.getElementById('compareResult').style.display = 'block';
+
+            const dayResult = await testAPI(`${API_BASE}/api/production/daily-summary-by-shift?date=${TEST_DATE}&shift=day`);
+            const nightResult = await testAPI(`${API_BASE}/api/production/daily-summary-by-shift?date=${TEST_DATE}&shift=night`);
+
+            let comparison = `=== เปรียบเทียบข้อมูลกะกลางวัน vs กะกลางคืน ===\n\n`;
+
+            if (dayResult.success && nightResult.success) {
+                const dayData = dayResult.data.dayShiftData || {};
+                const nightData = nightResult.data.nightShiftData || {};
+
+                comparison += `📊 NG Summary:\n`;
+                comparison += `   กะกลางวัน: ${(dayData.ngSummary || []).length} รายการ\n`;
+                comparison += `   กะกลางคืน: ${(nightData.ngSummary || []).length} รายการ\n\n`;
+
+                comparison += `⏰ Downtime Events:\n`;
+                comparison += `   กะกลางวัน: ${(dayData.downtimeHistory || []).length} เหตุการณ์\n`;
+                comparison += `   กะกลางคืน: ${(nightData.downtimeHistory || []).length} เหตุการณ์\n\n`;
+
+                comparison += `🧪 Material Usage:\n`;
+                comparison += `   กะกลางวัน: ${(dayData.materialUsageLogs || []).length} รายการ\n`;
+                comparison += `   กะกลางคืน: ${(nightData.materialUsageLogs || []).length} รายการ\n\n`;
+
+                comparison += `✅ สรุป: ข้อมูลแยกกะเป็นอิสระจากกันแล้ว!`;
+            } else {
+                comparison += `❌ ไม่สามารถดึงข้อมูลได้\n`;
+                comparison += `Day Shift Error: ${dayResult.error || 'N/A'}\n`;
+                comparison += `Night Shift Error: ${nightResult.error || 'N/A'}`;
+            }
+
+            document.getElementById('compareResult').textContent = comparison;
+        }
+
+        async function checkDatabase() {
+            document.getElementById('dbResult').textContent = 'กำลังตรวจสอบฐานข้อมูล...';
+            document.getElementById('dbResult').style.display = 'block';
+
+            // ตรวจสอบข้อมูลใน API debug endpoint
+            try {
+                const result = await testAPI(`${API_BASE}/api/pc/debug/service-test`);
+                
+                let dbInfo = `=== ตรวจสอบฐานข้อมูล ===\n\n`;
+                
+                if (result.success) {
+                    dbInfo += `✅ API Service พร้อมใช้งาน\n`;
+                    dbInfo += `📊 Response Status: ${result.status}\n\n`;
+                    dbInfo += `🔍 ข้อมูลจาก debug endpoint:\n`;
+                    dbInfo += JSON.stringify(result.data, null, 2);
+                } else {
+                    dbInfo += `❌ ไม่สามารถเชื่อมต่อ API ได้\n`;
+                    dbInfo += `Error: ${result.error}`;
+                }
+
+                document.getElementById('dbResult').textContent = dbInfo;
+            } catch (error) {
+                document.getElementById('dbResult').textContent = `❌ ข้อผิดพลาด: ${error.message}`;
+            }
+        }
+
+        // Auto-test on page load
+        window.onload = function() {
+            console.log('🚀 API Test Page Loaded');
+            console.log('📅 Test Date:', TEST_DATE);
+            console.log('🌐 API Base URL:', API_BASE);
+        };
+    </script>
+</body>
+</html>

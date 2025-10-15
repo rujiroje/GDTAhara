@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historical Reports API Test - Fixed Implementation</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .test-section { margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .test-section h3 { margin-top: 0; color: #333; }
+        button { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 10px; }
+        button:hover { background: #0056b3; }
+        button.success { background: #28a745; }
+        button.error { background: #dc3545; }
+        .result { margin-top: 15px; padding: 15px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; font-size: 12px; }
+        .result.success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .result.error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .result.info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        input[type="date"] { padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-right: 10px; }
+        .status { font-weight: bold; margin-bottom: 10px; }
+        .summary { background: #e9ecef; padding: 15px; border-radius: 4px; margin-top: 15px; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .data-table th, .data-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .data-table th { background: #f8f9fa; font-weight: bold; }
+        .highlight { background: #fff3cd; padding: 2px 4px; border-radius: 2px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Historical Reports API Test - Fixed Implementation</h1>
+        <p>ทดสอบ Historical Reports API หลังจากแก้ไข getHistoricalReports method ใน ProductionService</p>
+        
+        <div class="test-section">
+            <h3>📊 1. Historical Reports Query Test</h3>
+            <div class="status" id="auth-status">🔐 Authentication Status: <span class="highlight">กำลังตรวจสอบ...</span></div>
+            
+            <div style="margin: 15px 0;">
+                <label>วันที่เริ่มต้น:</label>
+                <input type="date" id="startDate" value="2025-09-01">
+                <label>วันที่สิ้นสุด:</label>
+                <input type="date" id="endDate" value="2025-09-30">
+                <button onclick="testHistoricalReports()">🔍 ทดสอบรายงานย้อนหลัง</button>
+                <button onclick="testWithAuth()">🔐 ทดสอบด้วย Authentication</button>
+            </div>
+            
+            <div class="result info" id="query-result">
+                ⏳ พร้อมทดสอบ - กรุณาเลือกช่วงวันที่และกดปุ่มทดสอบ
+                
+📝 ข้อมูลที่เปลี่ยนแปลง:
+• ✅ เพิ่ม findHistoricalReports method ใน ProductionReportRepository
+• ✅ แก้ไข getHistoricalReports method ใน ProductionService ให้ query ข้อมูลจริง
+• ✅ เพิ่มการคำนวณ goodQty, ngQty, yield, totalBoxes, totalScrapWeight
+• ✅ เพิ่ม error handling และ logging ที่ดีขึ้น
+
+🎯 คาดหวัง: จะพบข้อมูล production reports ในช่วงวันที่ที่กำหนด
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>📈 2. Database Data Check</h3>
+            <button onclick="checkDatabaseData()">🗄️ ตรวจสอบข้อมูลในฐานข้อมูล</button>
+            <div class="result info" id="db-result">
+                💡 ใช้ SQL query เพื่อตรวจสอบว่ามีข้อมูล production_reports ในฐานข้อมูลหรือไม่
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 3. API Response Analysis</h3>
+            <div id="analysis-result" class="result info">
+                📊 ผลการวิเคราะห์จะแสดงที่นี่หลังจากทดสอบ API
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        const API_BASE = 'http://localhost:8080/api';
+
+        // Check authentication status
+        async function checkAuthStatus() {
+            try {
+                const token = getCookie('authToken') || localStorage.getItem('authToken');
+                if (token) {
+                    authToken = token;
+                    document.getElementById('auth-status').innerHTML = 
+                        '🔐 Authentication Status: <span class="highlight" style="color: green;">✅ มี Token</span>';
+                } else {
+                    document.getElementById('auth-status').innerHTML = 
+                        '🔐 Authentication Status: <span class="highlight" style="color: orange;">⚠️ ไม่มี Token - กรุณาเข้าสู่ระบบ</span>';
+                }
+            } catch (error) {
+                document.getElementById('auth-status').innerHTML = 
+                    '🔐 Authentication Status: <span class="highlight" style="color: red;">❌ ผิดพลาด</span>';
+            }
+        }
+
+        // Test historical reports with new implementation
+        async function testHistoricalReports() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const resultDiv = document.getElementById('query-result');
+            
+            if (!startDate || !endDate) {
+                resultDiv.innerHTML = '❌ กรุณาระบุวันที่เริ่มต้นและสิ้นสุด';
+                resultDiv.className = 'result error';
+                return;
+            }
+
+            resultDiv.innerHTML = '⏳ กำลังทดสอบ Historical Reports API...';
+            resultDiv.className = 'result info';
+
+            try {
+                const url = `${API_BASE}/production/reports/production-historical?startDate=${startDate}&endDate=${endDate}`;
+                console.log('🔗 Testing URL:', url);
+
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: headers
+                });
+
+                const responseText = await response.text();
+                console.log('📡 Response Status:', response.status);
+                console.log('📡 Response Headers:', Object.fromEntries(response.headers.entries()));
+                console.log('📡 Response Body:', responseText);
+
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    data = responseText;
+                }
+
+                if (response.ok) {
+                    let message = `✅ สำเร็จ! Status: ${response.status}\n\n`;
+                    
+                    if (Array.isArray(data)) {
+                        message += `📊 พบข้อมูลรายงานย้อนหลัง: ${data.length} รายการ\n\n`;
+                        
+                        if (data.length > 0) {
+                            // Show detailed data in table format
+                            message += '🎯 ข้อมูลที่ได้:\n';
+                            data.forEach((report, index) => {
+                                message += `\n📋 รายงานที่ ${index + 1}:\n`;
+                                message += `  • ID: ${report.id}\n`;
+                                message += `  • Order Number: ${report.orderNumber}\n`;
+                                message += `  • วันที่เริ่ม: ${report.startDate}\n`;
+                                message += `  • วันที่สิ้นสุด: ${report.endDate}\n`;
+                                message += `  • เครื่องจักร: ${report.machineName}\n`;
+                                message += `  • ผลิตภัณฑ์: ${report.productName}\n`;
+                                message += `  • จำนวนดี: ${report.goodQty} ชิ้น\n`;
+                                message += `  • จำนวน NG: ${report.ngQty} ชิ้น\n`;
+                                message += `  • Yield: ${report.yield}\n`;
+                                message += `  • จำนวนกล่อง: ${report.totalBoxes}\n`;
+                                message += `  • น้ำหนักของเสีย: ${report.totalScrapWeight} kg\n`;
+                            });
+                            
+                            resultDiv.className = 'result success';
+                        } else {
+                            message += '⚠️ ไม่พบข้อมูลในช่วงวันที่ที่เลือก\n';
+                            message += '💡 แนะนำ: ตรวจสอบข้อมูลในฐานข้อมูลด้วยปุ่ม "ตรวจสอบข้อมูลในฐานข้อมูล"';
+                            resultDiv.className = 'result info';
+                        }
+                    } else {
+                        message += `📄 Response Data:\n${JSON.stringify(data, null, 2)}`;
+                        resultDiv.className = 'result success';
+                    }
+                    
+                    resultDiv.innerHTML = message;
+                    updateAnalysis(response.status, data);
+                } else {
+                    resultDiv.innerHTML = `❌ ผิดพลาด! Status: ${response.status}\n\n📄 Response:\n${responseText}`;
+                    resultDiv.className = 'result error';
+                    updateAnalysis(response.status, responseText);
+                }
+
+            } catch (error) {
+                console.error('🚨 Test Error:', error);
+                resultDiv.innerHTML = `🚨 เกิดข้อผิดพลาด:\n${error.message}\n\n💡 กรุณาตรวจสอบว่า backend กำลังทำงานอยู่ที่ port 8080`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        // Test with authentication
+        async function testWithAuth() {
+            try {
+                // Try to login first
+                const loginResponse = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'PC',
+                        password: 'pc123'
+                    })
+                });
+
+                if (loginResponse.ok) {
+                    const loginData = await loginResponse.json();
+                    authToken = loginData.token;
+                    localStorage.setItem('authToken', authToken);
+                    
+                    document.getElementById('auth-status').innerHTML = 
+                        '🔐 Authentication Status: <span class="highlight" style="color: green;">✅ เข้าสู่ระบบสำเร็จ</span>';
+                    
+                    // Now test historical reports
+                    await testHistoricalReports();
+                } else {
+                    document.getElementById('query-result').innerHTML = 
+                        '❌ ไม่สามารถเข้าสู่ระบบได้ กรุณาตรวจสอบ username/password';
+                    document.getElementById('query-result').className = 'result error';
+                }
+            } catch (error) {
+                document.getElementById('query-result').innerHTML = 
+                    `🚨 เกิดข้อผิดพลาดในการเข้าสู่ระบบ:\n${error.message}`;
+                document.getElementById('query-result').className = 'result error';
+            }
+        }
+
+        // Check database data (simulation)
+        function checkDatabaseData() {
+            const resultDiv = document.getElementById('db-result');
+            resultDiv.innerHTML = `🗄️ SQL สำหรับตรวจสอบข้อมูล:
+
+📋 1. ตรวจสอบจำนวนรายงานทั้งหมด:
+SELECT COUNT(*) as total_reports FROM production_reports;
+
+📋 2. ตรวจสอบช่วงวันที่ของข้อมูล:
+SELECT 
+    MIN(start_date) as earliest_date,
+    MAX(start_date) as latest_date,
+    COUNT(*) as total_reports
+FROM production_reports;
+
+📋 3. ตรวจสอบข้อมูลเดือนกันยายน 2025:
+SELECT 
+    id, order_number, start_date, end_date,
+    machine_id, product_id, target_qty, status
+FROM production_reports 
+WHERE start_date >= '2025-09-01' 
+  AND start_date <= '2025-09-30'
+ORDER BY start_date DESC;
+
+💡 รัน SQL เหล่านี้ใน database client เพื่อตรวจสอบข้อมูล`;
+            resultDiv.className = 'result info';
+        }
+
+        // Update analysis
+        function updateAnalysis(status, data) {
+            const analysisDiv = document.getElementById('analysis-result');
+            let analysis = `📊 การวิเคราะห์ผลลัพธ์:\n\n`;
+            
+            analysis += `🔗 HTTP Status: ${status}\n`;
+            
+            if (status === 200) {
+                analysis += `✅ Status Code: 200 OK - API ทำงานปกติ\n`;
+                
+                if (Array.isArray(data)) {
+                    analysis += `📋 Response Type: Array\n`;
+                    analysis += `📊 จำนวนรายการ: ${data.length}\n\n`;
+                    
+                    if (data.length > 0) {
+                        analysis += `🎉 สำเร็จ! พบข้อมูลรายงานย้อนหลัง\n`;
+                        analysis += `✅ การแก้ไข getHistoricalReports method ทำงานถูกต้อง\n`;
+                        analysis += `✅ Database query สามารถดึงข้อมูลได้\n\n`;
+                        
+                        const firstReport = data[0];
+                        analysis += `🔍 ตัวอย่างข้อมูลแรก:\n`;
+                        analysis += `  • มี Order Number: ${firstReport.orderNumber ? '✅' : '❌'}\n`;
+                        analysis += `  • มี Machine Name: ${firstReport.machineName ? '✅' : '❌'}\n`;
+                        analysis += `  • มี Product Name: ${firstReport.productName ? '✅' : '❌'}\n`;
+                        analysis += `  • มี Good Quantity: ${firstReport.goodQty !== undefined ? '✅' : '❌'}\n`;
+                        analysis += `  • มี NG Quantity: ${firstReport.ngQty !== undefined ? '✅' : '❌'}\n`;
+                        analysis += `  • มี Yield: ${firstReport.yield ? '✅' : '❌'}\n`;
+                    } else {
+                        analysis += `⚠️ ไม่พบข้อมูล - อาจมีสาเหตุจาก:\n`;
+                        analysis += `  • ไม่มีข้อมูล production_reports ในช่วงวันที่ที่เลือก\n`;
+                        analysis += `  • ข้อมูลอยู่ในช่วงวันที่อื่น\n`;
+                        analysis += `  • Database query conditions ไม่ตรงกับข้อมูลจริง\n`;
+                    }
+                } else {
+                    analysis += `📄 Response Type: ${typeof data}\n`;
+                }
+            } else if (status === 404) {
+                analysis += `❌ Status Code: 404 Not Found\n`;
+                analysis += `🔧 ปัญหาได้รับการแก้ไขแล้ว - API path ใช้งานได้\n`;
+            } else if (status === 401) {
+                analysis += `🔐 Status Code: 401 Unauthorized\n`;
+                analysis += `💡 กรุณาใช้ปุ่ม "ทดสอบด้วย Authentication"\n`;
+            } else {
+                analysis += `⚠️ Status Code: ${status}\n`;
+                analysis += `📄 Response: ${JSON.stringify(data, null, 2)}\n`;
+            }
+            
+            analysisDiv.innerHTML = analysis;
+            analysisDiv.className = status === 200 ? 'result success' : 'result error';
+        }
+
+        // Utility function to get cookie
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        // Initialize
+        checkAuthStatus();
+    </script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+package com.gdtahara.gdtaharabackend.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+/**
+ * DTO สำหรับรับข้อมูลการบันทึกเหตุการณ์ Downtime
+ */
+@Data
+public class DowntimeEventRequestDto {
+
+    /**
+     * เวลาที่เริ่ม Downtime
+     */
+    @NotNull(message = "Start time is required.")
+    private LocalDateTime startTime;
+
+    /**
+     * เวลาที่สิ้นสุด Downtime
+     */
+    private LocalDateTime endTime; // optional (null = in-progress)
+
+    /**
+     * สาเหตุของ Downtime
+     */
+    @NotBlank(message = "Reason is required.")
+    private String reason;
+
+    /**
+     * วิธีแก้ไขปัญหา
+     */
+    private String solution; // optional
+}

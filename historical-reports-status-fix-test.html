@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historical Reports Test - Status Field Fix</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .test-section { margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .test-section h3 { margin-top: 0; color: #333; }
+        button { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 10px; }
+        button:hover { background: #0056b3; }
+        button.success { background: #28a745; }
+        button.error { background: #dc3545; }
+        .result { margin-top: 15px; padding: 15px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; font-size: 12px; }
+        .result.success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .result.error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .result.info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        input[type="date"] { padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-right: 10px; }
+        .status { font-weight: bold; margin-bottom: 10px; }
+        .summary { background: #e9ecef; padding: 15px; border-radius: 4px; margin-top: 15px; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .data-table th, .data-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .data-table th { background: #f8f9fa; font-weight: bold; }
+        .highlight { background: #fff3cd; padding: 2px 4px; border-radius: 2px; }
+        .fix-highlight { background: #d4edda; padding: 2px 4px; border-radius: 2px; color: #155724; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Historical Reports Test - Status Field Fix</h1>
+        <p>ทดสอบ Historical Reports API หลังจากแก้ไข status field error</p>
+        
+        <div class="summary">
+            <h4>🎯 การแก้ไขที่ดำเนินการ:</h4>
+            <div class="fix-highlight">✅ เพิ่ม status field ใน HistoricalReportSummaryDto</div><br>
+            <div class="fix-highlight">✅ Update ProductionService ให้เซ็ต status จาก ProductionReport</div><br>
+            <div class="fix-highlight">✅ เพิ่ม null check ใน frontend: (report.status || 'unknown').toLowerCase()</div><br>
+            <br>
+            <strong>🐛 ปัญหาเดิม:</strong> Cannot read properties of undefined (reading 'toLowerCase')<br>
+            <strong>🎉 แก้ไขแล้ว:</strong> Frontend จะไม่ crash เมื่อ status เป็น null/undefined
+        </div>
+        
+        <div class="test-section">
+            <h3>📊 1. Historical Reports Query Test</h3>
+            <div class="status" id="auth-status">🔐 Authentication Status: <span class="highlight">กำลังตรวจสอบ...</span></div>
+            
+            <div style="margin: 15px 0;">
+                <label>วันที่เริ่มต้น:</label>
+                <input type="date" id="startDate" value="2025-09-01">
+                <label>วันที่สิ้นสุด:</label>
+                <input type="date" id="endDate" value="2025-10-03">
+                <button onclick="testHistoricalReports()">🔍 ทดสอบรายงานย้อนหลัง</button>
+                <button onclick="testWithAuth()">🔐 ทดสอบด้วย Authentication</button>
+            </div>
+            
+            <div class="result info" id="query-result">
+                ⏳ พร้อมทดสอบ - กรุณาเลือกช่วงวันที่และกดปุ่มทดสอบ
+                
+📝 ข้อมูลที่เปลี่ยนแปลงจากการแก้ไขล่าสุด:
+• ✅ เพิ่ม status field ใน HistoricalReportSummaryDto.java
+• ✅ ProductionService.getHistoricalReports() เซ็ต status จาก ProductionReport
+• ✅ Frontend ใช้ (report.status || 'unknown').toLowerCase() เพื่อป้องกัน null error
+• ✅ Backend API ส่ง status field ใน response
+
+🎯 คาดหวัง: 
+- API จะส่ง status field มาใน response
+- Frontend จะแสดงข้อมูลได้โดยไม่ crash
+- Status จะแสดงค่าจริงจากฐานข้อมูล หรือ "Unknown" ถ้าไม่มีค่า
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 3. Response Structure Validation</h3>
+            <div id="structure-result" class="result info">
+                📊 โครงสร้าง response ที่คาดหวัง:
+                
+Expected Response Format:
+[
+  {
+    "id": 123,
+    "orderNumber": "ORD-001",
+    "startDate": "2025-09-15",
+    "endDate": "2025-09-16",
+    "machineName": "Machine A",
+    "productName": "Product XYZ", 
+    "goodQty": 8500,
+    "ngQty": 500,
+    "yield": "94.44%",
+    "totalBoxes": 85,
+    "totalScrapWeight": 12.5,
+    "status": "IN_PROGRESS"  ← ✅ เพิ่มใหม่
+  }
+]
+
+🔧 Frontend Null Check:
+- เดิม: report.status.toLowerCase() ← ❌ Crash ถ้า status = null
+- ใหม่: (report.status || 'unknown').toLowerCase() ← ✅ Safe
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        const API_BASE = 'http://localhost:8080/api';
+
+        // Check authentication status
+        async function checkAuthStatus() {
+            try {
+                const token = getCookie('authToken') || localStorage.getItem('authToken');
+                if (token) {
+                    authToken = token;
+                    document.getElementById('auth-status').innerHTML = 
+                        '🔐 Authentication Status: <span class="highlight" style="color: green;">✅ มี Token</span>';
+                } else {
+                    document.getElementById('auth-status').innerHTML = 
+                        '🔐 Authentication Status: <span class="highlight" style="color: orange;">⚠️ ไม่มี Token - กรุณาเข้าสู่ระบบ</span>';
+                }
+            } catch (error) {
+                document.getElementById('auth-status').innerHTML = 
+                    '🔐 Authentication Status: <span class="highlight" style="color: red;">❌ ผิดพลาด</span>';
+            }
+        }
+
+        // Test historical reports with status field fix
+        async function testHistoricalReports() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const resultDiv = document.getElementById('query-result');
+            
+            if (!startDate || !endDate) {
+                resultDiv.innerHTML = '❌ กรุณาระบุวันที่เริ่มต้นและสิ้นสุด';
+                resultDiv.className = 'result error';
+                return;
+            }
+
+            resultDiv.innerHTML = '⏳ กำลังทดสอบ Historical Reports API (with status field fix)...';
+            resultDiv.className = 'result info';
+
+            try {
+                const url = `${API_BASE}/production/reports/production-historical?startDate=${startDate}&endDate=${endDate}`;
+                console.log('🔗 Testing URL:', url);
+
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: headers
+                });
+
+                const responseText = await response.text();
+                console.log('📡 Response Status:', response.status);
+                console.log('📡 Response Headers:', Object.fromEntries(response.headers.entries()));
+                console.log('📡 Response Body:', responseText);
+
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    data = responseText;
+                }
+
+                if (response.ok) {
+                    let message = `✅ สำเร็จ! Status: ${response.status}\n\n`;
+                    
+                    if (Array.isArray(data)) {
+                        message += `📊 พบข้อมูลรายงานย้อนหลัง: ${data.length} รายการ\n\n`;
+                        
+                        if (data.length > 0) {
+                            // Validate status field exists
+                            const hasStatusField = data.every(report => report.hasOwnProperty('status'));
+                            message += `🔧 Status Field Validation: ${hasStatusField ? '✅ ทุก record มี status field' : '❌ บาง record ไม่มี status field'}\n\n`;
+                            
+                            // Show detailed data with status field validation
+                            message += '🎯 ข้อมูลที่ได้ (พร้อม status field):\n';
+                            data.forEach((report, index) => {
+                                message += `\n📋 รายงานที่ ${index + 1}:\n`;
+                                message += `  • ID: ${report.id}\n`;
+                                message += `  • Order Number: ${report.orderNumber}\n`;
+                                message += `  • วันที่เริ่ม: ${report.startDate}\n`;
+                                message += `  • วันที่สิ้นสุด: ${report.endDate}\n`;
+                                message += `  • เครื่องจักร: ${report.machineName}\n`;
+                                message += `  • ผลิตภัณฑ์: ${report.productName}\n`;
+                                message += `  • จำนวนดี: ${report.goodQty} ชิ้น\n`;
+                                message += `  • จำนวน NG: ${report.ngQty} ชิ้น\n`;
+                                message += `  • Yield: ${report.yield}\n`;
+                                message += `  • จำนวนกล่อง: ${report.totalBoxes}\n`;
+                                message += `  • น้ำหนักของเสีย: ${report.totalScrapWeight} kg\n`;
+                                message += `  • 🎯 Status: "${report.status}" ${report.status ? '✅' : '⚠️ null/undefined'}\n`;
+                            });
+                            
+                            resultDiv.className = 'result success';
+                        } else {
+                            message += '⚠️ ไม่พบข้อมูลในช่วงวันที่ที่เลือก\n';
+                            message += '💡 แนะนำ: ตรวจสอบข้อมูลในฐานข้อมูลด้วย SQL query';
+                            resultDiv.className = 'result info';
+                        }
+                        
+                        // Update structure validation
+                        updateStructureValidation(data);
+                        
+                    } else {
+                        message += `📄 Response Data:\n${JSON.stringify(data, null, 2)}`;
+                        resultDiv.className = 'result success';
+                    }
+                    
+                    resultDiv.innerHTML = message;
+                } else {
+                    resultDiv.innerHTML = `❌ ผิดพลาด! Status: ${response.status}\n\n📄 Response:\n${responseText}`;
+                    resultDiv.className = 'result error';
+                }
+
+            } catch (error) {
+                console.error('🚨 Test Error:', error);
+                resultDiv.innerHTML = `🚨 เกิดข้อผิดพลาด:\n${error.message}\n\n💡 กรุณาตรวจสอบว่า backend กำลังทำงานอยู่ที่ port 8080`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        // Test with authentication
+        async function testWithAuth() {
+            try {
+                // Try to login first
+                const loginResponse = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'PC',
+                        password: 'pc123'
+                    })
+                });
+
+                if (loginResponse.ok) {
+                    const loginData = await loginResponse.json();
+                    authToken = loginData.token;
+                    localStorage.setItem('authToken', authToken);
+                    
+                    document.getElementById('auth-status').innerHTML = 
+                        '🔐 Authentication Status: <span class="highlight" style="color: green;">✅ เข้าสู่ระบบสำเร็จ</span>';
+                    
+                    // Now test historical reports
+                    await testHistoricalReports();
+                } else {
+                    document.getElementById('query-result').innerHTML = 
+                        '❌ ไม่สามารถเข้าสู่ระบบได้ กรุณาตรวจสอบ username/password';
+                    document.getElementById('query-result').className = 'result error';
+                }
+            } catch (error) {
+                document.getElementById('query-result').innerHTML = 
+                    `🚨 เกิดข้อผิดพลาดในการเข้าสู่ระบบ:\n${error.message}`;
+                document.getElementById('query-result').className = 'result error';
+            }
+        }
+
+        // Update structure validation
+        function updateStructureValidation(data) {
+            const structureDiv = document.getElementById('structure-result');
+            let analysis = `📊 การวิเคราะห์โครงสร้าง Response:\n\n`;
+            
+            if (Array.isArray(data) && data.length > 0) {
+                const sampleRecord = data[0];
+                const expectedFields = ['id', 'orderNumber', 'startDate', 'endDate', 'machineName', 'productName', 'goodQty', 'ngQty', 'yield', 'totalBoxes', 'totalScrapWeight', 'status'];
+                
+                analysis += `🔍 ตรวจสอบ Required Fields:\n`;
+                expectedFields.forEach(field => {
+                    const exists = sampleRecord.hasOwnProperty(field);
+                    const value = sampleRecord[field];
+                    analysis += `  • ${field}: ${exists ? '✅' : '❌'} ${exists ? `(${typeof value}) = "${value}"` : 'Missing'}\n`;
+                });
+                
+                analysis += `\n🎯 Status Field Analysis:\n`;
+                const statusValues = data.map(record => record.status);
+                const uniqueStatuses = [...new Set(statusValues)];
+                analysis += `  • จำนวน records: ${data.length}\n`;
+                analysis += `  • Status values: ${JSON.stringify(uniqueStatuses)}\n`;
+                analysis += `  • มี null/undefined: ${statusValues.some(s => !s) ? '⚠️  มี' : '✅ ไม่มี'}\n`;
+                
+                analysis += `\n✅ Frontend Error Fix Status:\n`;
+                analysis += `  • ก่อนแก้ไข: report.status.toLowerCase() ← Crash ถ้า status = null\n`;
+                analysis += `  • หลังแก้ไข: (report.status || 'unknown').toLowerCase() ← Safe\n`;
+                analysis += `  • ผลลัพธ์: ✅ ไม่ควร crash แล้ว\n`;
+                
+            } else {
+                analysis += `⚠️ ไม่มีข้อมูลสำหรับวิเคราะห์โครงสร้าง`;
+            }
+            
+            structureDiv.innerHTML = analysis;
+            structureDiv.className = 'result success';
+        }
+
+        // Utility function to get cookie
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        // Initialize
+        checkAuthStatus();
+    </script>
+</body>
+</html>
