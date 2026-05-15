@@ -120,15 +120,23 @@ public class PcCompatibilityController {
     // GET /api/pc/production/reports/{id}/summary -> same as /api/pc/reports/{id}/summary
     @GetMapping("/production/reports/{id}/summary")
     @PreAuthorize("hasAnyRole('Production Control', 'Shift Leader', 'DataAdmin', 'Management', 'Document')")
-    public ResponseEntity<ReportSummaryDto> getProductionReportSummaryAlias(@PathVariable Long id) {
-        return ResponseEntity.ok(productionService.getReportSummary(id));
+    public ResponseEntity<ReportSummaryDto> getProductionReportSummaryAlias(@PathVariable Long id,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        String pref = (langParam != null && !langParam.isBlank()) ? langParam : acceptLanguage;
+        String lang = (pref != null && pref.toLowerCase().startsWith("en")) ? "en" : "th";
+        return ResponseEntity.ok(productionService.getReportSummary(id, lang));
     }
 
     // GET /api/pc/production/reports/{id}/detailed -> same as /api/pc/reports/{id}/detailed
     @GetMapping("/production/reports/{id}/detailed")
     @PreAuthorize("hasAnyRole('Production Control', 'Shift Leader', 'Operator', 'Technician', 'QA', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
-    public ResponseEntity<DetailedProductionReportDto> getProductionReportDetailedAlias(@PathVariable Long id) {
-        return ResponseEntity.ok(productionService.getDetailedReport(id));
+    public ResponseEntity<DetailedProductionReportDto> getProductionReportDetailedAlias(@PathVariable Long id,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        String pref = (langParam != null && !langParam.isBlank()) ? langParam : acceptLanguage;
+        String lang = (pref != null && pref.toLowerCase().startsWith("en")) ? "en" : "th";
+        return ResponseEntity.ok(productionService.getDetailedReport(id, lang));
     }
 
     // Create/Update/Finalize report
@@ -167,14 +175,22 @@ public class PcCompatibilityController {
     // Summaries
     @GetMapping("/reports/{id}/summary")
     @PreAuthorize("hasAnyRole('Production Control', 'Shift Leader', 'DataAdmin', 'Management', 'Document')")
-    public ResponseEntity<ReportSummaryDto> getReportSummary(@PathVariable Long id) {
-        return ResponseEntity.ok(productionService.getReportSummary(id));
+    public ResponseEntity<ReportSummaryDto> getReportSummary(@PathVariable Long id,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        String pref = (langParam != null && !langParam.isBlank()) ? langParam : acceptLanguage;
+        String lang = (pref != null && pref.toLowerCase().startsWith("en")) ? "en" : "th";
+        return ResponseEntity.ok(productionService.getReportSummary(id, lang));
     }
 
     @GetMapping("/reports/{id}/detailed")
     @PreAuthorize("hasAnyRole('Production Control', 'Shift Leader', 'Operator', 'Technician', 'QA', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
-    public ResponseEntity<DetailedProductionReportDto> getDetailedReport(@PathVariable Long id) {
-        return ResponseEntity.ok(productionService.getDetailedReport(id));
+    public ResponseEntity<DetailedProductionReportDto> getDetailedReport(@PathVariable Long id,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        String pref = (langParam != null && !langParam.isBlank()) ? langParam : acceptLanguage;
+        String lang = (pref != null && pref.toLowerCase().startsWith("en")) ? "en" : "th";
+        return ResponseEntity.ok(productionService.getDetailedReport(id, lang));
     }
 
     // --- Aliases for daily-shift summary under PC paths (for legacy FE compatibility) ---
@@ -183,8 +199,21 @@ public class PcCompatibilityController {
     public ResponseEntity<DailyShiftSummaryDto> getDailySummaryByShift(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String machineId,
-            @RequestParam(required = false) Long productId) {
+            @RequestParam(required = false) Long productId,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        String pref = (langParam != null && !langParam.isBlank()) ? langParam : acceptLanguage;
+        String lang = (pref != null && pref.toLowerCase().startsWith("en")) ? "en" : "th";
         DailyShiftSummaryDto dto = productionService.getDailyProductionSummaryByShift(date, machineId, productId);
+        // Adjust NG summaries by language preference
+        try {
+            var dayNg = productionService.getShiftSpecificNgSummary(date, true, machineId, productId, lang);
+            var nightNg = productionService.getShiftSpecificNgSummary(date, false, machineId, productId, lang);
+            if (dto != null) {
+                if (dto.getDayShiftData() != null) dto.getDayShiftData().setNgSummary(dayNg);
+                if (dto.getNightShiftData() != null) dto.getNightShiftData().setNgSummary(nightNg);
+            }
+        } catch (Exception ignore) { }
         return ResponseEntity.ok(dto);
     }
 
@@ -193,8 +222,20 @@ public class PcCompatibilityController {
     public ResponseEntity<DailyShiftSummaryDto> getDailySummaryByShiftAlias(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String machineId,
-            @RequestParam(required = false) Long productId) {
+            @RequestParam(required = false) Long productId,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        String pref = (langParam != null && !langParam.isBlank()) ? langParam : acceptLanguage;
+        String lang = (pref != null && pref.toLowerCase().startsWith("en")) ? "en" : "th";
         DailyShiftSummaryDto dto = productionService.getDailyProductionSummaryByShift(date, machineId, productId);
+        try {
+            var dayNg = productionService.getShiftSpecificNgSummary(date, true, machineId, productId, lang);
+            var nightNg = productionService.getShiftSpecificNgSummary(date, false, machineId, productId, lang);
+            if (dto != null) {
+                if (dto.getDayShiftData() != null) dto.getDayShiftData().setNgSummary(dayNg);
+                if (dto.getNightShiftData() != null) dto.getNightShiftData().setNgSummary(nightNg);
+            }
+        } catch (Exception ignore) { }
         return ResponseEntity.ok(dto);
     }
 }

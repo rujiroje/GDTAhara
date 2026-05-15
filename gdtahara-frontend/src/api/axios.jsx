@@ -11,11 +11,37 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        } else {
-            console.error("JWT token is missing.");
+        // Allow caller to opt-out of auth handling per request
+        const skipAuth = config.headers && (config.headers['X-Skip-Auth'] === true || config.headers['X-Skip-Auth'] === 'true');
+
+        // Determine preferred language from localStorage or browser
+        let lang = localStorage.getItem('lang');
+        if (!lang) {
+            const navLang = (navigator.language || navigator.userLanguage || 'th').toLowerCase();
+            lang = navLang.startsWith('th') ? 'th' : 'en';
+            localStorage.setItem('lang', lang);
+        }
+        // Always send both header and query param; backend prioritizes ?lang over header
+        config.headers['Accept-Language'] = lang;
+        // Ensure lang query param is present/overridden
+        if (!config.params) config.params = {};
+        config.params.lang = lang;
+
+        // Identify public/auth endpoints to avoid noisy logs before login
+        const url = (config.url || '').toString();
+        const isAuthEndpoint = /\/auth\//.test(url) || /\/emergency\//.test(url);
+
+        if (!skipAuth) {
+            const token = localStorage.getItem('token');
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            } else {
+                // Don't spam console for public endpoints (e.g., login) when token is not yet available
+                if (!isAuthEndpoint) {
+                    // Use a low-severity log for easier debugging without alarming errors
+                    console.debug('JWT token is not set for this request.');
+                }
+            }
         }
         return config;
     },
@@ -26,9 +52,13 @@ axiosInstance.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response && error.response.status === 401) {
-            console.error("Unauthorized: Redirecting to login.");
-            localStorage.removeItem('token');
-            window.location.href = '/login'; // Redirect to login page
+            const url = (error.config && error.config.url) ? error.config.url.toString() : '';
+            const isAuthEndpoint = /\/auth\//.test(url) || /\/emergency\//.test(url);
+            if (!isAuthEndpoint) {
+                console.warn('Unauthorized (401). Redirecting to login.');
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+            }
         }
         return Promise.reject(error);
     }

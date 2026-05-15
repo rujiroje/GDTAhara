@@ -126,9 +126,10 @@ const CmOperatorDashboard = () => {
                 <div className="report-selection-container">
                     {activeReports && Array.isArray(activeReports) && activeReports.map(report => (
                         <div key={report.id} className="report-card">
-                            <h3>{report.orderNumber || `ID: ${report.id}`}</h3>
-                            <p>{report.machineName} - {report.productName}</p>
-                            <p>วันที่: {report.startDate} ถึง {report.endDate}</p>
+                            <h3>{report.machineName}</h3>
+                            <p>{report.productName}</p>
+                            {report.orderNumber && <p>Order No.: {report.orderNumber}</p>}
+                            <p>วันที่: {report.startDate} – {report.endDate}</p>
                             <button className="select-button" onClick={() => handleSelectReport(report)}>เลือก</button>
                         </div>
                     ))}

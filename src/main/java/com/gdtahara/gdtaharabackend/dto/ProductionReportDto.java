@@ -5,6 +5,7 @@
 package com.gdtahara.gdtaharabackend.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonFormat.Shape;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -46,14 +47,15 @@ public class ProductionReportDto {
     private Long parameterRecordCount;
     private Long qualityCheckCount;
     
-    // Additional fields for display
-    private String displayDate;
-    private String displayTime;
-    private String statusDisplayName;
+    // Additional display fields are computed via getters below to avoid unused-field warnings
     
     // Fields ที่ขาดหายไป
     private String orderNumber;
+
+    @JsonFormat(shape = Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate startDate;
+
+    @JsonFormat(shape = Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate endDate;
     private Integer targetQty;
     private boolean finalizable;

@@ -58,6 +58,31 @@ public interface NgLogRepository extends JpaRepository<NgLog, Long> {
                                             @Param("start") LocalDateTime start,
                                             @Param("end") LocalDateTime end);
 
+    // English-preferred summary (fallback to TH/code/type)
+    @Query("""
+        SELECT COALESCE(
+                   NULLIF(TRIM(nt.ngDescriptionEn), ''),
+                   NULLIF(TRIM(nt.ngDescriptionTh), ''),
+                   NULLIF(TRIM(nt.ngCode), ''),
+                   NULLIF(TRIM(nt.ngType), ''),
+                   'ไม่ระบุ'
+               ) AS description,
+               SUM(COALESCE(nl.quantity, 0))
+        FROM NgLog nl
+        LEFT JOIN nl.ngType nt
+        WHERE nl.report.id IN :reportIds AND nl.timestamp BETWEEN :start AND :end
+        GROUP BY COALESCE(
+                   NULLIF(TRIM(nt.ngDescriptionEn), ''),
+                   NULLIF(TRIM(nt.ngDescriptionTh), ''),
+                   NULLIF(TRIM(nt.ngCode), ''),
+                   NULLIF(TRIM(nt.ngType), ''),
+                   'ไม่ระบุ'
+               )
+    """)
+    List<Object[]> summarizeNgByDescriptionEn(@Param("reportIds") List<Long> reportIds,
+                                              @Param("start") LocalDateTime start,
+                                              @Param("end") LocalDateTime end);
+
     @Query("""
         SELECT COALESCE(
                    NULLIF(TRIM(nt.ngDescriptionTh), ''),
@@ -77,6 +102,29 @@ public interface NgLogRepository extends JpaRepository<NgLog, Long> {
                )
     """)
     List<Object[]> summarizeNgByDescriptionForReport(@Param("reportId") Long reportId);
+
+    // English-preferred variant for single report
+    @Query("""
+        SELECT COALESCE(
+                   NULLIF(TRIM(nt.ngDescriptionEn), ''),
+                   NULLIF(TRIM(nt.ngDescriptionTh), ''),
+                   NULLIF(TRIM(nt.ngCode), ''),
+                   NULLIF(TRIM(nt.ngType), ''),
+                   'ไม่ระบุ'
+               ) AS description,
+               SUM(COALESCE(nl.quantity, 0))
+        FROM NgLog nl
+        LEFT JOIN nl.ngType nt
+        WHERE nl.report.id = :reportId
+        GROUP BY COALESCE(
+                   NULLIF(TRIM(nt.ngDescriptionEn), ''),
+                   NULLIF(TRIM(nt.ngDescriptionTh), ''),
+                   NULLIF(TRIM(nt.ngCode), ''),
+                   NULLIF(TRIM(nt.ngType), ''),
+                   'ไม่ระบุ'
+               )
+    """)
+    List<Object[]> summarizeNgByDescriptionForReportEn(@Param("reportId") Long reportId);
 
     @Query("SELECT SUM(nl.quantity) FROM NgLog nl WHERE nl.report.id IN :reportIds")
     Long sumQuantityForReports(@Param("reportIds") List<Long> reportIds);

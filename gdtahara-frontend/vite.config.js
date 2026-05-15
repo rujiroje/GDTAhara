@@ -13,6 +13,8 @@ export default defineConfig({
     port: 5173,
   },
   resolve: {
+    // Avoid resolving to real paths on Windows/OneDrive which can trigger spawn EPERM in Vite's safe realpath checks
+    preserveSymlinks: true,
     alias: {
       '@': path.resolve(__dirname, './src'),
     },

@@ -29,7 +29,7 @@ public class EntityMethodsChecker {
             System.out.println("\n=== Checking possible report setter methods ===");
             for (String methodName : possibleReportMethods) {
                 try {
-                    Method method = ParameterRecord.class.getMethod(methodName, Object.class);
+                    ParameterRecord.class.getMethod(methodName, Object.class);
                     System.out.println("✅ Found: " + methodName);
                 } catch (NoSuchMethodException e) {
                     System.out.println("❌ Not found: " + methodName);
@@ -39,7 +39,7 @@ public class EntityMethodsChecker {
             System.out.println("\n=== Checking possible timestamp setter methods ===");
             for (String methodName : possibleTimeMethods) {
                 try {
-                    Method method = ParameterRecord.class.getMethod(methodName, LocalDateTime.class);
+                    ParameterRecord.class.getMethod(methodName, LocalDateTime.class);
                     System.out.println("✅ Found: " + methodName);
                 } catch (NoSuchMethodException e) {
                     System.out.println("❌ Not found: " + methodName);

@@ -431,6 +431,14 @@ body {
     background-color: #3b82f6;
 }
 
+.status-active {
+    background-color: #f59e0b;
+}
+
+.status-inactive {
+    background-color: #6b7280;
+}
+
 .status-finalized {
     background-color: #10b981;
 }

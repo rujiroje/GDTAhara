@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -13,6 +15,8 @@ public class NgTypeSummaryDto {
     private Long count;
     private double percentage;
     private long totalQuantity;
+    // น้ำหนักของเสีย (กก.) ใช้สำหรับ Technician scrap summary ตามกะ
+    private BigDecimal weightKg;
     // สำหรับ FE: เวลา/ช่วงเวลาที่ต้องการแสดง (เช่น เวลาเริ่มกะ)
     private String timeDisplay;
 
@@ -22,6 +26,7 @@ public class NgTypeSummaryDto {
         this.count = count;
         this.percentage = 0.0;
         this.totalQuantity = count != null ? count : 0L;
+        this.weightKg = BigDecimal.ZERO;
     }
 
     // Full constructor without timeDisplay (for legacy calls)
@@ -30,6 +35,7 @@ public class NgTypeSummaryDto {
         this.count = count;
         this.percentage = percentage;
         this.totalQuantity = totalQuantity != null ? totalQuantity : 0L;
+        this.weightKg = BigDecimal.ZERO;
         this.timeDisplay = null;
     }
 
@@ -54,6 +60,19 @@ public class NgTypeSummaryDto {
 
     @JsonProperty("percent")
     public double getPercentAlias() { return percentage; }
+
+    // Weight aliases for FE convenience
+    @JsonProperty("weightKg")
+    public BigDecimal getWeightKgAlias() { return weightKg; }
+
+    @JsonProperty("weight")
+    public BigDecimal getWeightAlias() { return weightKg; }
+
+    @JsonProperty("scrapWeightKg")
+    public BigDecimal getScrapWeightKgAlias() { return weightKg; }
+
+    @JsonProperty("scrapWeight")
+    public BigDecimal getScrapWeightAlias() { return weightKg; }
 
     // Aliases สำหรับเวลาที่แสดงในตาราง FE
     @JsonProperty("time")

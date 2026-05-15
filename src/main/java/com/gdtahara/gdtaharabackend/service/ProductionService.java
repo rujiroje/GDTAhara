@@ -326,6 +326,12 @@ public class ProductionService {
 
     @Transactional(readOnly = true)
     public ReportSummaryDto getReportSummary(Long id) {
+        // default to Thai for backward compatibility
+        return getReportSummary(id, "th");
+    }
+
+    @Transactional(readOnly = true)
+    public ReportSummaryDto getReportSummary(Long id, String lang) {
         try {
             logger.info("📊 Getting report summary for ID: {}", id);
             
@@ -398,15 +404,15 @@ public class ProductionService {
                 logger.warn("⚠️ Cannot load downtime events for report {}: {}", id, ex.getMessage());
             }
 
-            // NG logs list
+            // NG logs list (language-aware)
             List<NgLogSummaryDto> ngLogSummaries = new ArrayList<>();
             try {
                 var ngLogs = ngLogRepository.findByReportId(report.getId());
                 ngLogSummaries = ngLogs.stream().map(l -> new NgLogSummaryDto(
-                        l.getTimestamp() != null ? l.getTimestamp().toString() : "", 
-                        l.getNgType() != null ? l.getNgType().getNgDescriptionTh() : "", 
-                        l.getQuantity(), 
-                        l.getSource(), 
+                        l.getTimestamp() != null ? l.getTimestamp().toString() : "",
+                        l.getNgType() != null ? resolveNgDescription(l.getNgType(), lang) : "",
+                        l.getQuantity(),
+                        l.getSource(),
                         l.getUser() != null ? l.getUser().getUsername() : ""
                 )).collect(Collectors.toList());
             } catch (Exception ex) {
@@ -472,10 +478,12 @@ public class ProductionService {
             // OEE = Availability × Performance × Quality
             double oeePercentage = (availabilityPercentage * performancePercentage * qualityPercentage) / 10000.0;
             
-            // สรุปประเภทของเสีย (ใช้ aggregation จาก repository เพื่อให้คำอธิบายตรง)
+            // สรุปประเภทของเสีย (ใช้ aggregation จาก repository เพื่อให้คำอธิบายตรง) - language-aware
             List<NgTypeSummaryDto> ngTypeSummaries = new ArrayList<>();
             try {
-                List<Object[]> rows = ngLogRepository.summarizeNgByDescriptionForReport(report.getId());
+                List<Object[]> rows = (lang != null && lang.toLowerCase().startsWith("en"))
+                        ? ngLogRepository.summarizeNgByDescriptionForReportEn(report.getId())
+                        : ngLogRepository.summarizeNgByDescriptionForReport(report.getId());
                 if (rows != null) {
                     for (Object[] row : rows) {
                         String desc = row[0] != null ? row[0].toString() : "ไม่ระบุ";
@@ -487,7 +495,7 @@ public class ProductionService {
                 }
             } catch (Exception ex) {
                 logger.warn("Cannot aggregate NG summary for report {}: {}", id, ex.getMessage());
-                ngTypeSummaries = calculateNgTypeSummary(report.getId(), ngQty);
+                ngTypeSummaries = calculateNgTypeSummary(report.getId(), ngQty, lang);
             }
             
             // สรุงประเภท Downtime
@@ -563,6 +571,7 @@ public class ProductionService {
         dto.setStartDate(report.getStartDate());
         dto.setEndDate(report.getEndDate());
         dto.setMachineName(report.getMachine() != null ? report.getMachine().getMachineName() : "ไม่ระบุ");
+        dto.setMachineId(report.getMachine() != null ? String.valueOf(report.getMachine().getId()) : null);
         dto.setProductName(report.getProduct() != null ? report.getProduct().getProductName() : "ไม่ระบุ");
         dto.setTargetQty(report.getTargetQty());
         // Derive status by policy (today within window -> IN_PROGRESS; closed -> INACTIVE; else ACTIVE)
@@ -582,7 +591,8 @@ public class ProductionService {
         
         // Business rules for button visibility
         boolean isInProgress = "IN_PROGRESS".equalsIgnoreCase(statusCode);
-        dto.setFinalizable(isInProgress);
+        boolean isActive = "ACTIVE".equalsIgnoreCase(statusCode); // expired date but not yet closed
+        dto.setFinalizable(isInProgress || isActive);
         dto.setEditable(isInProgress && !hasProductionData);
         dto.setDeletable(!hasProductionData);
 
@@ -742,6 +752,10 @@ public class ProductionService {
     }
     // Helper methods for summary calculations
     private List<NgTypeSummaryDto> calculateNgTypeSummary(Long reportId, long totalNgQty) {
+        return calculateNgTypeSummary(reportId, totalNgQty, "th");
+    }
+
+    private List<NgTypeSummaryDto> calculateNgTypeSummary(Long reportId, long totalNgQty, String lang) {
         try {
             if (totalNgQty == 0) {
                 return new ArrayList<>();
@@ -754,13 +768,7 @@ public class ProductionService {
                 long qty = log.getQuantity() != null ? log.getQuantity() : 0L;
                 String desc = "ไม่ระบุ";
                 if (log.getNgType() != null) {
-                    if (log.getNgType().getNgDescriptionTh() != null && !log.getNgType().getNgDescriptionTh().isBlank()) {
-                        desc = log.getNgType().getNgDescriptionTh();
-                    } else if (log.getNgType().getNgCode() != null && !log.getNgType().getNgCode().isBlank()) {
-                        desc = log.getNgType().getNgCode();
-                    } else if (log.getNgType().getNgType() != null && !log.getNgType().getNgType().isBlank()) {
-                        desc = log.getNgType().getNgType();
-                    }
+                    desc = resolveNgDescription(log.getNgType(), lang);
                 }
                 ngTypeMap.merge(desc, qty, Long::sum);
             }
@@ -779,6 +787,22 @@ public class ProductionService {
             logger.warn("⚠️ Cannot calculate NG type summary for report {}: {}", reportId, ex.getMessage());
             return new ArrayList<>();
         }
+    }
+
+    // Helper: choose proper NG description
+    private String resolveNgDescription(NgType nt, String lang) {
+        if (nt == null) return "ไม่ระบุ";
+        String language = lang != null ? lang.toLowerCase() : "th";
+        if (language.startsWith("en")) {
+            if (nt.getNgDescriptionEn() != null && !nt.getNgDescriptionEn().isBlank()) return nt.getNgDescriptionEn().trim();
+            if (nt.getNgDescriptionTh() != null && !nt.getNgDescriptionTh().isBlank()) return nt.getNgDescriptionTh().trim();
+        } else {
+            if (nt.getNgDescriptionTh() != null && !nt.getNgDescriptionTh().isBlank()) return nt.getNgDescriptionTh().trim();
+            if (nt.getNgDescriptionEn() != null && !nt.getNgDescriptionEn().isBlank()) return nt.getNgDescriptionEn().trim();
+        }
+        if (nt.getNgCode() != null && !nt.getNgCode().isBlank()) return nt.getNgCode().trim();
+        if (nt.getNgType() != null && !nt.getNgType().isBlank()) return nt.getNgType().trim();
+        return "ไม่ระบุ";
     }
     
     private List<DowntimeReasonSummaryDto> calculateDowntimeReasonSummary(Long reportId, long totalDowntimeMinutes) {
@@ -940,7 +964,7 @@ public class ProductionService {
 
             logger.info("📊 Found {} production reports for date: {} and machineId: {}", reports.size(), date, machineId);
 
-            return processProductionReports(reports, date);
+            return processProductionReports(reports, date, "th");
         } catch (Exception e) {
             logger.error("❌ Error in getDailyProductionSummary for date: {} and machineId: {}", date, machineId, e);
             return createEmptySummary(date);
@@ -962,12 +986,37 @@ public class ProductionService {
                 .collect(Collectors.toList());
 
             logger.info("📊 Found {} production reports for date: {}, machineId: {}, productId: {}", reports.size(), date, machineId, productId);
-            return processProductionReports(reports, date);
+            return processProductionReports(reports, date, "th");
         } catch (Exception e) {
             logger.error("❌ Error in getDailyProductionSummary for date: {}, machineId: {}, productId: {}", date, machineId, productId, e);
             return createEmptySummary(date);
         }
     }
+
+    // Language-aware overloads for daily summary
+    @Transactional(readOnly = true)
+    public DailyProductionSummaryDto getDailyProductionSummary(java.time.LocalDate date, String machineId, Long productId, String lang) {
+        logger.info("🔍 Getting daily production summary (lang-aware) for date: {}, machineId: {}, productId: {}, lang={}", date, machineId, productId, lang);
+        try {
+            String normalizedMachineId = (machineId != null && !machineId.trim().isEmpty() && !"all".equalsIgnoreCase(machineId))
+                ? machineId.trim()
+                : null;
+
+            List<ProductionReport> reports = productionReportRepository.findActiveOnDate(date, normalizedMachineId);
+            reports = reports.stream()
+                .filter(report -> isReportActiveOnDate(report, date))
+                .filter(report -> productId == null || (report.getProduct() != null && productId.equals(report.getProduct().getId())))
+                .collect(Collectors.toList());
+
+            String langNorm = (lang != null && lang.toLowerCase().startsWith("en")) ? "en" : "th";
+            return processProductionReports(reports, date, langNorm);
+        } catch (Exception e) {
+            logger.error("❌ Error in getDailyProductionSummary (lang-aware) for date: {}, machineId: {}, productId: {}", date, machineId, productId, e);
+            return createEmptySummary(date);
+        }
+    }
+
+    
 
     public DailyProductionSummaryDto getDailyProductionSummary(java.time.LocalDate date) {
         logger.info("🔍 Getting daily production summary for date: {}", date);
@@ -980,14 +1029,14 @@ public class ProductionService {
 
             logger.info("📊 Found {} production reports for date: {}", reports.size(), date);
 
-            return processProductionReports(reports, date);
+            return processProductionReports(reports, date, "th");
         } catch (Exception e) {
             logger.error("❌ Error in getDailyProductionSummary for date: {}", date, e);
             return createEmptySummary(date);
         }
     }
     
-    private DailyProductionSummaryDto processProductionReports(List<ProductionReport> reports, java.time.LocalDate date) {
+    private DailyProductionSummaryDto processProductionReports(List<ProductionReport> reports, java.time.LocalDate date, String lang) {
         try {
             if (reports.isEmpty()) {
                 logger.warn("⚠️ No production reports found for date: {}", date);
@@ -1021,7 +1070,9 @@ public class ProductionService {
             List<MaterialUsageLog> dailyMaterialLogs = materialUsageLogRepository.findByReportIdInAndTimestampBetween(reportIds, dayShiftStart, queryEndInclusive);
             List<DowntimeEvent> downtimeEvents = downtimeEventRepository.findByReportIdIn(reportIds);
 
-            List<Object[]> aggregatedNgRows = ngLogRepository.summarizeNgByDescription(reportIds, dayShiftStart, queryEndInclusive);
+            List<Object[]> aggregatedNgRows = (lang != null && lang.toLowerCase().startsWith("en"))
+                ? ngLogRepository.summarizeNgByDescriptionEn(reportIds, dayShiftStart, queryEndInclusive)
+                : ngLogRepository.summarizeNgByDescription(reportIds, dayShiftStart, queryEndInclusive);
             if (aggregatedNgRows == null) {
                 aggregatedNgRows = java.util.Collections.emptyList();
             }
@@ -1407,6 +1458,11 @@ public class ProductionService {
 
     @Transactional(readOnly = true)
     public DailyShiftSummaryDto getDailyProductionSummaryByShift(LocalDate date, String machineId) {
+        return getDailyProductionSummaryByShift(date, machineId, (String) null);
+    }
+
+    @Transactional(readOnly = true)
+    public DailyShiftSummaryDto getDailyProductionSummaryByShift(LocalDate date, String machineId, String lang) {
         logger.info("🕐 Getting daily production summary by shift for date: {} and machineId: {}", date, machineId);
         
         try {
@@ -1456,7 +1512,7 @@ public class ProductionService {
                 fullSummary.getMorningShiftCount());
             
             // เพิ่มข้อมูลรายละเอียดจริงจาก database - กรองตามเวลากะกลางวัน (03:00-15:00) และ machineId
-            List<NgTypeSummaryDto> dayNgSummary = getShiftSpecificNgSummary(targetDate, true, normalizedMachineId); // true สำหรับกะกลางวัน
+            List<NgTypeSummaryDto> dayNgSummary = getShiftSpecificNgSummary(targetDate, true, normalizedMachineId, lang); // true สำหรับกะกลางวัน
             if (dayNgSummary == null) {
                 dayNgSummary = new ArrayList<>();
             }
@@ -1496,7 +1552,7 @@ public class ProductionService {
                 fullSummary.getNightShiftCount());
             
             // เพิ่มข้อมูลรายละเอียดจริงจาก database - กรองตามเวลากะกลางคืน (15:00-03:00) และ machineId
-            List<NgTypeSummaryDto> nightNgSummary = getShiftSpecificNgSummary(targetDate, false, normalizedMachineId); // false สำหรับกะกลางคืน
+            List<NgTypeSummaryDto> nightNgSummary = getShiftSpecificNgSummary(targetDate, false, normalizedMachineId, lang); // false สำหรับกะกลางคืน
             if (nightNgSummary == null) {
                 nightNgSummary = new ArrayList<>();
             }
@@ -1996,6 +2052,10 @@ public class ProductionService {
      */
     // Overloaded method รองรับ machineId
     private List<NgTypeSummaryDto> getShiftSpecificNgSummary(LocalDate date, boolean isDayShift, String machineId) {
+        return getShiftSpecificNgSummary(date, isDayShift, machineId, "th");
+    }
+
+    private List<NgTypeSummaryDto> getShiftSpecificNgSummary(LocalDate date, boolean isDayShift, String machineId, String lang) {
         try {
             LocalDateTime startTime, endTimeExclusive;
             
@@ -2021,7 +2081,7 @@ public class ProductionService {
                 .collect(java.util.stream.Collectors.toList());
             logger.info("📊 Found {} active production reports for date: {} and machineId: {}", activeReports.size(), date, machineId);
             
-            return processNgSummaryForShift(activeReports, startTime, endTimeExclusive, isDayShift, date);
+            return processNgSummaryForShift(activeReports, startTime, endTimeExclusive, isDayShift, date, lang);
         } catch (Exception e) {
             logger.error("❌ Error in getShiftSpecificNgSummary for date: {}, isDayShift: {}, machineId: {}", date, isDayShift, machineId, e);
             return new ArrayList<>();
@@ -2034,10 +2094,16 @@ public class ProductionService {
     }
     
     private List<NgTypeSummaryDto> processNgSummaryForShift(List<ProductionReport> activeReports, LocalDateTime startTime, LocalDateTime endTimeExclusive, boolean isDayShift, LocalDate date) {
+        return processNgSummaryForShift(activeReports, startTime, endTimeExclusive, isDayShift, date, "th");
+    }
+
+    private List<NgTypeSummaryDto> processNgSummaryForShift(List<ProductionReport> activeReports, LocalDateTime startTime, LocalDateTime endTimeExclusive, boolean isDayShift, LocalDate date, String lang) {
         try {
             // รวมยอดของเสียตามประเภท ของทั้งกะ (ทุก report ที่อยู่ในกะ)
             Map<String, Long> aggregateByType = new HashMap<>();
             Map<String, java.time.LocalDateTime> latestTimestampByType = new HashMap<>();
+            // รวมยอดน้ำหนักของเสีย (ชั่งน้ำหนักโดย Technician) แยกตามประเภทภายในช่วงกะ
+            Map<String, java.math.BigDecimal> scrapWeightByType = new HashMap<>();
             java.time.LocalDateTime debugMin = null;
             java.time.LocalDateTime debugMax = null;
 
@@ -2051,16 +2117,7 @@ public class ProductionService {
                     logger.info("📊 Found {} NG logs for report {} in time range {} to {} (inclusive)", ngLogs.size(), report.getId(), startTime, endInclusive);
 
                     for (NgLog ngLog : ngLogs) {
-                        String ngTypeName = "ไม่ระบุ";
-                        if (ngLog.getNgType() != null) {
-                            if (ngLog.getNgType().getNgDescriptionTh() != null && !ngLog.getNgType().getNgDescriptionTh().isBlank()) {
-                                ngTypeName = ngLog.getNgType().getNgDescriptionTh();
-                            } else if (ngLog.getNgType().getNgCode() != null && !ngLog.getNgType().getNgCode().isBlank()) {
-                                ngTypeName = ngLog.getNgType().getNgCode();
-                            } else if (ngLog.getNgType().getNgType() != null && !ngLog.getNgType().getNgType().isBlank()) {
-                                ngTypeName = ngLog.getNgType().getNgType();
-                            }
-                        }
+                        String ngTypeName = ngLog.getNgType() != null ? resolveNgDescription(ngLog.getNgType(), lang) : "ไม่ระบุ";
                         long quantity = ngLog.getQuantity() != null ? ngLog.getQuantity() : 0L;
                         aggregateByType.merge(ngTypeName, quantity, Long::sum);
                         if (ngLog.getTimestamp() != null) {
@@ -2075,6 +2132,22 @@ public class ProductionService {
                             if (debugMin == null || ngLog.getTimestamp().isBefore(debugMin)) debugMin = ngLog.getTimestamp();
                             if (debugMax == null || ngLog.getTimestamp().isAfter(debugMax)) debugMax = ngLog.getTimestamp();
                         }
+                    }
+
+                    // รวม ScrapWeight (Technician) สำหรับ report นี้ในช่วงเวลาเดียวกัน
+                    try {
+                        List<ScrapWeightLog> scrapLogs = scrapWeightLogRepository.findByReportIdInAndTimestampBetween(
+                            java.util.List.of(report.getId()), startTime, endInclusive
+                        );
+                        for (ScrapWeightLog sw : scrapLogs) {
+                            String scrapType = sw.getScrapType() != null ? sw.getScrapType() : "ไม่ระบุประเภท";
+                            String matType = sw.getMatType() != null ? sw.getMatType() : "";
+                            String combinedType = matType.isEmpty() ? scrapType : (matType + " " + scrapType);
+                            java.math.BigDecimal w = sw.getWeightKg() != null ? sw.getWeightKg() : java.math.BigDecimal.ZERO;
+                            scrapWeightByType.merge(combinedType, w, java.math.BigDecimal::add);
+                        }
+                    } catch (Exception ex) {
+                        logger.warn("⚠️ Could not aggregate scrap weights for report {}: {}", report.getId(), ex.getMessage());
                     }
                 }
             }
@@ -2117,14 +2190,45 @@ public class ProductionService {
                         ? lastTs.format(thaiDateTime)
                         : fallbackDateTime.format(thaiDateTime)
                 );
+                dto.setWeightKg(java.math.BigDecimal.ZERO);
                 result.add(dto);
             }
 
+            // เติมข้อมูลน้ำหนักของเสียตามประเภท (Technician) เข้าไปในรายการสรุป โดยไม่ทับซ้อนกับชื่อประเภทที่มีอยู่
+            for (Map.Entry<String, java.math.BigDecimal> e : scrapWeightByType.entrySet()) {
+                String type = e.getKey();
+                java.math.BigDecimal weight = e.getValue() != null ? e.getValue() : java.math.BigDecimal.ZERO;
+                // ถ้ามีอยู่แล้ว ให้เพิ่ม field weight เข้าไปใน item เดิม
+                NgTypeSummaryDto existing = null;
+                for (NgTypeSummaryDto item : result) {
+                    if (type.equals(item.getNgDescription())) { existing = item; break; }
+                }
+                if (existing != null) {
+                    existing.setWeightKg(weight);
+                } else {
+                    NgTypeSummaryDto dto = new NgTypeSummaryDto();
+                    dto.setNgDescription(type);
+                    dto.setCount(0L);
+                    dto.setTotalQuantity(0L);
+                    dto.setPercentage(0.0);
+                    dto.setWeightKg(weight);
+                    dto.setTimeDisplay(fallbackDateTime.format(thaiDateTime));
+                    result.add(dto);
+                }
+            }
+
             // เรียงลำดับมากไปน้อยตามจำนวน
-            result.sort((a, b) -> Long.compare(
-                b.getCount() != null ? b.getCount() : 0L,
-                a.getCount() != null ? a.getCount() : 0L
-            ));
+            result.sort((a, b) -> {
+                long ac = a.getCount() != null ? a.getCount() : 0L;
+                long bc = b.getCount() != null ? b.getCount() : 0L;
+                if (bc != ac) return Long.compare(bc, ac);
+                // ถ้าจำนวนชิ้นเท่ากัน ให้เรียงตามน้ำหนักจากมากไปน้อย
+                java.math.BigDecimal aw = a.getWeightKg() != null ? a.getWeightKg() : java.math.BigDecimal.ZERO;
+                java.math.BigDecimal bw = b.getWeightKg() != null ? b.getWeightKg() : java.math.BigDecimal.ZERO;
+                int cmp = bw.compareTo(aw);
+                if (cmp != 0) return cmp;
+                return String.CASE_INSENSITIVE_ORDER.compare(a.getNgDescription() != null ? a.getNgDescription() : "", b.getNgDescription() != null ? b.getNgDescription() : "");
+            });
 
             logger.info("✅ NG summary for {} shift: totalNG={}, types={}, minTs={}, maxTs={}", isDayShift ? "day" : "night", totalNgInShift, result.size(), debugMin, debugMax);
             return result;
@@ -2153,6 +2257,29 @@ public class ProductionService {
             return processNgSummaryForShift(activeReports, startTime, endTime, isDayShift, date);
         } catch (Exception e) {
             logger.error("❌ Error in getShiftSpecificNgSummary (with product) for date: {}, isDay: {}, machineId: {}, productId: {}", date, isDayShift, machineId, productId, e);
+            return new ArrayList<>();
+        }
+    }
+
+    // Public facade for controller to get language-aware NG summaries with product filter
+    @Transactional(readOnly = true)
+    public List<NgTypeSummaryDto> getShiftSpecificNgSummary(LocalDate date, boolean isDayShift, String machineId, Long productId, String lang) {
+        try {
+            LocalDateTime startTime = isDayShift ? date.atTime(3, 0) : date.atTime(15, 0);
+            LocalDateTime endTime = isDayShift ? date.atTime(15, 0) : date.plusDays(1).atTime(3, 0);
+
+            String normalizedMachineId = (machineId != null && !machineId.trim().isEmpty() && !"all".equalsIgnoreCase(machineId))
+                ? machineId.trim()
+                : null;
+
+            List<ProductionReport> activeReports = productionReportRepository.findActiveOnDate(date, normalizedMachineId).stream()
+                .filter(report -> isReportActiveOnDate(report, date))
+                .filter(report -> productId == null || (report.getProduct() != null && productId.equals(report.getProduct().getId())))
+                .collect(Collectors.toList());
+
+            return processNgSummaryForShift(activeReports, startTime, endTime, isDayShift, date, lang);
+        } catch (Exception e) {
+            logger.error("❌ Error in getShiftSpecificNgSummary (public, lang) for date: {}, isDay: {}, machineId: {}, productId: {}", date, isDayShift, machineId, productId, e);
             return new ArrayList<>();
         }
     }
@@ -2454,6 +2581,11 @@ public class ProductionService {
 
     @Transactional(readOnly = true)
     public DetailedProductionReportDto getDetailedReport(Long reportId) {
+        return getDetailedReport(reportId, "th");
+    }
+
+    @Transactional(readOnly = true)
+    public DetailedProductionReportDto getDetailedReport(Long reportId, String lang) {
         logger.info("Building detailed report for ID: {}", reportId);
         ProductionReport report = productionReportRepository.findById(reportId)
                 .orElseThrow(() -> new EntityNotFoundException("Production report not found with id: " + reportId));
@@ -2549,7 +2681,7 @@ public class ProductionService {
             var ngs = ngLogRepository.findByReportId(reportId);
             List<NgLogSummaryDto> ngDtos = ngs.stream().map(l -> new NgLogSummaryDto(
                 l.getTimestamp() != null ? l.getTimestamp().toString() : "",
-                l.getNgType() != null ? l.getNgType().getNgDescriptionTh() : "",
+                l.getNgType() != null ? resolveNgDescription(l.getNgType(), lang) : "",
                 l.getQuantity(),
                 l.getSource(),
                 l.getUser() != null ? l.getUser().getUsername() : ""

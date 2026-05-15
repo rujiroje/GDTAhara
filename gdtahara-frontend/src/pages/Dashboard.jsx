@@ -2,6 +2,7 @@
 // File: src/pages/Dashboard.jsx (ฉบับแก้ไข เพิ่ม Role Document/Management)
 // =================================================================
 import React from "react";
+import { t, getLang, setLang as setAppLang } from "../i18n/t";
 import { useAuth } from "../App";
 
 // --- Import Dashboard Components ---
@@ -17,6 +18,15 @@ import DocMgmtDashboard from "../components/doc-mgmt/DocMgmtDashboard"; // Kept 
 // --- Dashboard Layout ---
 const Dashboard = () => {
   const { user, logout } = useAuth();
+
+  const [lang, setLangState] = React.useState(getLang());
+
+  // Apply language: update state + persist + set document lang
+  const applyLang = (newLang) => {
+    setLangState(newLang);
+    setAppLang(newLang);
+    // No full reload; components using t() will re-render with new labels
+  };
 
   const renderDashboardByRole = () => {
     switch (user.role) {
@@ -51,8 +61,41 @@ const Dashboard = () => {
         <div className="nav-container">
           <h1 className="nav-brand">GDTahara</h1>
           <div className="nav-user-info">
-            <div className="user-greeting"> สวัสดี, <span className="user-name">{user.username}</span> <span className="user-role">({user.role})</span> </div>
-            <button onClick={logout} className="logout-button"> ออกจากระบบ </button>
+            <div className="user-greeting"> {t('hello')} <span className="user-name">{user.username}</span> <span className="user-role">({user.role})</span> </div>
+            {/* Language Switch: show both TH and EN, highlight active */}
+            <div style={{ display: 'flex', gap: '0.25rem', marginRight: '0.5rem' }}>
+              <button
+                onClick={() => applyLang('th')}
+                title="ภาษาไทย"
+                style={{
+                  padding: '0.35rem 0.6rem',
+                  borderRadius: '6px',
+                  border: '1px solid #ccc',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  backgroundColor: lang === 'th' ? '#005fb8' : '#fff',
+                  color: lang === 'th' ? '#fff' : '#333'
+                }}
+              >
+                TH
+              </button>
+              <button
+                onClick={() => applyLang('en')}
+                title="English"
+                style={{
+                  padding: '0.35rem 0.6rem',
+                  borderRadius: '6px',
+                  border: '1px solid #ccc',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  backgroundColor: lang === 'en' ? '#005fb8' : '#fff',
+                  color: lang === 'en' ? '#fff' : '#333'
+                }}
+              >
+                EN
+              </button>
+            </div>
+            <button onClick={logout} className="logout-button"> {t('logout')} </button>
           </div>
         </div>
       </nav>

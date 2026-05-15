@@ -2,19 +2,11 @@
 // File: src/App.jsx (ฉบับแก้ไข Final)
 // =================================================================
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import axios from 'axios';
+import axiosInstance from './api/axios';
 import { jwtDecode } from 'jwt-decode';
 import Dashboard from './pages/Dashboard';
 import './App.css';
 
-// --- API Service ---
-const API_URL = 'http://localhost:8080/api';
-const api = axios.create({ baseURL: API_URL });
-api.interceptors.request.use(config => {
-    const token = localStorage.getItem('token');
-    if (token) { config.headers.Authorization = `Bearer ${token}`; }
-    return config;
-}, error => Promise.reject(error));
 
 // --- Authentication Context ---
 const AuthContext = createContext(null);
@@ -40,7 +32,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = async (username, password) => {
-        const response = await api.post('/auth/login', { username, password });
+    const response = await axiosInstance.post('/auth/login', { username, password });
         const { token } = response.data;
         localStorage.setItem('token', token);
         const decodedUser = jwtDecode(token);

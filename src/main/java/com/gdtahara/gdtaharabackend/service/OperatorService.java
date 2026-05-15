@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -73,20 +72,16 @@ public class OperatorService {
             // ถ้ายังไม่มี ให้ใช้ native latest 5 rows (raw) แล้ว map
             return productionReportRepository.findLatest5Raw().stream()
                 .map(r -> {
-                    java.time.LocalDate startDate;
-                    Object dateObj = r[2];
-                    if (dateObj instanceof java.sql.Date sqlDate) {
-                        startDate = sqlDate.toLocalDate();
-                    } else if (dateObj instanceof java.time.LocalDate ld) {
-                        startDate = ld;
-                    } else {
-                        startDate = java.time.LocalDate.now();
-                    }
+                    java.time.LocalDate startDate = toLocalDate(r[2]);
+                    java.time.LocalDate endDate = toLocalDate(r[3]);
                     return new ProductionReportSimpleViewDto(
                         (Long) r[0],
+                        r[1] != null ? r[1].toString() : null,
                         startDate,
+                        endDate,
                         (String) r[5],
-                        (String) r[6]
+                        (String) r[6],
+                        null
                     );
                 })
                 .collect(Collectors.toList());
@@ -109,10 +104,19 @@ public class OperatorService {
     private ProductionReportSimpleViewDto convertToSimpleDto(ProductionReport report) {
         return new ProductionReportSimpleViewDto(
                 report.getId(),
+                report.getOrderNumber(),
                 report.getStartDate(),
+                report.getEndDate(),
                 report.getMachine() != null ? report.getMachine().getMachineName() : "Unknown Machine",
-                report.getProduct() != null ? report.getProduct().getProductName() : "Unknown Product"
+                report.getProduct() != null ? report.getProduct().getProductName() : "Unknown Product",
+                report.getMachine() != null ? String.valueOf(report.getMachine().getId()) : null
         );
+    }
+
+    private java.time.LocalDate toLocalDate(Object obj) {
+        if (obj instanceof java.sql.Date sqlDate) return sqlDate.toLocalDate();
+        if (obj instanceof java.time.LocalDate ld) return ld;
+        return null;
     }
     
     // เพิ่ม method สำหรับ debug

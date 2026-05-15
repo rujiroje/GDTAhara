@@ -14,6 +14,7 @@ import org.springframework.security.web.access.AccessDeniedHandlerImpl;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import java.time.Duration;
 import java.util.Arrays;
 
 @Configuration
@@ -93,10 +94,13 @@ public class SecurityConfig {
             "http://localhost:8081",  // Backend (ตัวเอง)
             "http://localhost:3000"   // Frontend (React/Next.js)
         ));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
+        // อนุญาตทุก header (dev) เพื่อหลีกเลี่ยงปัญหา preflight ซ้ำ ๆ
+        configuration.addAllowedHeader("*");
         configuration.setExposedHeaders(Arrays.asList("X-Total-Count", "X-Debug-Info", "X-Error-Message"));
         configuration.setAllowCredentials(true);
+        // ลดความถี่ของ preflight
+        configuration.setMaxAge(Duration.ofHours(1));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

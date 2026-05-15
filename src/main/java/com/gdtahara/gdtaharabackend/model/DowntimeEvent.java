@@ -31,9 +31,16 @@ public class DowntimeEvent {
     @Column(columnDefinition = "NVARCHAR(MAX)")
     private String reason;
 
-    // Solution/Corrective action for the downtime (การแก้ไข)
     @Column(name = "solution", columnDefinition = "NVARCHAR(MAX)")
     private String solution;
+
+    // PLANNED | UNPLANNED | EXTERNAL
+    @Column(name = "category", length = 50)
+    private String category;
+
+    // PM, MOLD_CHANGE, SETUP, BREAKDOWN, MATERIAL_SHORT, NO_ORDER, etc.
+    @Column(name = "downtime_type", length = 100)
+    private String downtimeType;
 
     @Transient
     private LocalDateTime timestamp;

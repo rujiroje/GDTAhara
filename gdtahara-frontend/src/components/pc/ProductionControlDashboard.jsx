@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Chart from 'react-apexcharts';
 import axios from 'axios';
+import { t, getLang } from '../../i18n/t';
+import { useAuth } from '../../App';
 
 // --- API Service ---
 const API_URL = 'http://localhost:8080/api';
@@ -14,6 +16,13 @@ api.interceptors.request.use(config => {
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
+    // Attach language info consistently so backend localizes NG names correctly
+    try {
+        const lang = (localStorage.getItem('lang') || '').toLowerCase().startsWith('en') ? 'en' : 'th';
+        if (!config.params) config.params = {};
+        config.params.lang = lang;
+        config.headers['Accept-Language'] = lang;
+    } catch {}
     return config;
 }, error => Promise.reject(error));
 
@@ -52,8 +61,8 @@ const ShiftDataDisplay = ({ title, data }) => {
             <div className="shift-data-container" style={{background: '#fff', padding: '1.5rem', borderRadius: '0.75rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '1.5rem'}}>
                 <h3>{title}</h3>
                 <div className="no-data-message" style={{textAlign: 'center', padding: '2rem', color: '#666'}}>
-                    <p>📋 ไม่มีข้อมูลสำหรับกะนี้</p>
-                    <small>กรุณาเลือกวันที่ที่มีข้อมูลการผลิต</small>
+                    <p>📋 {t('noData')}</p>
+                    <small>{t('selectOtherDate')}</small>
                 </div>
             </div>
         );
@@ -64,27 +73,27 @@ const ShiftDataDisplay = ({ title, data }) => {
             <h3>{title}</h3>
             <div className="kpi-grid" style={{gridTemplateColumns: 'repeat(3, 1fr)'}}>
                 <div className="kpi-card">
-                    <span className="kpi-label">ยอดผลิตดี (ชิ้น)</span>
+                    <span className="kpi-label">{t('goodPiecesLabel')}</span>
                     <span className="kpi-value">{data.goodProductionPieces?.toLocaleString() || 0}</span>
                 </div>
                 <div className="kpi-card">
-                    <span className="kpi-label">ยอดของเสีย (ชิ้น)</span>
+                    <span className="kpi-label">{t('ngPiecesLabel')}</span>
                     <span className="kpi-value ng-value">{data.ngProductionPieces?.toLocaleString() || 0}</span>
                 </div>
                 <div className="kpi-card">
-                    <span className="kpi-label">ยอดผลิตรวม (ชิ้น)</span>
+                    <span className="kpi-label">{t('totalPiecesLabel')}</span>
                     <span className="kpi-value">{data.totalProductionPieces?.toLocaleString() || 0}</span>
                 </div>
                 <div className="kpi-card">
-                    <span className="kpi-label">จำนวนกล่องที่บรรจุสำเร็จ</span>
+                    <span className="kpi-label">{t('goodBoxesLabel')}</span>
                     <span className="kpi-value">{data.goodProductionBoxes?.toLocaleString() || 0}</span>
                 </div>
                 <div className="kpi-card">
-                    <span className="kpi-label">Yield</span>
+                    <span className="kpi-label">{t('yieldLabel')}</span>
                     <span className="kpi-value yield-value">{data.yieldPercentage || '0.00%'}</span>
                 </div>
                 <div className="kpi-card">
-                    <span className="kpi-label">น้ำหนักของเสีย (Kg.)</span>
+                    <span className="kpi-label">{t('scrapWeightLabel')}</span>
                     <span className="kpi-value ng-value">{data.totalScrapWeight?.toFixed(2) || 0}</span>
                 </div>
             </div>
@@ -122,7 +131,8 @@ const DataSummaryPanel = ({ title, data }) => {
             // Otherwise try to parse as ISO/date string
             const d = new Date(raw);
             if (!isNaN(d.getTime())) {
-                return d.toLocaleString('th-TH');
+                const locale = getLang() === 'th' ? 'th-TH' : 'en-US';
+                return d.toLocaleString(locale);
             }
             // Fallback to raw string
             return String(raw);
@@ -151,16 +161,16 @@ const DataSummaryPanel = ({ title, data }) => {
         return (
             <>
                 <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                    <h4 className="summary-title">{title} - รายละเอียดของเสีย</h4>
+                    <h4 className="summary-title">{title} - {t('ngSummaryTitle')}</h4>
                     <div className="data-table-container">
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>เวลา</th>
-                                    <th>ประเภทของเสีย</th>
-                                    <th>จำนวน</th>
-                                    <th>เปอร์เซ็นต์</th>
-                                    <th>ผู้บันทึก</th>
+                                    <th>{t('timeLabel')}</th>
+                                    <th>{t('ngTypeLabel')}</th>
+                                    <th>{t('countLabel')}</th>
+                                    <th>{t('percentageLabel')}</th>
+                                    <th>{t('recorderLabel')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -169,7 +179,7 @@ const DataSummaryPanel = ({ title, data }) => {
                                     return (
                                         <tr key={i}>
                                             <td>{formatNgTime(log)}</td>
-                                            <td>{log.ngDescription || log.ngTypeName || 'ของเสียทั่วไป'}</td>
+                                            <td>{getNgDescription(log)}</td>
                                             <td>{log.count || log.totalQuantity || 0}</td>
                                             <td>{
                                                 typeof log.percentage === 'number'
@@ -182,7 +192,7 @@ const DataSummaryPanel = ({ title, data }) => {
                                 }) : (
                                     <tr>
                                         <td colSpan="5" style={{ textAlign: 'center', color: '#666' }}>
-                                            ไม่มีข้อมูลของเสีย
+                                            {t('noData')}
                                         </td>
                                     </tr>
                                 )}
@@ -192,16 +202,16 @@ const DataSummaryPanel = ({ title, data }) => {
                 </div>
 
                 <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                    <h4 className="summary-title">{title} - ประวัติ Downtime</h4>
+                    <h4 className="summary-title">{title} - {t('downtimeSummaryTitle')}</h4>
                     <div className="data-table-container">
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>เวลาเริ่ม</th>
-                                    <th>เวลาสิ้นสุด</th>
-                                    <th>ระยะเวลา</th>
-                                    <th>สาเหตุ</th>
-                                    <th>ผู้บันทึก</th>
+                                    <th>{t('startTime')}</th>
+                                    <th>{t('endTime')}</th>
+                                    <th>{t('duration')}</th>
+                                    <th>{t('reason')}</th>
+                                    <th>{t('recorderLabel')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -219,7 +229,7 @@ const DataSummaryPanel = ({ title, data }) => {
                                 }) : (
                                     <tr>
                                         <td colSpan="5" style={{ textAlign: 'center', color: '#666' }}>
-                                            ไม่มีข้อมูล Downtime
+                                            {t('noData')}
                                         </td>
                                     </tr>
                                 )}
@@ -229,16 +239,16 @@ const DataSummaryPanel = ({ title, data }) => {
                 </div>
 
                 <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                    <h4 className="summary-title">{title} - ประวัติการใช้วัตถุดิบ</h4>
+                    <h4 className="summary-title">{title} - {t('materialUsageSummaryTitle')}</h4>
                     <div className="data-table-container">
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>เวลา</th>
-                                    <th>รหัสวัตถุดิบ</th>
-                                    <th>Lot Number</th>
-                                    <th>จำนวน (Kg.)</th>
-                                    <th>ผู้บันทึก</th>
+                                    <th>{t('timeLabel')}</th>
+                                    <th>{t('materialCode')}</th>
+                                    <th>{t('lotNumber')}</th>
+                                    <th>{t('quantityKg')}</th>
+                                    <th>{t('recorderLabel')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -246,7 +256,7 @@ const DataSummaryPanel = ({ title, data }) => {
                                     console.log(`🎯 Rendering Material row ${i}:`, log);
                                     return (
                                         <tr key={i}>
-                                            <td>{log.timestamp ? new Date(log.timestamp).toLocaleString('th-TH') : 'N/A'}</td>
+                                            <td>{log.timestamp ? new Date(log.timestamp).toLocaleString(getLang() === 'th' ? 'th-TH' : 'en-US') : 'N/A'}</td>
                                             <td>{log.materialCode || log.materialName || 'ไม่ระบุ'}</td>
                                             <td>{log.lotNumber || 'ไม่ระบุ'}</td>
                                             <td>{log.quantityKg || log.quantity || 0}</td>
@@ -256,7 +266,7 @@ const DataSummaryPanel = ({ title, data }) => {
                                 }) : (
                                     <tr>
                                         <td colSpan="5" style={{ textAlign: 'center', color: '#666' }}>
-                                            ไม่มีข้อมูลการใช้วัตถุดิบ
+                                            {t('noData')}
                                         </td>
                                     </tr>
                                 )}
@@ -267,21 +277,21 @@ const DataSummaryPanel = ({ title, data }) => {
 
                 {/* Packaging logs for the shift */}
                 <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                    <h4 className="summary-title">{title} - รายการบันทึกการบรรจุ</h4>
+                    <h4 className="summary-title">{title} - {t('packagingLogsTitle')}</h4>
                     <div className="data-table-container">
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>เวลา</th>
-                                    <th>Lot Number</th>
-                                    <th>กล่องที่</th>
-                                    <th>ผู้บรรจุ/ผู้บันทึก</th>
+                                    <th>{t('timeLabel')}</th>
+                                    <th>{t('lotNumber')}</th>
+                                    <th>{t('boxNo')}</th>
+                                    <th>{t('operator')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {Array.isArray(data.packagingLogs) && data.packagingLogs.length > 0 ? data.packagingLogs.map((log, i) => (
                                     <tr key={i}>
-                                        <td>{log.timestamp ? new Date(log.timestamp).toLocaleString('th-TH') : 'N/A'}</td>
+                                        <td>{log.timestamp ? new Date(log.timestamp).toLocaleString(getLang() === 'th' ? 'th-TH' : 'en-US') : 'N/A'}</td>
                                         <td>{log.lotNumber || '-'}</td>
                                         <td>{log.boxNo || '-'}</td>
                                         <td>{log.operatorName || log.userName || 'ไม่ระบุ'}</td>
@@ -289,7 +299,7 @@ const DataSummaryPanel = ({ title, data }) => {
                                 )) : (
                                     <tr>
                                         <td colSpan="4" style={{ textAlign: 'center', color: '#666' }}>
-                                            ไม่มีข้อมูลการบรรจุ
+                                            {t('noData')}
                                         </td>
                                     </tr>
                                 )}
@@ -310,18 +320,18 @@ const DataSummaryPanel = ({ title, data }) => {
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>เวลา</th>
-                                <th>ประเภทของเสีย</th>
-                                <th>จำนวน</th>
-                                <th>แหล่งที่มา</th>
-                                <th>ผู้บันทึก</th>
+                                <th>{t('timeLabel')}</th>
+                                <th>{t('ngTypeLabel')}</th>
+                                <th>{t('countLabel')}</th>
+                                <th>Source</th>
+                                <th>{t('recorderLabel')}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {data.map((log, i) => (
                                 <tr key={i}>
                                     <td>{log.timestamp}</td>
-                                    <td>{log.ngDescription}</td>
+                                    <td>{getNgDescription(log)}</td>
                                     <td>{log.quantity}</td>
                                     <td>{log.source}</td>
                                     <td>{log.userName}</td>
@@ -330,7 +340,7 @@ const DataSummaryPanel = ({ title, data }) => {
                             {data.length === 0 && (
                                 <tr>
                                     <td colSpan="5" style={{ textAlign: 'center', color: '#666' }}>
-                                        ไม่มีข้อมูลของเสีย
+                                        {t('noData')}
                                     </td>
                                 </tr>
                             )}
@@ -340,16 +350,16 @@ const DataSummaryPanel = ({ title, data }) => {
             </div>
 
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h4 className="summary-title">ประวัติ Downtime</h4>
+                <h4 className="summary-title">{t('downtimeSummaryTitle')}</h4>
                 <div className="data-table-container">
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>เวลาเริ่ม</th>
-                                <th>เวลาสิ้นสุด</th>
-                                <th>ระยะเวลา</th>
-                                <th>สาเหตุ</th>
-                                <th>ผู้บันทึก</th>
+                                <th>{t('startTime')}</th>
+                                <th>{t('endTime')}</th>
+                                <th>{t('duration')}</th>
+                                <th>{t('reason')}</th>
+                                <th>{t('recorderLabel')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -364,7 +374,7 @@ const DataSummaryPanel = ({ title, data }) => {
                             )) : (
                                 <tr>
                                     <td colSpan="5" style={{ textAlign: 'center', color: '#666' }}>
-                                        ไม่มีข้อมูล Downtime
+                                        {t('noData')}
                                     </td>
                                 </tr>
                             )}
@@ -374,16 +384,16 @@ const DataSummaryPanel = ({ title, data }) => {
             </div>
 
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h4 className="summary-title">ประวัติการใช้วัตถุดิบ</h4>
+                <h4 className="summary-title">{t('materialUsageSummaryTitle')}</h4>
                 <div className="data-table-container">
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>เวลา</th>
-                                <th>รหัสวัตถุดิบ</th>
-                                <th>Lot Number</th>
-                                <th>จำนวน (Kg.)</th>
-                                <th>ผู้บันทึก</th>
+                                <th>{t('timeLabel')}</th>
+                                <th>{t('materialCode')}</th>
+                                <th>{t('lotNumber')}</th>
+                                <th>{t('quantityKg')}</th>
+                                <th>{t('recorderLabel')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -398,7 +408,7 @@ const DataSummaryPanel = ({ title, data }) => {
                             )) : (
                                 <tr>
                                     <td colSpan="5" style={{ textAlign: 'center', color: '#666' }}>
-                                        ไม่มีข้อมูลการใช้วัตถุดิบ
+                                        {t('noData')}
                                     </td>
                                 </tr>
                             )}
@@ -436,15 +446,33 @@ const parseWorkersByRole = (text) => {
     return result;
 };
 
+// 🔧 Helper: เลือกชื่อประเภทของเสียตามภาษา (EN/TH) จากหลายชื่อฟิลด์ทั่วไป
+const getNgDescription = (row) => {
+    if (!row || typeof row !== 'object') return getLang() === 'th' ? 'ไม่ระบุ' : 'N/A';
+    const lang = getLang();
+    if (lang === 'en') {
+        return (
+            row.ngDescriptionEn || row.descriptionEn || row.ngTypeNameEn ||
+            row.englishDescription || row.englishName || row.ngEnglish ||
+            row.description || row.ngDescription || row.ngTypeName || 'N/A'
+        );
+    }
+    // Thai/default
+    return (
+        row.ngDescription || row.description || row.ngTypeName ||
+        row.ngDescriptionTh || row.descriptionTh || 'ไม่ระบุ'
+    );
+};
+
 // 🔧 Helper: สถานะ (display label + css class)
 const statusDisplay = (status) => {
-    if (!status) return 'ไม่ระบุ';
+    if (!status) return t('notSpecified');
     const key = String(status).toUpperCase();
     switch (key) {
-        case 'IN_PROGRESS': return 'กำลังดำเนินการ';
-        case 'ACTIVE': return 'พร้อมทำงาน';
-        case 'INACTIVE': return 'ปิดงาน';
-        case 'COMPLETED': return 'เสร็จสิ้น';
+        case 'IN_PROGRESS': return t('inProgress');
+        case 'ACTIVE': return t('active');
+        case 'INACTIVE': return t('inactive');
+        case 'COMPLETED': return t('completed');
         default: return status;
     }
 };
@@ -533,15 +561,15 @@ const GaugeCard = ({ machineName, productName, target, current, ng, status, stat
                 <p className="gauge-product-name">{productName}</p>
                 <div className="gauge-details">
                     <div className="gauge-detail-item">
-                        <span>ยอดผลิตดี</span>
+                        <span>{t('good')}</span>
                         <strong>{formatNumber(current)}</strong>
                     </div>
                     <div className="gauge-detail-item">
-                        <span>เป้าหมาย</span>
+                        <span>{t('target')}</span>
                         <strong>{formatNumber(target)}</strong>
                     </div>
                     <div className="gauge-detail-item ng">
-                        <span>ของเสีย</span>
+                        <span>{t('ng')}</span>
                         <strong>{formatNumber(ng)}</strong>
                     </div>
                 </div>
@@ -603,12 +631,12 @@ const ReportDetailView = ({ reportId, onBack }) => {
                 
                 if (!summaryResponse?.data && !reportSummaryResponse?.data) {
                     console.log('⚠️ No data from both APIs');
-                    setError('ไม่สามารถดึงข้อมูลสรุปได้ - ไม่พบข้อมูลจาก API');
+                    setError(t('cannotFetchSummaryNoApiData'));
                 }
                 
             } catch (err) {
                 console.error('🚨 Error fetching report details:', err);
-                setError(`ไม่สามารถดึงข้อมูลสรุปได้: ${err.message}`);
+                setError(`${t('cannotFetchSummary')}: ${err.message}`);
             } finally {
                 setLoading(false);
                 console.log('🏁 ReportDetailView: Data fetching completed');
@@ -617,21 +645,18 @@ const ReportDetailView = ({ reportId, onBack }) => {
         fetchData();
     }, [reportId]);
 
-    if (loading) return <div className="loading-container"><h2>กำลังโหลดรายละเอียด...</h2></div>;
-    if (error) return <div className="dashboard-card"><p className="error-message">{error}</p><button onClick={onBack} className="back-button">&larr; กลับ</button></div>;
+    if (loading) return <div className="loading-container"><h2>{t('loadingDetails')}</h2></div>;
+    if (error) return <div className="dashboard-card"><p className="error-message">{error}</p><button onClick={onBack} className="back-button">&larr; {t('back')}</button></div>;
     if (!summary) {
         console.log('⚠️ No summary data, rendering fallback message');
         console.log('📊 Current state - summary:', summary, 'reportSummary:', reportSummary);
         return (
             <div className="dashboard-card">
-                <button onClick={onBack} className="back-button">&larr; กลับไปหน้าก่อนหน้า</button>
+                <button onClick={onBack} className="back-button">&larr; {t('backToPrevious')}</button>
                 <div className="error-message" style={{textAlign: 'center', padding: '2rem'}}>
-                    <h3>ไม่พบข้อมูลสรุป</h3>
-                    <p>Report ID: {reportId}</p>
-                    <p>กรุณาตรวจสอบ Console สำหรับรายละเอียดเพิ่มเติม</p>
-                    <p style={{fontSize: '12px', color: '#666'}}>
-                        Debug: summary={summary ? 'has data' : 'null'}, reportSummary={reportSummary ? 'has data' : 'null'}
-                    </p>
+                    <h3>{t('noSummaryData')}</h3>
+                    <p>{t('reportIdLabel')}: {reportId}</p>
+                    <p>{t('pleaseCheckConsole')}</p>
                 </div>
             </div>
         );
@@ -689,7 +714,7 @@ const ReportDetailView = ({ reportId, onBack }) => {
         if (Array.isArray(scrapLogs) && scrapLogs.length > 0) {
             for (const l of scrapLogs) {
                 if (!isTechnicianLog(l)) continue;
-                const key = l?.reason || l?.description || 'ไม่ระบุสาเหตุ';
+                const key = l?.reason || l?.description || t('unspecifiedReason');
                 const w = parseFloat(l?.weightKg) || 0;
                 const prev = map.get(key) || { reason: key, count: 0, totalKg: 0 };
                 prev.count += 1;
@@ -705,7 +730,7 @@ const ReportDetailView = ({ reportId, onBack }) => {
         const map = new Map();
         if (Array.isArray(summary.materialUsageLogs)) {
             for (const m of summary.materialUsageLogs) {
-                const code = m.materialCode || 'ไม่ระบุ';
+                const code = m.materialCode || t('notSpecified');
                 const qty = parseFloat(m.quantityKg) || 0;
                 const prev = map.get(code) || { materialCode: code, totalKg: 0, count: 0 };
                 prev.totalKg += qty;
@@ -718,43 +743,43 @@ const ReportDetailView = ({ reportId, onBack }) => {
 
     return (
         <div className="dashboard-card">
-            <button onClick={onBack} className="back-button">&larr; กลับไปหน้าก่อนหน้า</button>
+            <button onClick={onBack} className="back-button">&larr; {t('backToPrevious')}</button>
             <h2 className="dashboard-title">
-                สรุปผลการผลิตเลขที่คำสั่ง: {reportSummary?.orderNumber || summary?.orderNumber || summary?.orderNo || summary?.prodOrder || summary?.productionOrder || '—'}
+                {t('productionSummaryTitle')}: {reportSummary?.orderNumber || summary?.orderNumber || summary?.orderNo || summary?.prodOrder || summary?.productionOrder || '—'}
             </h2>
             <p>
-                เครื่องจักร: {summary.machineName} | ผลิตภัณฑ์: {summary.productName} | เป้าหมาย: {summary.targetQty?.toLocaleString() || "N/A"} ชิ้น
+                {t('machineLabel')}: {summary.machineName} | {t('productLabel')}: {summary.productName} | {t('targetLabel')}: {summary.targetQty?.toLocaleString() || "N/A"}
             </p>
             
             {/* Basic KPIs */}
             <div className="kpi-grid" style={{gridTemplateColumns: 'repeat(6, 1fr)'}}>
-                <div className="kpi-card"><span className="kpi-label">ยอดผลิตดี</span><span className="kpi-value">{summary.goodQty?.toLocaleString() || "0"}</span></div>
-                <div className="kpi-card"><span className="kpi-label">ยอดของเสีย</span><span className="kpi-value ng-value">{summary.totalNgQty?.toLocaleString() || "0"}</span></div>
-                <div className="kpi-card"><span className="kpi-label">Yield</span><span className="kpi-value yield-value">{summary.yield || "0.00%"}</span></div>
-                <div className="kpi-card"><span className="kpi-label">น้ำหนักของเสียรวม (Kg.)</span><span className="kpi-value ng-value">{totalScrapWeightKg.toFixed(2)}</span></div>
-                <div className="kpi-card"><span className="kpi-label">วัตถุดิบใช้รวม (Kg.)</span><span className="kpi-value">{totalMaterialUsedKg.toFixed(2)}</span></div>
-                <div className="kpi-card"><span className="kpi-label">น้ำหนักของเสียจาก Technician (Kg.)</span><span className="kpi-value ng-value">{technicianScrapWeightKg.toFixed(2)}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('good')}</span><span className="kpi-value">{summary.goodQty?.toLocaleString() || "0"}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('ng')}</span><span className="kpi-value ng-value">{summary.totalNgQty?.toLocaleString() || "0"}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('yieldLabel')}</span><span className="kpi-value yield-value">{summary.yield || "0.00%"}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('scrapWeightLabel')}</span><span className="kpi-value ng-value">{totalScrapWeightKg.toFixed(2)}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('materialUsageSummaryTitle')} (Kg.)</span><span className="kpi-value">{totalMaterialUsedKg.toFixed(2)}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('technicianScrapSummaryTitle')} (Kg.)</span><span className="kpi-value ng-value">{technicianScrapWeightKg.toFixed(2)}</span></div>
             </div>
             
             {/* Enhanced OEE Metrics */}
             {reportSummary && (
                 <div className="oee-metrics-panel" style={{ marginTop: '1.5rem', background: '#f8f9fa', padding: '1.5rem', borderRadius: '0.75rem' }}>
-                    <h3 style={{ color: '#2c3e50', marginBottom: '1rem' }}>📊 ตัวชี้วัด OEE (Overall Equipment Effectiveness)</h3>
+                    <h3 style={{ color: '#2c3e50', marginBottom: '1rem' }}>📊 {t('oeeTitle')}</h3>
                     <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                         <div className="kpi-card oee-card">
-                            <span className="kpi-label">OEE รวม</span>
+                            <span className="kpi-label">{t('oeeOverall')}</span>
                             <span className="kpi-value oee-value" style={{ fontSize: '2rem', color: '#e74c3c' }}>{reportSummary.oee || '0.00%'}</span>
                         </div>
                         <div className="kpi-card">
-                            <span className="kpi-label">Availability</span>
+                            <span className="kpi-label">{t('availability')}</span>
                             <span className="kpi-value" style={{ fontSize: '1.5rem', color: '#3498db' }}>{reportSummary.availability || '0.00%'}</span>
                         </div>
                         <div className="kpi-card">
-                            <span className="kpi-label">Performance</span>
+                            <span className="kpi-label">{t('performance')}</span>
                             <span className="kpi-value" style={{ fontSize: '1.5rem', color: '#f39c12' }}>{reportSummary.performance || '0.00%'}</span>
                         </div>
                         <div className="kpi-card">
-                            <span className="kpi-label">Quality</span>
+                            <span className="kpi-label">{t('quality')}</span>
                             <span className="kpi-value" style={{ fontSize: '1.5rem', color: '#27ae60' }}>{reportSummary.quality || '0.00%'}</span>
                         </div>
                     </div>
@@ -764,20 +789,20 @@ const ReportDetailView = ({ reportId, onBack }) => {
             {/* NG Type Summary */}
             {reportSummary?.ngTypeSummary?.length > 0 && (
                 <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                    <h3 style={{ color: '#e74c3c' }}>🔴 สรุปประเภทของเสีย</h3>
+                    <h3 style={{ color: '#e74c3c' }}>🔴 {t('ngSummaryTitle')}</h3>
                     <div className="data-table-container">
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>ประเภทของเสีย</th>
-                                    <th>จำนวน (ชิ้น)</th>
-                                    <th>เปอร์เซ็นต์</th>
+                                    <th>{t('ngTypeLabel')}</th>
+                                    <th>{t('pieces')}</th>
+                                    <th>{t('percent')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {reportSummary.ngTypeSummary.map((ng, i) => (
                                     <tr key={i}>
-                                        <td>{ng.description || 'ไม่ระบุ'}</td>
+                                        <td>{getNgDescription(ng)}</td>
                                         <td style={{ textAlign: 'right' }}>{ng.count?.toLocaleString() || 0}</td>
                                         <td style={{ textAlign: 'right', color: '#e74c3c' }}>{ng.percentage ? ng.percentage.toFixed(2) + '%' : '0.00%'}</td>
                                     </tr>
@@ -790,14 +815,14 @@ const ReportDetailView = ({ reportId, onBack }) => {
 
             {/* Material Usage Summary (aggregated) */}
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h3 style={{ color: '#2c3e50' }}>🏭 สรุปยอดใช้วัตถุดิบ</h3>
+                <h3 style={{ color: '#2c3e50' }}>🏭 {t('materialUsageSummaryTitle')}</h3>
                 <div className="data-table-container">
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>รหัสวัตถุดิบ</th>
-                                <th style={{ textAlign: 'right' }}>จำนวนครั้ง</th>
-                                <th style={{ textAlign: 'right' }}>รวม (Kg.)</th>
+                                <th>{t('materialCode')}</th>
+                                <th style={{ textAlign: 'right' }}>{t('count')}</th>
+                                <th style={{ textAlign: 'right' }}>{t('quantityKg')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -809,7 +834,7 @@ const ReportDetailView = ({ reportId, onBack }) => {
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan={3} style={{ textAlign: 'center', color: '#666' }}>ไม่มีข้อมูลการใช้วัตถุดิบ</td>
+                                    <td colSpan={3} style={{ textAlign: 'center', color: '#666' }}>{t('noMaterialUsageData')}</td>
                                 </tr>
                             )}
                         </tbody>
@@ -819,14 +844,14 @@ const ReportDetailView = ({ reportId, onBack }) => {
 
             {/* Technician Scrap Summary (if available) */}
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h3 style={{ color: '#8e44ad' }}>🧰 สรุปของเสียจาก Technician</h3>
+                <h3 style={{ color: '#8e44ad' }}>🧰 {t('technicianScrapSummaryTitle')}</h3>
                 <div className="data-table-container">
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>สาเหตุ / รายการ</th>
-                                <th style={{ textAlign: 'right' }}>จำนวนครั้ง</th>
-                                <th style={{ textAlign: 'right' }}>รวม (Kg.)</th>
+                                <th>{t('reason')}</th>
+                                <th style={{ textAlign: 'right' }}>{t('count')}</th>
+                                <th style={{ textAlign: 'right' }}>{t('quantityKg')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -838,7 +863,7 @@ const ReportDetailView = ({ reportId, onBack }) => {
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan={3} style={{ textAlign: 'center', color: '#666' }}>ไม่มีข้อมูลของเสียจาก Technician</td>
+                                    <td colSpan={3} style={{ textAlign: 'center', color: '#666' }}>{t('noTechnicianScrapData')}</td>
                                 </tr>
                             )}
                         </tbody>
@@ -849,22 +874,22 @@ const ReportDetailView = ({ reportId, onBack }) => {
             {/* Downtime Reason Summary */}
             {reportSummary?.downtimeReasonSummary?.length > 0 && (
                 <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                    <h3 style={{ color: '#f39c12' }}>⏰ สรุปสาเหตุ Downtime</h3>
+                    <h3 style={{ color: '#f39c12' }}>⏰ {t('downtimeSummaryTitle')}</h3>
                     <div className="data-table-container">
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>สาเหตุ</th>
-                                    <th>ระยะเวลารวม</th>
-                                    <th>จำนวนครั้ง</th>
-                                    <th>เปอร์เซ็นต์</th>
+                                    <th>{t('reason')}</th>
+                                    <th>{t('duration')}</th>
+                                    <th>{t('count')}</th>
+                                    <th>{t('percent')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {reportSummary.downtimeReasonSummary.map((dt, i) => (
                                     <tr key={i}>
-                                        <td>{dt.reason || 'ไม่ระบุสาเหตุ'}</td>
-                                        <td style={{ textAlign: 'right' }}>{dt.formattedDuration || '0 นาที'}</td>
+                                        <td>{dt.reason || t('unspecifiedReason')}</td>
+                                        <td style={{ textAlign: 'right' }}>{dt.formattedDuration || `0 ${t('minutes')}`}</td>
                                         <td style={{ textAlign: 'center' }}>{dt.count || 0}</td>
                                         <td style={{ textAlign: 'right', color: '#f39c12' }}>{dt.percentage ? dt.percentage.toFixed(2) + '%' : '0.00%'}</td>
                                     </tr>
@@ -875,16 +900,16 @@ const ReportDetailView = ({ reportId, onBack }) => {
                 </div>
             )}
             <div className="summary-panel">
-                <h3>ประวัติ Downtime</h3>
+                <h3>{t('downtimeHistory')}</h3>
                 <div className="data-table-container">
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>เวลาเริ่ม</th>
-                                <th>เวลาสิ้นสุด</th>
-                                <th>ระยะเวลา</th>
-                                <th>สาเหตุ</th>
-                                <th>ผู้บันทึก</th>
+                                <th>{t('startTime')}</th>
+                                <th>{t('endTime')}</th>
+                                <th>{t('duration')}</th>
+                                <th>{t('reason')}</th>
+                                <th>{t('recorderLabel')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -898,7 +923,7 @@ const ReportDetailView = ({ reportId, onBack }) => {
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="5">ไม่มีข้อมูล Downtime</td>
+                                    <td colSpan="5">{t('noDowntimeData')}</td>
                                 </tr>
                             )}
                         </tbody>
@@ -954,20 +979,20 @@ const DailyReportSelector = ({ onBack, onDateSelected, defaultDate, machineId, p
     if (loading) {
         return (
             <div className="dashboard-card">
-                <button onClick={onBack} className="back-button">&larr; กลับไปหน้ารายงานย้อนหลัง</button>
-                <h2>กำลังโหลดรายการวันที่...</h2>
+                <button onClick={onBack} className="back-button">&larr; {t('backToHistory')}</button>
+                <h2>{t('loadingData')}</h2>
             </div>
         );
     }
 
     return (
         <div className="dashboard-card">
-            <button onClick={onBack} className="back-button">&larr; กลับไปหน้ารายงานย้อนหลัง</button>
-            <h2 className="dashboard-title">เลือกวันที่สำหรับสรุปรายวัน{orderNumber ? ` • ใบสั่งผลิต: ${orderNumber}` : ''}</h2>
+            <button onClick={onBack} className="back-button">&larr; {t('backToHistory')}</button>
+            <h2 className="dashboard-title">{t('selectDateForDailySummary')}{orderNumber ? ` • ${t('productionSummaryTitle')}: ${orderNumber}` : ''}</h2>
             
             <div className="filters-section" style={{ marginTop: '2rem' }}>
                 <div className="filter-group">
-                    <label htmlFor="dailyDate">เลือกวันที่:</label>
+                    <label htmlFor="dailyDate">{t('chooseDate')}:</label>
                     <input
                         type="date"
                         id="dailyDate"
@@ -979,17 +1004,17 @@ const DailyReportSelector = ({ onBack, onDateSelected, defaultDate, machineId, p
                 
                 {availableDates.length > 0 && (
                     <div className="filter-group">
-                        <label htmlFor="availableDates">หรือเลือกจากวันที่ที่มีข้อมูล:</label>
+                        <label htmlFor="availableDates">{t('chooseFromAvailableDates')}:</label>
                         <select
                             id="availableDates"
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
                             className="select-input"
                         >
-                            <option value="">เลือกวันที่...</option>
+                            <option value="">{t('chooseDate')}...</option>
                             {availableDates.map(date => (
                                 <option key={date} value={date}>
-                                    {new Date(date).toLocaleDateString('th-TH', {
+                                    {new Date(date).toLocaleDateString(getLang() === 'th' ? 'th-TH' : 'en-US', {
                                         year: 'numeric',
                                         month: 'long',
                                         day: 'numeric',
@@ -1007,16 +1032,16 @@ const DailyReportSelector = ({ onBack, onDateSelected, defaultDate, machineId, p
                         className="search-button"
                         disabled={!selectedDate}
                     >
-                        ดูสรุปรายวัน
+                        {t('viewDailySummary')}
                     </button>
                 </div>
             </div>
             
             {availableDates.length === 0 && !loading && (
                 <div className="info-message" style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
-                    <p>📅 ไม่พบข้อมูลรายงานในช่วง 30 วันที่ผ่านมา</p>
+                    <p>📅 {t('noAvailableDates')}</p>
                     <p style={{ fontSize: '0.9rem', color: '#666' }}>
-                        คุณยังสามารถเลือกวันที่ด้วยตนเองได้ ระบบจะแสดงข้อมูลหากมี
+                        {t('youCanPickDate')}
                     </p>
                 </div>
             )}
@@ -1028,6 +1053,7 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [oeeData, setOeeData] = useState(null);
 
     useEffect(() => {
         const fetchDailySummary = async () => {
@@ -1062,15 +1088,28 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
         fetchDailySummary();
     }, [date]);
 
-    if (loading) return <div className="loading-container"><h2>กำลังโหลดสรุปรายวัน...</h2></div>;
+    useEffect(() => {
+        const fetchOee = async () => {
+            if (!machineId || !date) return;
+            try {
+                const res = await api.get(`/oee/${machineId}?date=${date}`);
+                setOeeData(res.data);
+            } catch {
+                setOeeData(null);
+            }
+        };
+        fetchOee();
+    }, [machineId, date]);
+
+    if (loading) return <div className="loading-container"><h2>{t('loadingDailySummary')}</h2></div>;
     
     if (error) return (
         <div className="dashboard-card">
-            <button onClick={onBack} className="back-button">&larr; กลับ</button>
+            <button onClick={onBack} className="back-button">&larr; {t('back')}</button>
             <p className="error-message">{error}</p>
             <div className="buttons-section" style={{ marginTop: '1rem' }}>
                 <button onClick={onSelectNewDate} className="search-button">
-                    เลือกวันที่อื่น
+                    {t('selectOtherDate')}
                 </button>
             </div>
         </div>
@@ -1078,11 +1117,11 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
     
     if (!summary) return (
         <div className="dashboard-card">
-            <button onClick={onBack} className="back-button">&larr; กลับ</button>
-            <p>ไม่มีข้อมูลสำหรับวันที่ {date}</p>
+            <button onClick={onBack} className="back-button">&larr; {t('back')}</button>
+            <p>{t('noData')} - {date}</p>
             <div className="buttons-section" style={{ marginTop: '1rem' }}>
                 <button onClick={onSelectNewDate} className="search-button">
-                    เลือกวันที่อื่น
+                    {t('selectOtherDate')}
                 </button>
             </div>
         </div>
@@ -1094,18 +1133,12 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
         const totalGood = summary.totalGoodQty || 0;
         const totalNg = summary.totalNgQty || 0;
         const actualGood = Math.max(totalGood - totalNg, 0);
-        
         const yieldPercent = totalTarget > 0 ? ((actualGood / totalTarget) * 100) : 0;
-        const oeePercent = yieldPercent * 0.85; // Simplified OEE calculation
-        
-        return {
-            totalTarget,
-            yieldPercent: yieldPercent.toFixed(2),
-            oeePercent: oeePercent.toFixed(2)
-        };
+        return { totalTarget, yieldPercent: yieldPercent.toFixed(2) };
     };
 
     const metrics = calculateMetrics();
+    const oeePercent = oeeData ? oeeData.oee.toFixed(1) : null;
 
     // เพิ่ม KPI ตามเทมเพลตภาพรวม: วัตถุดิบใช้รวม และ น้ำหนักของเสียจาก Technician
     const totalMaterialUsedKg = Array.isArray(summary.materialUsageLogs)
@@ -1174,39 +1207,39 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
     return (
         <div className="dashboard-card">
             <div className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <button onClick={onBack} className="back-button">&larr; กลับไปหน้ารายงานย้อนหลัง</button>
+                <button onClick={onBack} className="back-button">&larr; {t('backToHistory')}</button>
                 <button onClick={onSelectNewDate} className="edit-button">
-                    📅 เลือกวันที่อื่น
+                    📅 {t('selectOtherDate')}
                 </button>
             </div>
-            <h2 className="dashboard-title">สรุปรายงานประจำวันที่: {new Date(date).toLocaleDateString('th-TH', {
+            <h2 className="dashboard-title">{t('productionOverviewTitle')}: {new Date(date).toLocaleDateString(getLang() === 'th' ? 'th-TH' : 'en-US', {
                 year: 'numeric',
                 month: 'long', 
                 day: 'numeric',
                 weekday: 'long'
-            })}{orderNumber ? ` • ใบสั่งผลิต: ${orderNumber}` : ''}</h2>
+            })}{orderNumber ? ` • ${t('orderNumber')}: ${orderNumber}` : ''}</h2>
 
             {/* แสดงเครื่องจักร/ผลิตภัณฑ์/เป้าหมายตาม Template */}
             <p>
-                เครื่องจักร: {summary?.machineName || ctxMachineName || 'ไม่มีข้อมูล'} | ผลิตภัณฑ์: {summary?.productName || ctxProductName || 'ไม่มีข้อมูล'} | เป้าหมาย: {(summary?.dailyReports && summary.dailyReports.length > 0)
+                {t('machineLabel')}: {summary?.machineName || ctxMachineName || t('notSpecified')} | {t('productLabel')}: {summary?.productName || ctxProductName || t('notSpecified')} | {t('targetLabel')}: {(summary?.dailyReports && summary.dailyReports.length > 0)
                     ? (summary.dailyReports.reduce((s, r) => s + (r.targetQty || 0), 0)).toLocaleString()
-                    : 'N/A'} ชิ้น
+                    : 'N/A'}
             </p>
 
             {/* เครื่องจักรและผลิตภัณฑ์ที่ใช้ในวันนี้ */}
             {summary.dailyReports && summary.dailyReports.length > 0 && (
                 <div className="summary-panel" style={{ marginTop: '1rem' }}>
-                    <h3 className="summary-title">เครื่องจักรและผลิตภัณฑ์ที่ผลิตในวันนี้</h3>
+                    <h3 className="summary-title">{t('machineProductToday')}</h3>
                     <div className="data-table-container">
                         <table className="data-table">
-                            <thead><tr><th>คำสั่งผลิต</th><th>เครื่องจักร</th><th>ผลิตภัณฑ์</th><th>สถานะ</th></tr></thead>
+                            <thead><tr><th>{t('orderNumber')}</th><th>{t('machineLabel')}</th><th>{t('productLabel')}</th><th>{t('statusLabel')}</th></tr></thead>
                             <tbody>
                                 {summary.dailyReports.map((report, i) => {
                                     return (
                                         <tr key={i}>
-                                            <td><strong>{report.orderNumber || 'ไม่ระบุ'}</strong></td>
-                                            <td>{report.machineName || 'ไม่ระบุ'}</td>
-                                            <td>{report.productName || 'ไม่ระบุ'}</td>
+                                            <td><strong>{report.orderNumber || t('notSpecified')}</strong></td>
+                                            <td>{report.machineName || t('notSpecified')}</td>
+                                            <td>{report.productName || t('notSpecified')}</td>
                                             <td>
                                                 <span className={`status-${statusClass(report.status)}`}>
                                                     {statusDisplay(report.status)}
@@ -1223,31 +1256,69 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
 
             {/* KPI Grid หลัก */}
             <div className="kpi-grid pc-kpi" style={{gridTemplateColumns: 'repeat(6, 1fr)', marginTop: '1.5rem'}}>
-                <div className="kpi-card"><span className="kpi-label">เป้าหมายรวม</span><span className="kpi-value">{metrics.totalTarget.toLocaleString()}</span></div>
-                <div className="kpi-card"><span className="kpi-label">ยอดผลิตดีทั้งหมด</span><span className="kpi-value">{summary.totalGoodQty.toLocaleString()}</span></div>
-                <div className="kpi-card"><span className="kpi-label">ยอดของเสียทั้งหมด</span><span className="kpi-value ng-value">{summary.totalNgQty.toLocaleString()}</span></div>
-                <div className="kpi-card"><span className="kpi-label">จำนวนกล่องทั้งหมด</span><span className="kpi-value">{summary.totalGoodBoxes?.toLocaleString() || 0}</span></div>
-                <div className="kpi-card"><span className="kpi-label">Yield (%)</span><span className="kpi-value yield-value">{metrics.yieldPercent}%</span></div>
-                <div className="kpi-card"><span className="kpi-label">OEE (%)</span><span className="kpi-value oee-value">{metrics.oeePercent}%</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('totalTargetLabel')}</span><span className="kpi-value">{metrics.totalTarget.toLocaleString()}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('totalGoodAll')}</span><span className="kpi-value">{summary.totalGoodQty.toLocaleString()}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('totalNgAll')}</span><span className="kpi-value ng-value">{summary.totalNgQty.toLocaleString()}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('totalBoxes')}</span><span className="kpi-value">{summary.totalGoodBoxes?.toLocaleString() || 0}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('yieldLabel')}</span><span className="kpi-value yield-value">{metrics.yieldPercent}%</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('oeeLabel')}</span><span className="kpi-value oee-value">{oeePercent !== null ? `${oeePercent}%` : '-'}</span></div>
             </div>
 
+            {/* OEE Breakdown Panel */}
+            {oeeData && (
+                <div className="summary-panel" style={{ marginTop: '1rem' }}>
+                    <h3 className="summary-title">OEE Breakdown</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                        {[
+                            { label: 'Availability', value: oeeData.availability, detail: `${oeeData.runningMinutes} / ${oeeData.plannedProductionMinutes} นาที` },
+                            { label: 'Performance', value: oeeData.performance, detail: `Ideal cycle: ${oeeData.idealCycleTimeSec}s` },
+                            { label: 'Quality', value: oeeData.quality, detail: `Good: ${oeeData.goodQty} / Total: ${oeeData.totalQty}` },
+                        ].map(({ label, value, detail }) => {
+                            const pct = value.toFixed(1);
+                            const color = value >= 85 ? '#16a34a' : value >= 60 ? '#d97706' : '#dc2626';
+                            return (
+                                <div key={label} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, background: '#fff' }}>
+                                    <div style={{ fontWeight: 600, marginBottom: 6, color: '#374151' }}>{label}</div>
+                                    <div style={{ fontSize: 28, fontWeight: 700, color }}>{pct}%</div>
+                                    <div style={{ marginTop: 6, height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
+                                        <div style={{ height: '100%', width: `${Math.min(value, 100)}%`, background: color, borderRadius: 4, transition: 'width 0.5s' }} />
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{detail}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div style={{ marginTop: 12, padding: '10px 14px', background: '#f8fafc', borderRadius: 8, display: 'flex', gap: 24, fontSize: 13, color: '#374151' }}>
+                        <span>Running: <strong>{oeeData.runningMinutes} น.</strong></span>
+                        <span>Idle: <strong>{oeeData.idleMinutes} น.</strong></span>
+                        <span>Unplanned Stop: <strong style={{ color: '#dc2626' }}>{oeeData.unplannedStopMinutes} น.</strong></span>
+                        <span>Planned Stop: <strong>{oeeData.plannedStopMinutes} น.</strong></span>
+                    </div>
+                </div>
+            )}
+            {!oeeData && machineId && (
+                <div style={{ marginTop: '1rem', padding: '10px 14px', background: '#fffbeb', borderRadius: 8, fontSize: 13, color: '#92400e' }}>
+                    OEE: ยังไม่มีข้อมูล MachineStatusLog หรือ Recipe สำหรับวันนี้ — ต้องบันทึกสถานะเครื่องและตั้ง Recipe ก่อน
+                </div>
+            )}
+
             <div className="kpi-grid pc-kpi" style={{gridTemplateColumns: 'repeat(4, 1fr)', marginTop: '1rem'}}>
-                <div className="kpi-card"><span className="kpi-label">น้ำหนักของเสียรวม (Kg.)</span><span className="kpi-value ng-value">{summary.totalScrapWeight?.toFixed(2) || 0}</span></div>
-                <div className="kpi-card"><span className="kpi-label">ของเสียจาก Technician (Kg.)</span><span className="kpi-value ng-value">{technicianScrapTotalKg.toFixed(2)}</span></div>
-                <div className="kpi-card"><span className="kpi-label">วัตถุดิบใช้รวม (Kg.)</span><span className="kpi-value">{totalMaterialUsedKg.toFixed(2)}</span></div>
-                <div className="kpi-card"><span className="kpi-label">จำนวนประเภทของเสีย</span><span className="kpi-value">{summary.ngSummary?.length || 0} ประเภท</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('totalScrapWeightLabel')}</span><span className="kpi-value ng-value">{summary.totalScrapWeight?.toFixed(2) || 0}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('technicianScrapWeightLabel')}</span><span className="kpi-value ng-value">{technicianScrapTotalKg.toFixed(2)}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('totalMaterialUsedLabel')}</span><span className="kpi-value">{totalMaterialUsedKg.toFixed(2)}</span></div>
+                <div className="kpi-card"><span className="kpi-label">{t('ngTypesCountLabel')}</span><span className="kpi-value">{summary.ngSummary?.length || 0}</span></div>
             </div>
 
             {/* สรุปยอดใช้วัตถุดิบ (รวมทั้งวัน) */}
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h3 className="summary-title">🏭 สรุปยอดใช้วัตถุดิบ (ทั้งวัน)</h3>
+                <h3 className="summary-title">🏭 {t('materialUsageWholeDay')}</h3>
                 <div className="data-table-container">
                     <table className="data-table">
-                        <thead><tr><th>รหัสวัตถุดิบ</th><th style={{textAlign:'right'}}>จำนวนครั้ง</th><th style={{textAlign:'right'}}>รวม (Kg.)</th></tr></thead>
+                        <thead><tr><th>{t('materialCode')}</th><th style={{textAlign:'right'}}>{t('count')}</th><th style={{textAlign:'right'}}>{t('quantityKg')}</th></tr></thead>
                         <tbody>
                             {materialAgg.length > 0 ? materialAgg.map((row) => (
                                 <tr key={row.materialCode}><td>{row.materialCode}</td><td style={{textAlign:'right'}}>{row.count.toLocaleString()}</td><td style={{textAlign:'right'}}>{row.totalKg.toFixed(3)}</td></tr>
-                            )) : <tr><td colSpan={3} style={{textAlign:'center', color:'#666'}}>ไม่มีข้อมูล</td></tr>}
+                            )) : <tr><td colSpan={3} style={{textAlign:'center', color:'#666'}}>{t('noData')}</td></tr>}
                         </tbody>
                     </table>
                 </div>
@@ -1255,14 +1326,14 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
 
             {/* สรุปสาเหตุ Downtime (รวมทั้งวัน) */}
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h3 className="summary-title">⏰ สรุปสาเหตุ Downtime (ทั้งวัน)</h3>
+                <h3 className="summary-title">⏰ {t('downtimeWholeDay')}</h3>
                 <div className="data-table-container">
                     <table className="data-table">
-                        <thead><tr><th>สาเหตุ</th><th style={{textAlign:'right'}}>ระยะเวลารวม</th><th style={{textAlign:'right'}}>จำนวนครั้ง</th><th style={{textAlign:'right'}}>เปอร์เซ็นต์</th></tr></thead>
+                        <thead><tr><th>{t('reason')}</th><th style={{textAlign:'right'}}>{t('duration')}</th><th style={{textAlign:'right'}}>{t('count')}</th><th style={{textAlign:'right'}}>{t('percentageLabel')}</th></tr></thead>
                         <tbody>
                             {downtimeReasonAgg.length > 0 ? downtimeReasonAgg.map((r, i) => (
                                 <tr key={i}><td>{r.reason}</td><td style={{textAlign:'right'}}>{r.formattedDuration}</td><td style={{textAlign:'right'}}>{r.count}</td><td style={{textAlign:'right'}}>{r.percentage.toFixed(2)}%</td></tr>
-                            )) : <tr><td colSpan={4} style={{textAlign:'center', color:'#666'}}>ไม่มีข้อมูล</td></tr>}
+                            )) : <tr><td colSpan={4} style={{textAlign:'center', color:'#666'}}>{t('noData')}</td></tr>}
                         </tbody>
                     </table>
                 </div>
@@ -1270,16 +1341,16 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
 
             {/* ตารางน้ำหนักของเสีย PE/PP จาก Technician */}
             <div className="summary-panel" style={{ marginTop: '2rem' }}>
-                <h3 className="summary-title">🏷️ น้ำหนักของเสีย PE/PP (จาก Technician)</h3>
+                <h3 className="summary-title">🏷️ {t('technicianWasteWeightTitle')}</h3>
                 <div className="data-table-container">
                     <table className="data-table">
-                        <thead><tr><th>ประเภทวัสดุ</th><th>จำนวนครั้ง</th><th>น้ำหนัก (กก.)</th><th>เปอร์เซ็นต์</th></tr></thead>
+                        <thead><tr><th>{t('ngTypeLabel')}</th><th>{t('count')}</th><th>{t('scrapWeightLabel')}</th><th>{t('percentageLabel')}</th></tr></thead>
                         <tbody>
                             {summary.ngSummary?.length > 0 ? (() => {
                                 const weightData = summary.ngSummary.filter(ng => (ng.weightKg || 0) > 0);
                                 
                                 if (weightData.length === 0) {
-                                    return <tr><td colSpan="4">ไม่มีข้อมูลน้ำหนักของเสียจาก Technician</td></tr>;
+                                    return <tr><td colSpan="4">{t('noData')}</td></tr>;
                                 }
                                 
                                 const totalWeight = weightData.reduce((sum, ng) => sum + (ng.weightKg || 0), 0);
@@ -1294,14 +1365,14 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
                                         
                                         return (
                                             <tr key={i} className="technician-weight-row">
-                                                <td><strong>{ng.ngDescription}</strong></td>
+                                                <td><strong>{getNgDescription(ng)}</strong></td>
                                                 <td>{count.toLocaleString()}</td>
-                                                <td className="ng-weight"><strong>{weightDisplay} กก.</strong></td>
+                                                <td className="ng-weight"><strong>{weightDisplay} {t('kgUnit')}</strong></td>
                                                 <td className="ng-percentage"><strong>{percentage}%</strong></td>
                                             </tr>
                                         );
                                     });
-                            })() : <tr><td colSpan="4">ไม่มีข้อมูล</td></tr>}
+                            })() : <tr><td colSpan="4">{t('noData')}</td></tr>}
                         </tbody>
                     </table>
                 </div>
@@ -1309,16 +1380,16 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
 
             {/* ตารางของเสียแบบชิ้น */}
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h3 className="summary-title">📊 สรุปของเสียแบบชิ้น</h3>
+                <h3 className="summary-title">📊 {t('pieceWasteSummaryTitle')}</h3>
                 <div className="data-table-container">
                     <table className="data-table">
-                        <thead><tr><th>ประเภทของเสีย</th><th>จำนวน (ชิ้น)</th><th>เปอร์เซ็นต์</th></tr></thead>
+                        <thead><tr><th>{t('ngTypeLabel')}</th><th>{t('ngPiecesLabel')}</th><th>{t('percentageLabel')}</th></tr></thead>
                         <tbody>
                             {summary.ngSummary?.length > 0 ? (() => {
                                 const pieceData = summary.ngSummary.filter(ng => (ng.weightKg || 0) === 0);
                                 
                                 if (pieceData.length === 0) {
-                                    return <tr><td colSpan="3">ไม่มีข้อมูลของเสียแบบชิ้น</td></tr>;
+                                    return <tr><td colSpan="3">{t('noData')}</td></tr>;
                                 }
                                 
                                 const totalPieces = pieceData.reduce((sum, ng) => sum + (ng.count || 0), 0);
@@ -1331,27 +1402,27 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
                                         
                                         return (
                                             <tr key={i} className="piece-count-row">
-                                                <td><strong>{ng.ngDescription}</strong></td>
+                                                <td><strong>{getNgDescription(ng)}</strong></td>
                                                 <td>{count.toLocaleString()}</td>
                                                 <td className="ng-percentage"><strong>{percentage}%</strong></td>
                                             </tr>
                                         );
                                     });
-                            })() : <tr><td colSpan="3">ไม่มีข้อมูล</td></tr>}
+                            })() : <tr><td colSpan="3">{t('noData')}</td></tr>}
                         </tbody>
                     </table>
                 </div>
             </div>
 
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h3 className="summary-title">ประวัติการใช้วัตถุดิบ</h3>
+                <h3 className="summary-title">{t('materialUsageHistoryTitle')}</h3>
                 <div className="data-table-container">
                     <table className="data-table">
-                        <thead><tr><th>เวลา</th><th>รหัสวัตถุดิบ</th><th>Lot Number</th><th>จำนวน (Kg.)</th><th>ผู้บันทึก</th></tr></thead>
+                        <thead><tr><th>{t('timeLabel')}</th><th>{t('materialCode')}</th><th>{t('lotNumber')}</th><th>{t('quantityKg')}</th><th>{t('recorderLabel')}</th></tr></thead>
                         <tbody>
                             {summary.materialUsageLogs?.length > 0 ? summary.materialUsageLogs.map((log, i) => (
-                                <tr key={i}><td>{new Date(log.timestamp).toLocaleString()}</td><td>{log.materialCode}</td><td>{log.lotNumber}</td><td>{log.quantityKg}</td><td>{log.technicianName}</td></tr>
-                            )) : <tr><td colSpan="5">ไม่มีข้อมูล</td></tr>}
+                                <tr key={i}><td>{new Date(log.timestamp).toLocaleString(getLang() === 'th' ? 'th-TH' : 'en-US')}</td><td>{log.materialCode}</td><td>{log.lotNumber}</td><td>{log.quantityKg}</td><td>{log.technicianName}</td></tr>
+                            )) : <tr><td colSpan="5">{t('noData')}</td></tr>}
                         </tbody>
                     </table>
                 </div>
@@ -1359,28 +1430,28 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
 
             {/* รายการบันทึกการบรรจุ (ทั้งวัน 03:00–03:00) */}
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h3 className="summary-title">📦 รายการบันทึกการบรรจุ (ทั้งวัน)</h3>
+                <h3 className="summary-title">📦 {t('packagingLogsWholeDayTitle')}</h3>
                 <div className="data-table-container">
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>เวลา</th>
-                                <th>Lot Number</th>
-                                <th>กล่องที่</th>
-                                <th>ผู้บรรจุ/ผู้บันทึก</th>
+                                <th>{t('timeLabel')}</th>
+                                <th>{t('lotNumber')}</th>
+                                <th>{t('boxNo')}</th>
+                                <th>{t('operator')}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {Array.isArray(summary.packagingLogs) && summary.packagingLogs.length > 0 ? summary.packagingLogs.map((log, idx) => (
                                 <tr key={idx}>
-                                    <td>{log.timestamp ? new Date(log.timestamp).toLocaleString('th-TH') : 'N/A'}</td>
+                                    <td>{log.timestamp ? new Date(log.timestamp).toLocaleString(getLang() === 'th' ? 'th-TH' : 'en-US') : 'N/A'}</td>
                                     <td>{log.lotNumber || '-'}</td>
                                     <td>{log.boxNo || '-'}</td>
-                                    <td>{log.operatorName || log.userName || 'ไม่ระบุ'}</td>
+                                    <td>{log.operatorName || log.userName || t('notSpecified')}</td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="4" style={{ textAlign: 'center', color: '#666' }}>ไม่มีข้อมูลการบรรจุ</td>
+                                    <td colSpan="4" style={{ textAlign: 'center', color: '#666' }}>{t('noData')}</td>
                                 </tr>
                             )}
                         </tbody>
@@ -1389,14 +1460,14 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
             </div>
 
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h3 className="summary-title">ประวัติ Downtime</h3>
+                <h3 className="summary-title">{t('downtimeHistory')}</h3>
                 <div className="data-table-container">
                     <table className="data-table">
-                        <thead><tr><th>เวลาเริ่ม</th><th>เวลาสิ้นสุด</th><th>ระยะเวลา</th><th>สาเหตุ</th><th>ผู้บันทึก</th></tr></thead>
+                        <thead><tr><th>{t('startTime')}</th><th>{t('endTime')}</th><th>{t('duration')}</th><th>{t('reason')}</th><th>{t('recorderLabel')}</th></tr></thead>
                         <tbody>
                             {summary.downtimeEvents?.length > 0 ? summary.downtimeEvents.map((evt, i) => (
                                 <tr key={i}><td>{evt.startTime}</td><td>{evt.endTime}</td><td>{evt.duration}</td><td>{evt.reason}</td><td>{evt.technicianName}</td></tr>
-                            )) : <tr><td colSpan="5">ไม่มีข้อมูล</td></tr>}
+                            )) : <tr><td colSpan="5">{t('noData')}</td></tr>}
                         </tbody>
                     </table>
                 </div>
@@ -1404,20 +1475,20 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
 
             {/* สรุปกะทำงานและบุคลากร (นับตามจริงและแยกตามบทบาท) */}
             <div className="summary-panel" style={{ marginTop: '1.5rem' }}>
-                <h3 className="summary-title">สรุปกะทำงานและบุคลากร</h3>
+                <h3 className="summary-title">{t('totalWorkersSummaryTitle')}</h3>
                 <div className="shift-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
                     <div className="shift-card" style={{ padding: '1rem', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f8f9fa' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#333' }}>กะเช้า (03:00-15:00)</h4>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#333' }}>{t('morningShift')}</h4>
                         <div className="shift-info">
-                            <p><strong>หัวหน้ากะ:</strong> {summary.morningShiftSupervisor || 'ไม่ระบุ'}</p>
-                            <p><strong>พนักงาน:</strong> {summary.morningShiftWorkers || 'ไม่ระบุ'}</p>
+                            <p><strong>{t('shiftLeader')}:</strong> {summary.morningShiftSupervisor || t('notSpecified')}</p>
+                            <p><strong>{t('workers')}:</strong> {summary.morningShiftWorkers || t('notSpecified')}</p>
                             {(() => {
                                 const map = parseWorkersByRole(summary.morningShiftWorkers);
                                 const roles = Object.keys(map);
                                 const counts = roles.reduce((s, r) => s + (map[r]?.length || 0), 0);
                                 return (
                                     <>
-                                        <p><strong>จำนวนคน:</strong> {counts + (summary.morningShiftSupervisor && summary.morningShiftSupervisor !== 'ไม่มีข้อมูล' ? 1 : 0)} คน</p>
+                                        <p><strong>{t('headcount')}:</strong> {counts + (summary.morningShiftSupervisor && summary.morningShiftSupervisor !== 'ไม่มีข้อมูล' ? 1 : 0)} {t('peopleUnit')}</p>
                                         {roles.length > 0 && (
                                             <div style={{ fontSize: '0.9rem', color: '#555' }}>
                                                 {roles.map(role => (
@@ -1431,17 +1502,17 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
                         </div>
                     </div>
                     <div className="shift-card" style={{ padding: '1rem', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f8f9fa' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#333' }}>กะกลางคืน (15:00-03:00)</h4>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#333' }}>{t('nightShift')}</h4>
                         <div className="shift-info">
-                            <p><strong>หัวหน้ากะ:</strong> {summary.nightShiftSupervisor || 'ไม่ระบุ'}</p>
-                            <p><strong>พนักงาน:</strong> {summary.nightShiftWorkers || 'ไม่ระบุ'}</p>
+                            <p><strong>{t('shiftLeader')}:</strong> {summary.nightShiftSupervisor || t('notSpecified')}</p>
+                            <p><strong>{t('workers')}:</strong> {summary.nightShiftWorkers || t('notSpecified')}</p>
                             {(() => {
                                 const map = parseWorkersByRole(summary.nightShiftWorkers);
                                 const roles = Object.keys(map);
                                 const counts = roles.reduce((s, r) => s + (map[r]?.length || 0), 0);
                                 return (
                                     <>
-                                        <p><strong>จำนวนคน:</strong> {counts + (summary.nightShiftSupervisor && summary.nightShiftSupervisor !== 'ไม่มีข้อมูล' ? 1 : 0)} คน</p>
+                                        <p><strong>{t('headcount')}:</strong> {counts + (summary.nightShiftSupervisor && summary.nightShiftSupervisor !== 'ไม่มีข้อมูล' ? 1 : 0)} {t('peopleUnit')}</p>
                                         {roles.length > 0 && (
                                             <div style={{ fontSize: '0.9rem', color: '#555' }}>
                                                 {roles.map(role => (
@@ -1458,7 +1529,7 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
                 
                 {/* สรุปบุคลากรทั้งหมด */}
                 <div className="total-workers" style={{ padding: '1rem', backgroundColor: '#e8f4fd', borderRadius: '8px', border: '1px solid #b3d9f2' }}>
-                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#0056b3' }}>สรุปบุคลากรทั้งหมดในวันนี้</h4>
+                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#0056b3' }}>{t('totalWorkersSummaryTitle')}</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                         {(() => {
                             const m = parseWorkersByRole(summary.morningShiftWorkers);
@@ -1470,9 +1541,9 @@ const DailyReportView = ({ date, machineId, productId, orderNumber, machineName:
                             const regulars = Math.max(total - supervisors, 0);
                             return (
                                 <>
-                                    <p><strong>รวมทั้งหมด:</strong> {total} คน</p>
-                                    <p><strong>หัวหน้ากะ:</strong> {supervisors} คน</p>
-                                    <p><strong>พนักงานประจำ:</strong> {regulars} คน</p>
+                                    <p><strong>{t('totalAll')}:</strong> {total} {t('peopleUnit')}</p>
+                                    <p><strong>{t('supervisors')}:</strong> {supervisors} {t('peopleUnit')}</p>
+                                    <p><strong>{t('regularWorkers')}:</strong> {regulars} {t('peopleUnit')}</p>
                                 </>
                             );
                         })()}
@@ -1511,7 +1582,7 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
                 const response = await api.get(url);
                 setSummary(response.data);
             } catch (err) {
-                setError('ไม่สามารถดึงข้อมูลสรุปรายวันแบบแยกกะได้ หรือไม่มีข้อมูลสำหรับวันที่เลือก');
+                setError(t('cannotConnectServer'));
                 console.error(err);
             } finally {
                 setLoading(false);
@@ -1520,16 +1591,16 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
         fetchDailyShiftSummary();
     }, [date, machines, machineId, productId, ctxMachineName]);
 
-    if (loading) return <div className="loading-container"><h2>กำลังโหลดสรุปรายวัน (แยกกะ)...</h2></div>;
+    if (loading) return <div className="loading-container"><h2>{t('loadingDailyShiftSummary')}</h2></div>;
     
     if (error) return (
         <div className="dashboard-card">
-            <button onClick={onBack} className="back-button">&larr; กลับ</button>
+            <button onClick={onBack} className="back-button">&larr; {t('back')}</button>
 
             <p className="error-message">{error}</p>
             <div className="buttons-section" style={{ marginTop: '1rem' }}>
                 <button onClick={onSelectNewDate} className="search-button">
-                    เลือกวันที่อื่น
+                    {t('selectOtherDate')}
                 </button>
             </div>
         </div>
@@ -1537,12 +1608,12 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
     
     if (!summary) return (
         <div className="dashboard-card">
-            <button onClick={onBack} className="back-button">&larr; กลับ</button>
+            <button onClick={onBack} className="back-button">&larr; {t('back')}</button>
 
-            <p>ไม่มีข้อมูลสำหรับวันที่ {date}</p>
+            <p>{t('noData')}</p>
             <div className="buttons-section" style={{ marginTop: '1rem' }}>
                 <button onClick={onSelectNewDate} className="search-button">
-                    เลือกวันที่อื่น
+                    {t('selectOtherDate')}
                 </button>
             </div>
         </div>
@@ -1606,13 +1677,13 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
     return (
         <div className="dashboard-card">
             <div className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <button onClick={onBack} className="back-button">&larr; กลับไปหน้ารายงานย้อนหลัง</button>
+                <button onClick={onBack} className="back-button">&larr; {t('backToHistory')}</button>
                 <button onClick={onSelectNewDate} className="edit-button">
-                    📅 เลือกวันที่อื่น
+                    📅 {t('selectOtherDate')}
                 </button>
             </div>
             
-            <h2 className="dashboard-title">รายละเอียดสรุปรายวัน (แยกกะ): {new Date(date).toLocaleDateString('th-TH', {
+            <h2 className="dashboard-title">{t('dailyShiftDetailTitle')}: {new Date(date).toLocaleDateString(getLang() === 'th' ? 'th-TH' : 'en-US', {
                 year: 'numeric',
                 month: 'long', 
                 day: 'numeric',
@@ -1623,28 +1694,28 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
 
             {/* ข้อมูลเบื้องต้น */}
             <div className="summary-panel" style={{ marginTop: '1rem', backgroundColor: '#e3f2fd', padding: '1rem', borderRadius: '8px' }}>
-                <h3 className="summary-title">📋 รายละเอียดการผลิต</h3>
+                <h3 className="summary-title">📋 {t('productionDetails')}</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
                     <div className="info-card" style={{ padding: '0.75rem', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>📄 เลขที่สั่งผลิต</h4>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>📄 {t('orderNumber')}</h4>
                         <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 'bold', color: summary.orderNumber && summary.orderNumber !== 'ไม่มีข้อมูล' ? '#333' : '#999' }}>
                             {summary.orderNumber || summary.dayShiftData?.orderNumber || summary.nightShiftData?.orderNumber || 'ไม่มีข้อมูล'}
                         </p>
                     </div>
                     <div className="info-card" style={{ padding: '0.75rem', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>🏭 เครื่องจักร</h4>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>🏭 {t('machineLabel')}</h4>
                         <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 'bold', color: (summary.machineName || ctxMachineName) && (summary.machineName || ctxMachineName) !== 'ไม่มีข้อมูล' ? '#333' : '#999' }}>
                             {summary.machineName || ctxMachineName || summary.dayShiftData?.machineName || summary.nightShiftData?.machineName || 'ไม่มีข้อมูล'}
                         </p>
                     </div>
                     <div className="info-card" style={{ padding: '0.75rem', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>📦 ผลิตภัณฑ์</h4>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>📦 {t('productLabel')}</h4>
                         <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 'bold', color: (summary.productName || ctxProductName) && (summary.productName || ctxProductName) !== 'ไม่มีข้อมูล' ? '#333' : '#999' }}>
                             {summary.productName || ctxProductName || summary.dayShiftData?.productName || summary.nightShiftData?.productName || 'ไม่มีข้อมูล'}
                         </p>
                     </div>
                     <div className="info-card" style={{ padding: '0.75rem', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>🎯 เป้าหมายแผน (ชิ้น)</h4>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>🎯 {t('planTargetPieces')}</h4>
                         <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 'bold', color: '#333' }}>
                             {(((summary.dayShiftData?.targetQty || 0) + (summary.nightShiftData?.targetQty || 0)) || 0).toLocaleString()}
                         </p>
@@ -1654,26 +1725,26 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
 
             {/* สรุปรวมทั้งวัน */}
             <div className="summary-panel" style={{ marginTop: '1rem', backgroundColor: '#f8f9fa', padding: '1rem', borderRadius: '8px' }}>
-                <h3 className="summary-title">📊 สรุปรวมทั้งวัน</h3>
+                <h3 className="summary-title">📊 {t('dailySummary')}</h3>
                 <div className="kpi-grid pc-kpi" style={{gridTemplateColumns: 'repeat(5, 1fr)'}}>
                     <div className="kpi-card">
-                        <span className="kpi-label">ยอดผลิตดีรวม</span>
+                        <span className="kpi-label">{t('totalGoodAll')}</span>
                         <span className="kpi-value">{totalGood.toLocaleString()}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">ของเสียรวม</span>
+                        <span className="kpi-label">{t('totalNgAll')}</span>
                         <span className="kpi-value ng-value">{totalNg.toLocaleString()}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">น้ำหนักของเสียรวม</span>
-                        <span className="kpi-value ng-value">{totalScrap.toFixed(2)} กก.</span>
+                        <span className="kpi-label">{t('totalScrapWeightLabel')}</span>
+                        <span className="kpi-value ng-value">{totalScrap.toFixed(2)} {t('kgUnit')}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">ของเสียจาก Technician</span>
-                        <span className="kpi-value ng-value">{totalTechScrap.toFixed(2)} กก.</span>
+                        <span className="kpi-label">{t('technicianScrapWeightLabel')}</span>
+                        <span className="kpi-value ng-value">{totalTechScrap.toFixed(2)} {t('kgUnit')}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">Yield รวม</span>
+                        <span className="kpi-label">{t('yieldLabel')}</span>
                         <span className="kpi-value yield-value">{overallYield}%</span>
                     </div>
                 </div>
@@ -1681,28 +1752,28 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
 
             {/* ข้อมูลกะเช้า */}
             <div className="summary-panel" style={{ marginTop: '2rem' }}>
-                <h3 className="summary-title" style={{ color: '#ff9800' }}>🌅 กะเช้า (03:00 - 15:00)</h3>
+                <h3 className="summary-title" style={{ color: '#ff9800' }}>🌅 {t('morningShift')}</h3>
                 
                 {/* KPI กะเช้า */}
                 <div className="kpi-grid pc-kpi" style={{gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: '1.5rem'}}>
                     <div className="kpi-card">
-                        <span className="kpi-label">ยอดผลิตดี</span>
+                        <span className="kpi-label">{t('good')}</span>
                         <span className="kpi-value">{dayMetrics.goodQty.toLocaleString()}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">ของเสีย</span>
+                        <span className="kpi-label">{t('ng')}</span>
                         <span className="kpi-value ng-value">{dayMetrics.ngQty.toLocaleString()}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">น้ำหนักของเสีย</span>
-                        <span className="kpi-value ng-value">{dayMetrics.scrapWeight.toFixed(2)} กก.</span>
+                        <span className="kpi-label">{t('scrapWeightLabel')}</span>
+                        <span className="kpi-value ng-value">{dayMetrics.scrapWeight.toFixed(2)} {t('kgUnit')}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">ของเสียจาก Technician</span>
-                        <span className="kpi-value ng-value">{dayTechScrap.toFixed(2)} กก.</span>
+                        <span className="kpi-label">{t('technicianScrapWeightLabel')}</span>
+                        <span className="kpi-value ng-value">{dayTechScrap.toFixed(2)} {t('kgUnit')}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">Yield</span>
+                        <span className="kpi-label">{t('yieldLabel')}</span>
                         <span className="kpi-value yield-value">{dayMetrics.yieldPercent}%</span>
                     </div>
                 </div>
@@ -1710,18 +1781,18 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
                 {/* หัวหน้ากะและพนักงานกะเช้า */}
                 <div className="shift-details" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                     <div className="shift-workers" style={{ padding: '1rem', backgroundColor: '#fff3e0', borderRadius: '8px', border: '1px solid #ffcc02' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#f57c00' }}>👥 บุคลากรกะเช้า</h4>
-                        <p><strong>หัวหน้ากะ:</strong> {summary.dayShiftData?.shiftLeader || 'ไม่ระบุ'}</p>
-                        <p><strong>พนักงาน:</strong> {summary.dayShiftData?.workers || 'ไม่ระบุ'}</p>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#f57c00' }}>👥 {t('shiftPersonnelMorningTitle')}</h4>
+                        <p><strong>{t('shiftLeader')}:</strong> {summary.dayShiftData?.shiftLeader || t('notSpecified')}</p>
+                        <p><strong>{t('workers')}:</strong> {summary.dayShiftData?.workers || t('notSpecified')}</p>
                     </div>
                     <div className="shift-count" style={{ padding: '1rem', backgroundColor: '#e8f5e8', borderRadius: '8px', border: '1px solid #4caf50' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#2e7d32' }}>👨‍👩‍👧‍👦 จำนวนคน</h4>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#2e7d32' }}>👨‍👩‍👧‍👦 {t('headcount')}</h4>
                         {(() => {
                             const map = parseWorkersByRole(summary.dayShiftData?.workers);
                             const roles = Object.keys(map);
                             const counts = roles.reduce((s, r) => s + (map[r]?.length || 0), 0);
                             const total = counts + (summary.dayShiftData?.shiftLeader ? 1 : 0);
-                            return (<p style={{ fontSize: '2rem', margin: 0, fontWeight: 'bold', color: '#2e7d32' }}>{total} คน</p>);
+                            return (<p style={{ fontSize: '2rem', margin: 0, fontWeight: 'bold', color: '#2e7d32' }}>{total} {t('peopleUnit')}</p>);
                         })()}
                     </div>
                 </div>
@@ -1742,39 +1813,39 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
                             marginBottom: '1rem'
                         }}
                     >
-                        {showDayDetails ? '🔼 ซ่อนรายละเอียด' : '🔽 แสดงรายละเอียด'} กะเช้า
+                        {showDayDetails ? `🔼 ${t('hideDetails')}` : `🔽 ${t('showDetails')}`} {t('morningShift')}
                     </button>
                     
                     {showDayDetails && summary.dayShiftData && (
-                        <DataSummaryPanel title="รายละเอียดกะเช้า" data={summary.dayShiftData} />
+                        <DataSummaryPanel title={`${t('morningShift')} - ${t('productionDetails')}`} data={summary.dayShiftData} />
                     )}
                 </div>
             </div>
 
             {/* ข้อมูลกะกลางคืน */}
             <div className="summary-panel" style={{ marginTop: '2rem' }}>
-                <h3 className="summary-title" style={{ color: '#3f51b5' }}>🌙 กะกลางคืน (15:00 - 03:00)</h3>
+                <h3 className="summary-title" style={{ color: '#3f51b5' }}>🌙 {t('nightShift')}</h3>
                 
                 {/* KPI กะกลางคืน */}
                 <div className="kpi-grid pc-kpi" style={{gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: '1.5rem'}}>
                     <div className="kpi-card">
-                        <span className="kpi-label">ยอดผลิตดี</span>
+                        <span className="kpi-label">{t('good')}</span>
                         <span className="kpi-value">{nightMetrics.goodQty.toLocaleString()}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">ของเสีย</span>
+                        <span className="kpi-label">{t('ng')}</span>
                         <span className="kpi-value ng-value">{nightMetrics.ngQty.toLocaleString()}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">น้ำหนักของเสีย</span>
-                        <span className="kpi-value ng-value">{nightMetrics.scrapWeight.toFixed(2)} กก.</span>
+                        <span className="kpi-label">{t('scrapWeightLabel')}</span>
+                        <span className="kpi-value ng-value">{nightMetrics.scrapWeight.toFixed(2)} {t('kgUnit')}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">ของเสียจาก Technician</span>
-                        <span className="kpi-value ng-value">{nightTechScrap.toFixed(2)} กก.</span>
+                        <span className="kpi-label">{t('technicianScrapWeightLabel')}</span>
+                        <span className="kpi-value ng-value">{nightTechScrap.toFixed(2)} {t('kgUnit')}</span>
                     </div>
                     <div className="kpi-card">
-                        <span className="kpi-label">Yield</span>
+                        <span className="kpi-label">{t('yieldLabel')}</span>
                         <span className="kpi-value yield-value">{nightMetrics.yieldPercent}%</span>
                     </div>
                 </div>
@@ -1782,18 +1853,18 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
                 {/* หัวหน้ากะและพนักงานกะกลางคืน */}
                 <div className="shift-details" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                     <div className="shift-workers" style={{ padding: '1rem', backgroundColor: '#e8eaf6', borderRadius: '8px', border: '1px solid #3f51b5' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#3f51b5' }}>👥 บุคลากรกะกลางคืน</h4>
-                        <p><strong>หัวหน้ากะ:</strong> {summary.nightShiftData?.shiftLeader || 'ไม่ระบุ'}</p>
-                        <p><strong>พนักงาน:</strong> {summary.nightShiftData?.workers || 'ไม่ระบุ'}</p>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#3f51b5' }}>👥 {t('shiftPersonnelNightTitle')}</h4>
+                        <p><strong>{t('shiftLeader')}:</strong> {summary.nightShiftData?.shiftLeader || t('notSpecified')}</p>
+                        <p><strong>{t('workers')}:</strong> {summary.nightShiftData?.workers || t('notSpecified')}</p>
                     </div>
                     <div className="shift-count" style={{ padding: '1rem', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '1px solid #2196f3' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>👨‍👩‍👧‍👦 จำนวนคน</h4>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>👨‍👩‍👧‍👦 {t('headcount')}</h4>
                         {(() => {
                             const map = parseWorkersByRole(summary.nightShiftData?.workers);
                             const roles = Object.keys(map);
                             const counts = roles.reduce((s, r) => s + (map[r]?.length || 0), 0);
                             const total = counts + (summary.nightShiftData?.shiftLeader ? 1 : 0);
-                            return (<p style={{ fontSize: '2rem', margin: 0, fontWeight: 'bold', color: '#1976d2' }}>{total} คน</p>);
+                            return (<p style={{ fontSize: '2rem', margin: 0, fontWeight: 'bold', color: '#1976d2' }}>{total} {t('peopleUnit')}</p>);
                         })()}
                     </div>
                 </div>
@@ -1814,22 +1885,22 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
                             marginBottom: '1rem'
                         }}
                     >
-                        {showNightDetails ? '🔼 ซ่อนรายละเอียด' : '🔽 แสดงรายละเอียด'} กะกลางคืน
+                        {showNightDetails ? `🔼 ${t('hideDetails')}` : `🔽 ${t('showDetails')}`} {t('nightShift')}
                     </button>
                     
                     {showNightDetails && summary.nightShiftData && (
-                        <DataSummaryPanel title="รายละเอียดกะกลางคืน" data={summary.nightShiftData} />
+                        <DataSummaryPanel title={`${t('nightShift')} - ${t('productionDetails')}`} data={summary.nightShiftData} />
                     )}
                 </div>
             </div>
 
             {/* สรุปบุคลากรทั้งหมด */}
             <div className="summary-panel" style={{ marginTop: '2rem' }}>
-                <h3 className="summary-title">👥 สรุปบุคลากรทั้งหมด</h3>
+                <h3 className="summary-title">👥 {t('totalWorkersSummaryTitle')}</h3>
                 <div className="total-workers" style={{ padding: '1rem', backgroundColor: '#e8f4fd', borderRadius: '8px', border: '1px solid #b3d9f2' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
                         <div className="worker-stat">
-                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0056b3' }}>รวมทั้งหมด</h4>
+                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0056b3' }}>{t('totalAll')}</h4>
                             <p style={{ fontSize: '1.5rem', margin: 0, fontWeight: 'bold' }}>
                                 {(() => {
                                     const dm = parseWorkersByRole(summary.dayShiftData?.workers);
@@ -1837,15 +1908,15 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
                                     const day = Object.values(dm).reduce((s, arr) => s + arr.length, 0) + (summary.dayShiftData?.shiftLeader ? 1 : 0);
                                     const night = Object.values(dn).reduce((s, arr) => s + arr.length, 0) + (summary.nightShiftData?.shiftLeader ? 1 : 0);
                                     return day + night;
-                                })()} คน
+                                })()} {t('peopleUnit')}
                             </p>
                         </div>
                         <div className="worker-stat">
-                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0056b3' }}>หัวหน้ากะ</h4>
-                            <p style={{ fontSize: '1.5rem', margin: 0, fontWeight: 'bold' }}>2 คน</p>
+                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0056b3' }}>{t('supervisors')}</h4>
+                            <p style={{ fontSize: '1.5rem', margin: 0, fontWeight: 'bold' }}>2 {t('peopleUnit')}</p>
                         </div>
                         <div className="worker-stat">
-                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0056b3' }}>พนักงานประจำ</h4>
+                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0056b3' }}>{t('regularWorkers')}</h4>
                             <p style={{ fontSize: '1.5rem', margin: 0, fontWeight: 'bold' }}>
                                 {(() => {
                                     const dm = parseWorkersByRole(summary.dayShiftData?.workers);
@@ -1853,11 +1924,11 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
                                     const day = Object.values(dm).reduce((s, arr) => s + arr.length, 0);
                                     const night = Object.values(dn).reduce((s, arr) => s + arr.length, 0);
                                     return day + night;
-                                })()} คน
+                                })()} {t('peopleUnit')}
                             </p>
                         </div>
                         <div className="worker-stat">
-                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0056b3' }}>เฉลี่ยต่อกะ</h4>
+                            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0056b3' }}>{t('averagePerShift')}</h4>
                             <p style={{ fontSize: '1.5rem', margin: 0, fontWeight: 'bold' }}>
                                 {(() => {
                                     const dm = parseWorkersByRole(summary.dayShiftData?.workers);
@@ -1865,7 +1936,7 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
                                     const day = Object.values(dm).reduce((s, arr) => s + arr.length, 0) + (summary.dayShiftData?.shiftLeader ? 1 : 0);
                                     const night = Object.values(dn).reduce((s, arr) => s + arr.length, 0) + (summary.nightShiftData?.shiftLeader ? 1 : 0);
                                     return ((day + night) / 2).toFixed(1);
-                                })()} คน
+                                })()} {t('peopleUnit')}
                             </p>
                         </div>
                     </div>
@@ -1876,10 +1947,13 @@ const DailyShiftReportView = ({ date, machineId, productId, machineName: ctxMach
 };
 
 const ProductionOrderManagement = ({ onBack, onViewDetail, machines, products, allReports, fetchData }) => {
+    const { user } = useAuth();
+    const role = (user?.role || '').toString();
+    const canManage = role === 'Production Control' || role === 'DataAdmin';
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingReport, setEditingReport] = useState(null);
     const [filteredReports, setFilteredReports] = useState([]);
-    const [statusFilter, setStatusFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('IN_PROGRESS');
     const initialFormData = {
         orderNumber: '', startDate: new Date().toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0],
         machineId: '', productId: '', targetQty: ''
@@ -1900,8 +1974,9 @@ const ProductionOrderManagement = ({ onBack, onViewDetail, machines, products, a
         catch (err) { alert(err.response?.data || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'); }
     };
 
-    const handleOpenCreateModal = () => { setEditingReport(null); setFormData(initialFormData); setIsModalOpen(true); };
+    const handleOpenCreateModal = () => { if (!canManage) return; setEditingReport(null); setFormData(initialFormData); setIsModalOpen(true); };
     const handleOpenEditModal = (report) => {
+        if (!canManage) return;
         setEditingReport(report);
         const machine = machines.find(m => m.machineName === report.machineName);
         const product = products.find(p => p.productName === report.productName);
@@ -1909,20 +1984,28 @@ const ProductionOrderManagement = ({ onBack, onViewDetail, machines, products, a
         setIsModalOpen(true);
     };
     const handleCloseModal = () => { setIsModalOpen(false); setEditingReport(null); };
-    const handleFinalize = async (reportId) => { if (window.confirm('คุณต้องการปิดงานใบสั่งผลิตนี้ใช่หรือไม่?')) { try { await api.post(`/pc/reports/${reportId}/finalize`); alert('ปิดงานสำเร็จ!'); fetchData(); } catch (err) { alert('เกิดข้อผิดพลาดในการปิดงาน'); } } };
-    const handleDelete = async (reportId) => { if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบใบสั่งผลิตนี้?')) { try { await api.delete(`/pc/reports/${reportId}`); alert('ลบใบสั่งผลิตสำเร็จ!'); fetchData(); } catch (err) { alert(err.response?.data || 'เกิดข้อผิดพลาดในการลบข้อมูล'); } } };
+    const handleFinalize = async (reportId) => { if (!canManage) return; if (window.confirm('คุณต้องการปิดงานใบสั่งผลิตนี้ใช่หรือไม่?')) { try { await api.post(`/pc/reports/${reportId}/finalize`); alert('ปิดงานสำเร็จ!'); fetchData(); } catch (err) { alert('เกิดข้อผิดพลาดในการปิดงาน'); } } };
+    const handleDelete = async (reportId) => { if (!canManage) return; if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบใบสั่งผลิตนี้?')) { try { await api.delete(`/pc/reports/${reportId}`); alert('ลบใบสั่งผลิตสำเร็จ!'); fetchData(); } catch (err) { alert(err.response?.data || 'เกิดข้อผิดพลาดในการลบข้อมูล'); } } };
 
     return (
         <div className="dashboard-card">
-            <button onClick={onBack} className="back-button">&larr; กลับไปหน้าภาพรวม</button>
-            <h2 className="dashboard-title">จัดการคำสั่งผลิต</h2>
+            <button onClick={onBack} className="back-button">&larr; {t('backToOverview')}</button>
+            <h2 className="dashboard-title">{t('manageProductionOrders')}</h2>
             <div className="table-header">
-                <h3>รายการใบสั่งผลิตทั้งหมด</h3>
-                <div> <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input" style={{marginRight: '1rem', display: 'inline-block', width: 'auto'}}> <option value="all">แสดงทุกสถานะ</option> <option value="In Progress">กำลังดำเนินการ</option> <option value="Finalized">ปิดงานแล้ว</option> </select> <button className="add-button" onClick={handleOpenCreateModal}>สร้างใบสั่งผลิตใหม่</button> </div>
+                <h3>{t('productionOverviewTitle')}</h3>
+                <div>
+                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input" style={{marginRight: '1rem', display: 'inline-block', width: 'auto'}}>
+                    <option value="all">{t('all')}</option>
+                    <option value="IN_PROGRESS">{t('inProgress')}</option>
+                    <option value="ACTIVE">{getLang() === 'en' ? 'Expired (Not closed)' : 'หมดเวลา (รอปิดงาน)'}</option>
+                    <option value="INACTIVE">{t('inactive')}</option>
+                  </select>
+                  {canManage && <button className="add-button" onClick={handleOpenCreateModal}>{t('createNewOrder') || 'สร้างใบสั่งผลิตใหม่'}</button>}
+                </div>
             </div>
             <div className="data-table-container">
                 <table className="data-table">
-                   <thead><tr><th>Order No.</th><th>วันที่</th><th>เครื่องจักร</th><th>ผลิตภัณฑ์</th><th>สถานะ</th><th>Actions</th></tr></thead>
+                   <thead><tr><th>Order No.</th><th>{t('dateLabel')}</th><th>{t('machineLabel')}</th><th>{t('productLabel')}</th><th>{t('statusLabel')}</th><th>{t('actionsLabel')}</th></tr></thead>
                    <tbody>
                         {Array.isArray(filteredReports) && filteredReports.map(report => (
                            <tr key={report.id}>
@@ -1934,27 +2017,29 @@ const ProductionOrderManagement = ({ onBack, onViewDetail, machines, products, a
                                    </span>
                                </td>
                                <td className="actions-cell">
-                                    <button className="add-button" onClick={() => onViewDetail(report.id)}>ดูสรุป</button>
-                                    <button className="edit-button" disabled={!report.editable} onClick={() => handleOpenEditModal(report)}>แก้ไข</button>
-                                    <button className="finalize-button" disabled={!report.finalizable} onClick={() => handleFinalize(report.id)}>ปิดงาน</button>
-                                    <button className="delete-button" disabled={!report.deletable} onClick={() => handleDelete(report.id)}>ลบ</button>
+                                    <button className="add-button" onClick={() => onViewDetail(report.id)}>{t('orderOverview')}</button>
+                                    {canManage && <button className="edit-button" disabled={!report.editable} onClick={() => handleOpenEditModal(report)}>{t('edit') || 'แก้ไข'}</button>}
+                                    {canManage && <button className="finalize-button" disabled={!report.finalizable} onClick={() => handleFinalize(report.id)}>{t('finalize') || 'ปิดงาน'}</button>}
+                                    {canManage && <button className="delete-button" disabled={!report.deletable} onClick={() => handleDelete(report.id)}>{t('delete') || 'ลบ'}</button>}
                                </td>
                            </tr>
                        ))}
                    </tbody>
                 </table>
             </div>
-            <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingReport ? 'แก้ไขใบสั่งผลิต' : 'สร้างใบสั่งผลิตใหม่'}>
+            {canManage && (
+            <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingReport ? (t('editOrder') || 'แก้ไขใบสั่งผลิต') : (t('createNewOrder') || 'สร้างใบสั่งผลิตใหม่')}>
                 <form onSubmit={handleFormSubmit} className="production-form">
-                    <div className="form-group"><label className="form-label">หมายเลขคำสั่งผลิต (Order No.)</label><input type="text" name="orderNumber" value={formData.orderNumber} onChange={handleFormChange} className="form-input" /></div>
-                    <div className="form-group"><label className="form-label">วันที่เริ่มต้น</label><input type="date" name="startDate" value={formData.startDate} onChange={handleFormChange} className="form-input" required /></div>
-                    <div className="form-group"><label className="form-label">วันที่สิ้นสุด</label><input type="date" name="endDate" value={formData.endDate} onChange={handleFormChange} className="form-input" required /></div>
-                    <div className="form-group"><label className="form-label">เครื่องจักร</label><select name="machineId" value={formData.machineId} onChange={handleFormChange} className="form-input" required><option value="" disabled>-- เลือกเครื่องจักร --</option>{Array.isArray(machines) && machines.map(m => <option key={m.id} value={m.id}>{m.machineName}</option>)}</select></div>
-                    <div className="form-group"><label className="form-label">ผลิตภัณฑ์</label><select name="productId" value={formData.productId} onChange={handleFormChange} className="form-input" required><option value="" disabled>-- เลือกผลิตภัณฑ์ --</option>{Array.isArray(products) && products.map(p => <option key={p.id} value={p.id}>{p.productName}</option>)}</select></div>
-                    <div className="form-group"><label className="form-label">เป้าหมาย (Target)</label><input type="number" name="targetQty" value={formData.targetQty} onChange={handleFormChange} className="form-input" /></div>
-                    <div className="form-actions"><button type="button" onClick={handleCloseModal} className="cancel-button">ยกเลิก</button><button type="submit" className="save-button">บันทึก</button></div>
+                    <div className="form-group"><label className="form-label">{t('orderNumber')}</label><input type="text" name="orderNumber" value={formData.orderNumber} onChange={handleFormChange} className="form-input" /></div>
+                    <div className="form-group"><label className="form-label">{t('startDate')}</label><input type="date" name="startDate" value={formData.startDate} onChange={handleFormChange} className="form-input" required /></div>
+                    <div className="form-group"><label className="form-label">{t('endDate')}</label><input type="date" name="endDate" value={formData.endDate} onChange={handleFormChange} className="form-input" required /></div>
+                    <div className="form-group"><label className="form-label">{t('machineLabel')}</label><select name="machineId" value={formData.machineId} onChange={handleFormChange} className="form-input" required><option value="" disabled>--</option>{Array.isArray(machines) && machines.map(m => <option key={m.id} value={m.id}>{m.machineName}</option>)}</select></div>
+                    <div className="form-group"><label className="form-label">{t('productLabel')}</label><select name="productId" value={formData.productId} onChange={handleFormChange} className="form-input" required><option value="" disabled>--</option>{Array.isArray(products) && products.map(p => <option key={p.id} value={p.id}>{p.productName}</option>)}</select></div>
+                    <div className="form-group"><label className="form-label">{t('targetLabel')}</label><input type="number" name="targetQty" value={formData.targetQty} onChange={handleFormChange} className="form-input" /></div>
+                    <div className="form-actions"><button type="button" onClick={handleCloseModal} className="cancel-button">{t('back')}</button><button type="submit" className="save-button">{t('save') || 'บันทึก'}</button></div>
                 </form>
             </Modal>
+            )}
         </div>
     );
 };
@@ -2033,20 +2118,20 @@ const HistoricalReports = ({ onBack, onViewDetail, onViewDailyReport, onViewDail
 
     return (
         <div className="dashboard-card">
-            <button onClick={onBack} className="back-button">&larr; กลับไปหน้าภาพรวม</button>
-            <h2 className="dashboard-title">รายงานย้อนหลัง</h2>
+            <button onClick={onBack} className="back-button">&larr; {t('backToOverview') || 'Back to overview'}</button>
+            <h2 className="dashboard-title">{t('historicalReports')}</h2>
             <div className="filter-panel" style={{display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '1.5rem'}}>
-                <div className="form-group"><label className="form-label">วันที่เริ่มต้น</label><input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="form-input" /></div>
-                <div className="form-group"><label className="form-label">วันที่สิ้นสุด</label><input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="form-input" /></div>
-                <div className="form-group"><label className="form-label">เครื่องจักร</label><select name="machineId" value={filters.machineId} onChange={handleFilterChange} className="form-input"><option value="all">ทุกเครื่องจักร</option>{Array.isArray(machines) && machines.map(m => <option key={m.id} value={m.id}>{m.machineName}</option>)}</select></div>
-                <div className="form-group"><label className="form-label">ผลิตภัณฑ์</label><select name="productId" value={filters.productId} onChange={handleFilterChange} className="form-input"><option value="all">ทุกผลิตภัณฑ์</option>{Array.isArray(products) && products.map(p => <option key={p.id} value={p.id}>{p.productName}</option>)}</select></div>
-                <button onClick={handleSearch} disabled={loading} className="submit-button" style={{height: '42px'}}>{loading ? 'กำลังค้นหา...' : 'ค้นหา'}</button>
+                <div className="form-group"><label className="form-label">{t('startDate')}</label><input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="form-input" /></div>
+                <div className="form-group"><label className="form-label">{t('endDate')}</label><input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="form-input" /></div>
+                <div className="form-group"><label className="form-label">{t('machineLabel')}</label><select name="machineId" value={filters.machineId} onChange={handleFilterChange} className="form-input"><option value="all">{t('all')}</option>{Array.isArray(machines) && machines.map(m => <option key={m.id} value={m.id}>{m.machineName}</option>)}</select></div>
+                <div className="form-group"><label className="form-label">{t('productLabel')}</label><select name="productId" value={filters.productId} onChange={handleFilterChange} className="form-input"><option value="all">{t('all')}</option>{Array.isArray(products) && products.map(p => <option key={p.id} value={p.id}>{p.productName}</option>)}</select></div>
+                <button onClick={handleSearch} disabled={loading} className="submit-button" style={{height: '42px'}}>{loading ? t('searching') : t('search')}</button>
             </div>
             
             {/* Loading state */}
             {loading && (
                 <div className="loading-message" style={{textAlign: 'center', padding: '2rem'}}>
-                    <p>🔍 กำลังค้นหาข้อมูล...</p>
+                    <p>🔍 {t('searching')}</p>
                 </div>
             )}
             
@@ -2061,16 +2146,16 @@ const HistoricalReports = ({ onBack, onViewDetail, onViewDailyReport, onViewDail
             {results && Array.isArray(results) && results.length > 0 && !loading && (
                 <div className="results-section">
                     <div style={{marginBottom: '1rem'}}>
-                        <p><strong>✅ พบข้อมูล {results.length} รายการ</strong></p>
+                        <p><strong>✅ {results.length} {t('recordsLabel') || 'records found'}</strong></p>
                     </div>
                     <div className="data-table-container" style={{marginTop: '1rem'}}>
                          <table className="data-table">
-                            <thead><tr><th>Order No.</th><th>วันที่</th><th>เครื่องจักร</th><th>ผลิตภัณฑ์</th><th>สถานะ</th><th>Actions</th></tr></thead>
+                            <thead><tr><th>Order No.</th><th>{t('dateLabel')}</th><th>{t('machineLabel')}</th><th>{t('productLabel')}</th><th>{t('statusLabel')}</th><th>{t('actionsLabel')}</th></tr></thead>
                             <tbody>
                                 {results.map(report => (<tr key={report.id}><td>{report.orderNumber}</td><td>{report.startDate} - {report.endDate}</td><td>{report.machineName}</td><td>{report.productName}</td><td><span className={`status-${statusClass(report.status)}`}>{statusDisplay(report.status)}</span></td><td className="actions-cell" style={{flexDirection: 'column', alignItems: 'stretch', gap: '0.25rem'}}>
-                                    <button className="add-button" onClick={() => onViewDetail(report.id)}>1. ภาพรวมคำสั่งผลิต</button>
-                                    <button className="edit-button" onClick={() => onViewDailyReport(report)}>2. สรุปรายวัน</button>
-                                    <button className="finalize-button" onClick={() => onViewDailyShiftReport(report)}>3. สรุปรายวัน (แยกกะ)</button>
+                                    <button className="add-button" onClick={() => onViewDetail(report.id)}>1. {t('orderOverview')}</button>
+                                    <button className="edit-button" onClick={() => onViewDailyReport(report)}>2. {t('dailySummary')}</button>
+                                    <button className="finalize-button" onClick={() => onViewDailyShiftReport(report)}>3. {t('dailyShiftSummary')}</button>
                                 </td></tr>))}
                             </tbody>
                         </table>
@@ -2081,8 +2166,8 @@ const HistoricalReports = ({ onBack, onViewDetail, onViewDailyReport, onViewDail
             {/* No data message */}
             {results && Array.isArray(results) && results.length === 0 && !loading && (
                 <div className="no-data-message" style={{textAlign: 'center', padding: '2rem', backgroundColor: '#f5f5f5', borderRadius: '4px', margin: '1rem 0'}}>
-                    <p>📊 ไม่พบข้อมูลรายงานในช่วงวันที่ที่เลือก</p>
-                    <p style={{fontSize: '0.9rem', color: '#666'}}>ลองเปลี่ยนช่วงวันที่หรือเงื่อนไขการค้นหา</p>
+                    <p>📊 {t('noResultsInRange')}</p>
+                    <p style={{fontSize: '0.9rem', color: '#666'}}>{t('hintChangeFilters')}</p>
                 </div>
             )}
         </div>
@@ -2115,15 +2200,15 @@ const HistoricalReportsSection = () => {
         const fetchDropdownData = async () => {
             try {
                 const [machinesRes, productsRes] = await Promise.all([
-                    axios.get('/production/machines'),  // Fixed: removed /api prefix (baseURL has it)
-                    axios.get('/production/products')  // Fixed: removed /api prefix (baseURL has it)
+                    api.get('/production/machines'),  // use shared client for lang/header
+                    api.get('/production/products')
                 ]);
                 // Backend ส่งข้อมูลในรูปแบบ {data: [...], status: "success"}
                 setMachines(machinesRes.data?.data || []);
                 setProducts(productsRes.data?.data || []);
             } catch (error) {
                 console.error("Error fetching dropdown data:", error);
-                setError("ไม่สามารถโหลดข้อมูลเครื่องจักรและผลิตภัณฑ์ได้");
+                setError(t('failedToLoadDropdowns') || 'Failed to load machines and products');
             }
         };
         
@@ -2162,7 +2247,7 @@ const HistoricalReportsSection = () => {
             // ตรวจสอบว่าเข้าสู่ระบบอยู่หรือไม่
             const token = localStorage.getItem('token');
             if (!token) {
-                setError('กรุณาเข้าสู่ระบบก่อนใช้งาน');
+                setError(t('pleaseLogin'));
                 setLoading(false);
                 return;
             }
@@ -2172,7 +2257,7 @@ const HistoricalReportsSection = () => {
             const formattedEndDate = filters.endDate ? new Date(filters.endDate).toISOString().split('T')[0] : '';
             
             if (!formattedStartDate || !formattedEndDate) {
-                setError('กรุณาระบุวันที่เริ่มต้นและวันที่สิ้นสุด');
+                setError(t('requireStartEndDate') || 'Please provide start and end dates');
                 setLoading(false);
                 return;
             }
@@ -2191,17 +2276,10 @@ const HistoricalReportsSection = () => {
             
             console.log('Sending request with params:', params.toString());
             
-            const config = {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              }
-            };
-            
             const url = `/production/reports/production-historical?${params}`;  // Fixed: removed /api prefix (baseURL has it)
             console.log('Calling API:', url);
             
-            const response = await axios.get(url, config);
+                        const response = await api.get(url);
             console.log('API Response:', response);
             
             // บันทึกข้อมูล response สำหรับ debug
@@ -2214,11 +2292,11 @@ const HistoricalReportsSection = () => {
             if (Array.isArray(response.data)) {
                 setResults(response.data);
                 if (response.data.length === 0) {
-                    setError('ไม่พบข้อมูลตามเงื่อนไขที่ระบุ');
+                    setError(t('noResultsInRange'));
                 }
             } else {
                 console.error('Invalid response format:', response.data);
-                setError('ข้อมูลที่ได้รับมีรูปแบบไม่ถูกต้อง');
+                setError(t('invalidDataFormat') || 'Invalid data format received');
                 setResults([]);
             }
         } catch (err) {
@@ -2234,12 +2312,12 @@ const HistoricalReportsSection = () => {
               }
             }));
             
-            if (err.response) {
-              setError(`เกิดข้อผิดพลาด: ${err.response.status} ${err.response.statusText || ''}`);
-            } else if (err.request) {
-              setError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
-            } else {
-              setError(`เกิดข้อผิดพลาด: ${err.message}`);
+                        if (err.response) {
+                            setError(err.response.status === 401 ? t('pleaseLogin') : `Error: ${err.response.status} ${err.response.statusText || ''}`);
+                        } else if (err.request) {
+                            setError(t('cannotConnectServer') || 'Cannot connect to server');
+                        } else {
+                            setError(`Error: ${err.message}`);
             }
             setResults([]);
         } finally {
@@ -2249,13 +2327,13 @@ const HistoricalReportsSection = () => {
 
     return (
         <div className="dashboard-card">
-            <h2>รายงานย้อนหลัง</h2>
+            <h2>{t('historicalReports')}</h2>
             
             {/* ส่วนฟอร์มค้นหา */}
             <form onSubmit={handleSearch} className="filters-section">
                 <div className="filters-grid">
                     <div className="filter-group">
-                        <label htmlFor="startDate">วันที่เริ่มต้น</label>
+                        <label htmlFor="startDate">{t('startDate')}</label>
                         <input
                             type="date"
                             id="startDate"
@@ -2267,7 +2345,7 @@ const HistoricalReportsSection = () => {
                     </div>
                     
                     <div className="filter-group">
-                        <label htmlFor="endDate">วันที่สิ้นสุด</label>
+                        <label htmlFor="endDate">{t('endDate')}</label>
                         <input
                             type="date"
                             id="endDate"
@@ -2279,14 +2357,14 @@ const HistoricalReportsSection = () => {
                     </div>
                     
                     <div className="filter-group">
-                        <label htmlFor="machineId">เครื่องจักร</label>
+                        <label htmlFor="machineId">{t('machineLabel')}</label>
                         <select
                             id="machineId"
                             name="machineId"
                             value={filters.machineId}
                             onChange={handleFilterChange}
                         >
-                            <option value="all">ทั้งหมด</option>
+                            <option value="all">{t('all')}</option>
                             {Array.isArray(machines) && machines.map(machine => (
                                 <option key={machine.id} value={machine.id}>
                                     {machine.machineName}
@@ -2296,14 +2374,14 @@ const HistoricalReportsSection = () => {
                     </div>
                     
                     <div className="filter-group">
-                        <label htmlFor="productId">ผลิตภัณฑ์</label>
+                        <label htmlFor="productId">{t('productLabel')}</label>
                         <select
                             id="productId"
                             name="productId"
                             value={filters.productId}
                             onChange={handleFilterChange}
                         >
-                            <option value="all">ทั้งหมด</option>
+                            <option value="all">{t('all')}</option>
                             {Array.isArray(products) && products.map(product => (
                                 <option key={product.id} value={product.id}>
                                     {product.productName}
@@ -2315,7 +2393,7 @@ const HistoricalReportsSection = () => {
                 
                 <div className="buttons-section">
                     <button type="submit" className="search-button" disabled={loading}>
-                        {loading ? 'กำลังค้นหา...' : 'ค้นหา'}
+                        {loading ? t('searching') : t('search')}
                     </button>
                 </div>
             </form>
@@ -2330,7 +2408,7 @@ const HistoricalReportsSection = () => {
                 ) : (
                     !loading && !error && (
                         <div className="no-data-message">
-                            <p>กรุณาเลือกเงื่อนไขและกดค้นหาเพื่อดูรายงานย้อนหลัง</p>
+                            <p>{t('selectFiltersAndSearch')}</p>
                         </div>
                     )
                 )
@@ -2339,7 +2417,7 @@ const HistoricalReportsSection = () => {
             {/* ถ้ายังไม่ได้ค้นหา และไม่มีข้อความผิดพลาด */}
             {!hasSearched && !error && (
                 <div className="instruction-message">
-                    <p>กรุณาเลือกช่วงวันที่และเงื่อนไขอื่น ๆ แล้วกดค้นหาเพื่อดูรายงานย้อนหลัง</p>
+                    <p>{t('selectFiltersAndSearch')}</p>
                 </div>
             )}
 
@@ -2376,6 +2454,8 @@ const HistoricalReportsSection = () => {
 
 // --- Main PC Dashboard Component ---
 const ProductionControlDashboard = () => {
+    const { user } = useAuth();
+    const canManage = user?.role === 'Production Control' || user?.role === 'DataAdmin';
     const [view, setView] = useState('dashboard');
     const [previousView, setPreviousView] = useState('dashboard');
     const [selectedReportId, setSelectedReportId] = useState(null);
@@ -2547,12 +2627,25 @@ const ProductionControlDashboard = () => {
         setView(newView);
     };
 
-    if (loading) return <div className="loading-container"><h2>กำลังโหลดข้อมูล...</h2></div>;
+    if (loading) return <div className="loading-container"><h2>{t('loadingData')}</h2></div>;
     if (error) return <div className="error-message">{error}</div>;
 
     // --- View Router ---
-    if (view === 'manage') {
-        return <ProductionOrderManagement onBack={() => changeView('dashboard')} onViewDetail={(id) => changeView('detail', id)} machines={machines} products={products} allReports={allReports} fetchData={fetchData}/>;
+        if (view === 'manage') {
+                if (!canManage) {
+                        return (
+                            <div className="pc-dashboard-container">
+                                <div className="pc-dashboard-header">
+                                    <h2 className="pc-dashboard-title">{t('manageProductionOrders')}</h2>
+                                </div>
+                                <div className="no-data-card">
+                                    <h3>{t('pleaseLogin')}</h3>
+                                    <button className="back-button" onClick={() => setView('dashboard')}>&larr; {t('backToOverview')}</button>
+                                </div>
+                            </div>
+                        );
+                }
+                return <ProductionOrderManagement onBack={() => changeView('dashboard')} onViewDetail={(id) => changeView('detail', id)} machines={machines} products={products} allReports={allReports} fetchData={fetchData}/>;
     } else if (view === 'detail') {
         return <ReportDetailView reportId={selectedReportId} onBack={() => changeView(previousView)} />;
     } else if (view === 'history') {
@@ -2655,17 +2748,19 @@ const ProductionControlDashboard = () => {
     return (
         <div className="pc-dashboard-container">
             <div className="pc-dashboard-header">
-                <h2 className="pc-dashboard-title">ภาพรวมการผลิต (Production Overview)</h2>
+                <h2 className="pc-dashboard-title">{t('productionOverviewTitle')}</h2>
                 <div>
-                    <button className="manage-reports-button" onClick={() => changeView('history')} style={{ marginRight: '1rem' }}>ดูรายงานย้อนหลัง</button>
-                    <button className="manage-reports-button" onClick={() => changeView('manage')}>จัดการใบสั่งผลิต</button>
+                    <button className="manage-reports-button" onClick={() => changeView('history')} style={{ marginRight: '1rem' }}>{t('viewHistoricalReports')}</button>
+                                        {canManage && (
+                      <button className="manage-reports-button" onClick={() => changeView('manage')}>{t('manageProductionOrders')}</button>
+                    )}
                 </div>
             </div>
             {error && <p className="error-message">{error}</p>}
             {!error && dashboardData.length === 0 &&
                 <div className="no-data-card">
-                    <h3>ไม่มีเครื่องจักรที่กำลังทำงานอยู่</h3>
-                    <p>สามารถเริ่มได้โดยการไปที่ "จัดการใบสั่งผลิต" เพื่อสร้างใบสั่งผลิตใหม่</p>
+                    <h3>{t('noMachinesRunning')}</h3>
+                    <p>{t('goToManageToCreate')}</p>
                 </div>
             }
             <div className="gauge-grid">

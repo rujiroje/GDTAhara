@@ -315,7 +315,8 @@ const QaDashboard = () => {
                     <div key={report.id} className="report-card">
                         <h3>{report.machineName}</h3>
                         <p>{report.productName}</p>
-                        <p>วันที่: {report.startDate}</p>
+                        {report.orderNumber && <p>Order No.: {report.orderNumber}</p>}
+                        <p>วันที่: {report.startDate} – {report.endDate}</p>
                         <button className="select-button" onClick={() => setSelectedReport(report)}>
                             เลือก
                         </button>

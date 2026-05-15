@@ -5,6 +5,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import _ from 'lodash';
 import ParameterChecklistForm from './ParameterChecklistForm';
+import PmSchedulePanel from './PmSchedulePanel';
+import RecipePanel from '../pc/RecipePanel';
 
 // --- API Service ---
 const API_URL = 'http://localhost:8080/api';
@@ -501,11 +503,11 @@ const TechnicianDashboard = () => {
     const renderCurrentView = () => {
         switch (currentView) {
             case 'timeSelection':
-                return <TimeSelectionScreen onSelectTime={handleSelectTime} onBack={() => setCurrentView('recordsView')} />;
+                return <TimeSelectionScreen onSelectTime={handleSelectTime} onBack={() => setCurrentView('reportList')} />;
             case 'form':
                 return <ParameterForm formData={formData} setFormData={setFormData} onSubmit={handleFormSubmit} onCancel={() => setCurrentView('reportList')} timeRecord={timeRecord} />;
             case 'recordsView':
-                return <ParameterRecordsView records={parameterRecords} onEdit={handleEditRecord} onAddNew={() => setCurrentView('timeSelection')} onBack={() => setSelectedReport(null)} />;
+                return <ParameterRecordsView records={parameterRecords} onEdit={handleEditRecord} onAddNew={() => setCurrentView('timeSelection')} onBack={() => setCurrentView('reportList')} />;
             default:
                 return renderMainTaskView();
         }
@@ -591,6 +593,8 @@ const TechnicianDashboard = () => {
     return (
         <div className="dashboard-card">
             <NotificationPanel />
+            <PmSchedulePanel />
+            <RecipePanel />
             <h2 className="dashboard-title">เลือกใบสั่งผลิตเพื่อบันทึกข้อมูล</h2>
             {error && <p className="error-message">{error}</p>}
             {(!activeReports || activeReports.length === 0) && !error && <p>ไม่มีใบสั่งผลิตที่กำลังทำงานอยู่</p>}
@@ -599,7 +603,8 @@ const TechnicianDashboard = () => {
                     <div key={report.id} className="report-card">
                         <h3>{report.machineName}</h3>
                         <p>{report.productName}</p>
-                        <p>วันที่: {report.productionDate}</p>
+                        {report.orderNumber && <p>Order No.: {report.orderNumber}</p>}
+                        <p>วันที่: {report.startDate} – {report.endDate}</p>
                         <button className="select-button" onClick={() => setSelectedReport(report)}>
                             เลือก
                         </button>

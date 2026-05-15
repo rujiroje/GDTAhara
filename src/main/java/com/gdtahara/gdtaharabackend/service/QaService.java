@@ -63,9 +63,12 @@ public class QaService {
             return reportRepository.findLatest5Raw().stream()
                     .map(r -> new ProductionReportSimpleViewDto(
                             (Long) r[0],
-                            (java.time.LocalDate) r[2],
+                            r[1] != null ? r[1].toString() : null,
+                            toLocalDate(r[2]),
+                            toLocalDate(r[3]),
                             (String) r[5],
-                            (String) r[6]
+                            (String) r[6],
+                            null
                     ))
                     .collect(Collectors.toList());
 
@@ -78,10 +81,19 @@ public class QaService {
     private ProductionReportSimpleViewDto convertToSimpleDto(ProductionReport report) {
         return new ProductionReportSimpleViewDto(
                 report.getId(),
+                report.getOrderNumber(),
                 report.getStartDate(),
+                report.getEndDate(),
                 report.getMachine() != null ? report.getMachine().getMachineName() : "Unknown Machine",
-                report.getProduct() != null ? report.getProduct().getProductName() : "Unknown Product"
+                report.getProduct() != null ? report.getProduct().getProductName() : "Unknown Product",
+                report.getMachine() != null ? String.valueOf(report.getMachine().getId()) : null
         );
+    }
+
+    private java.time.LocalDate toLocalDate(Object obj) {
+        if (obj instanceof java.sql.Date sqlDate) return sqlDate.toLocalDate();
+        if (obj instanceof java.time.LocalDate ld) return ld;
+        return null;
     }
 
     // **[ใหม่]** เมธอดสำหรับดึง NG Types สำหรับ QA

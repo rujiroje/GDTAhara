@@ -4,8 +4,12 @@
 // =================================================================
 package com.gdtahara.gdtaharabackend.controller;
 
+import com.gdtahara.gdtaharabackend.model.Machine;
 import com.gdtahara.gdtaharabackend.model.Material;
 import com.gdtahara.gdtaharabackend.model.NgType;
+import com.gdtahara.gdtaharabackend.model.Product;
+import com.gdtahara.gdtaharabackend.repository.MachineRepository;
+import com.gdtahara.gdtaharabackend.repository.ProductRepository;
 import com.gdtahara.gdtaharabackend.service.MasterDataService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +27,12 @@ public class MasterDataController {
     @Autowired
     private MasterDataService masterDataService;
 
+    @Autowired
+    private MachineRepository machineRepository;
+
+    @Autowired
+    private ProductRepository productRepository;
+
     @GetMapping("/ng-types")
     public ResponseEntity<List<NgType>> getAllNgTypes() {
         return ResponseEntity.ok(masterDataService.getAllNgTypes());
@@ -31,5 +41,15 @@ public class MasterDataController {
     @GetMapping("/materials")
     public ResponseEntity<List<Material>> getAllMaterials() {
         return ResponseEntity.ok(masterDataService.getAllMaterials());
+    }
+
+    @GetMapping("/machines")
+    public ResponseEntity<List<Machine>> getAllMachines() {
+        return ResponseEntity.ok(machineRepository.findAll());
+    }
+
+    @GetMapping("/products")
+    public ResponseEntity<List<Product>> getAllProducts() {
+        return ResponseEntity.ok(productRepository.findAll());
     }
 }

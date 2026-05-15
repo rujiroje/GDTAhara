@@ -3,6 +3,7 @@
 // =================================================================
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import MachineStatusPanel from '../common/MachineStatusPanel';
 
 // --- API Service (ควรย้ายไปไฟล์กลาง) ---
 const API_URL = 'http://localhost:8080/api';
@@ -10,6 +11,13 @@ const api = axios.create({ baseURL: API_URL });
 api.interceptors.request.use(config => {
     const token = localStorage.getItem('token');
     if (token) { config.headers.Authorization = `Bearer ${token}`; }
+    // Attach language hints for backend localization
+    try {
+        const lang = (localStorage.getItem('lang') || '').toLowerCase().startsWith('en') ? 'en' : 'th';
+        if (!config.params) config.params = {};
+        config.params.lang = lang;
+        config.headers['Accept-Language'] = lang;
+    } catch {}
     return config;
 }, error => Promise.reject(error));
 
@@ -83,13 +91,26 @@ const OperatorDashboard = () => {
                     // แก้ไขจาก /master-data/ เป็น /operator/
                     const response = await api.get('/operator/ng-types');
                     console.log('NG Types response:', response.data);
-                    
-                    // ข้อมูลจาก operator endpoint มา filtered แล้ว ไม่ต้อง filter เพิ่ม
-                    let operatorNg = response.data || [];
-                    
-                    console.log('Operator NG Types from backend:', operatorNg);
-                    console.log('Count from backend:', operatorNg.length);
-                    
+                    // กรองเฉพาะ NG ที่เหมาะกับ Operator (ตัด QA/Technician/Production/Sort ออก)
+                    let operatorNg = (response.data || []).filter(ng => {
+                        const th = (ng.ngDescriptionTh || '').toLowerCase();
+                        const en = (ng.ngDescriptionEn || '').toLowerCase();
+                        const name = `${th} ${en}`;
+                        const excludes = [
+                            'technician',
+                            'qa',
+                            'production',
+                            ' sort', // เว้นวรรคกัน false-positive กับคำไทยทั่วไป
+                            'โดย technician',
+                            'โดย qa',
+                            'โดย production'
+                        ];
+                        return !excludes.some(x => name.includes(x));
+                    });
+
+                    console.log('Operator NG Types (filtered):', operatorNg);
+                    console.log('Counts - backend:', (response.data || []).length, 'filtered:', operatorNg.length);
+
                     const sortedNg = operatorNg.sort((a, b) => {
                         if (a.ngDescriptionTh && a.ngDescriptionTh.includes('ปัญหาอื่นๆ')) return 1;
                         if (b.ngDescriptionTh && b.ngDescriptionTh.includes('ปัญหาอื่นๆ')) return -1;
@@ -258,20 +279,18 @@ const OperatorDashboard = () => {
         return ( <div className="dashboard-card"> {activeTask === null && renderTaskChoice()} {activeTask === 'ng' && renderNgRecording()} {activeTask === 'packaging' && renderPackagingRecording()} <Modal isOpen={isAlertModalOpen} onClose={() => setIsAlertModalOpen(false)} title="แจ้งปัญหา"> <form onSubmit={handleAlertSubmit}> <div className="form-group"> <label className="form-label">กรุณาระบุเหตุผล</label> <textarea value={alertReason} onChange={(e) => setAlertReason(e.target.value)} className="form-input" rows="4" required /> </div> <div className="form-actions"> <button type="button" onClick={() => setIsAlertModalOpen(false)} className="cancel-button">ยกเลิก</button> <button type="submit" className="save-button">ยืนยันการแจ้ง</button> </div> </form> </Modal> </div> );
     }
 
-    return ( <div className="dashboard-card"> 
-        <h2 className="dashboard-title">เลือกใบสั่งผลิตเพื่อเริ่มทำงาน</h2> 
-        
-        {/* Debug Information */}
-        <div style={{ padding: '10px', backgroundColor: '#f5f5f5', marginBottom: '20px', borderRadius: '5px' }}>
-            <h4 style={{ color: '#1976d2' }}>Operator System Status</h4>
-            <p>Active Reports: {activeReports.length}</p>
-            <p>Status: {error ? 'Error' : 'Connected'}</p>
-            {error && <p style={{ color: 'red' }}>Error: {error}</p>}
-        </div>
+    const machineList = activeReports
+        .filter((r, i, arr) => r.machineId && arr.findIndex(x => x.machineId === r.machineId) === i)
+        .map(r => ({ id: parseInt(r.machineId), machineName: r.machineName }))
+        .filter(m => !isNaN(m.id));
+
+    return ( <div className="dashboard-card">
+        <h2 className="dashboard-title">เลือกใบสั่งผลิตเพื่อเริ่มทำงาน</h2>
+        <MachineStatusPanel machines={machineList} />
         
         {error && <p className="error-message">{error}</p>} 
         {activeReports.length === 0 && !error && <p>ไม่มีใบสั่งผลิตที่กำลังทำงานอยู่</p>} 
-        <div className="report-selection-container"> {activeReports.map(report => ( <div key={report.id} className="report-card"> <h3>{report.machineName}</h3> <p>{report.productName}</p> <p>วันที่: {report.productionDate || report.startDate}</p> <button className="select-button" onClick={() => setSelectedReport(report)}> เลือก </button> </div> ))} </div> </div> );
+        <div className="report-selection-container"> {activeReports.map(report => ( <div key={report.id} className="report-card"> <h3>{report.machineName}</h3> <p>{report.productName}</p> {report.orderNumber && <p>Order No.: {report.orderNumber}</p>} <p>วันที่: {report.startDate} – {report.endDate}</p> <button className="select-button" onClick={() => setSelectedReport(report)}> เลือก </button> </div> ))} </div> </div> );
 };
 
 export default OperatorDashboard;

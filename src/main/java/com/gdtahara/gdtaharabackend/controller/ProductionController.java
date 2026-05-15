@@ -45,10 +45,16 @@ public class ProductionController {
     
     @GetMapping("/reports/{id}/report-summary")
     @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
-    public ResponseEntity<ReportSummaryDto> getReportSummary(@PathVariable Long id) {
-        logger.info("Fetching report summary for report ID: {}", id);
+    public ResponseEntity<ReportSummaryDto> getReportSummary(
+            @PathVariable Long id,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        logger.info("Fetching report summary for report ID: {} (langHeader={}, langParam={})", id, acceptLanguage, langParam);
         try {
-            ReportSummaryDto summary = productionService.getReportSummary(id);
+            String langPref = (langParam != null && !langParam.isBlank()) ? langParam
+                    : (acceptLanguage != null && !acceptLanguage.isBlank() ? acceptLanguage : "th");
+            String lang = langPref.toLowerCase().startsWith("en") ? "en" : "th";
+            ReportSummaryDto summary = productionService.getReportSummary(id, lang);
             return ResponseEntity.ok(summary);
         } catch (EntityNotFoundException e) {
             logger.warn("Report not found: {}", e.getMessage());
@@ -166,10 +172,16 @@ public class ProductionController {
 
     @GetMapping("/reports/{id}/detailed")
     @PreAuthorize("hasAnyRole('Production Control', 'Shift Leader', 'Operator', 'Technician', 'QA', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
-    public ResponseEntity<DetailedProductionReportDto> getDetailedReport(@PathVariable Long id) {
-        logger.info("Fetching detailed report with ID: {}", id);
+    public ResponseEntity<DetailedProductionReportDto> getDetailedReport(
+            @PathVariable Long id,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        logger.info("Fetching detailed report with ID: {} (langHeader={}, langParam={})", id, acceptLanguage, langParam);
         try {
-            return ResponseEntity.ok(productionService.getDetailedReport(id));
+            String langPref = (langParam != null && !langParam.isBlank()) ? langParam
+                    : (acceptLanguage != null && !acceptLanguage.isBlank() ? acceptLanguage : "th");
+            String lang = langPref.toLowerCase().startsWith("en") ? "en" : "th";
+            return ResponseEntity.ok(productionService.getDetailedReport(id, lang));
         } catch (Exception e) {
             logger.error("Error fetching detailed report with ID {}: {}", id, e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
@@ -226,13 +238,14 @@ public class ProductionController {
     public ResponseEntity<DailyProductionSummaryDto> getDailySummary(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String machineId,
-            @RequestParam(required = false) Long productId) {
-        logger.info("Fetching daily production summary for date: {}, machineId: {}, productId: {}", date, machineId, productId);
+            @RequestParam(required = false) Long productId,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        logger.info("Fetching daily production summary for date: {}, machineId: {}, productId: {}, langHeader={}, langParam={}", date, machineId, productId, acceptLanguage, langParam);
         try {
-            if (machineId != null || productId != null) {
-                return ResponseEntity.ok(productionService.getDailyProductionSummary(date, machineId, productId));
-            }
-            return ResponseEntity.ok(productionService.getDailyProductionSummary(date));
+            String pref = (langParam != null && !langParam.isBlank()) ? langParam : acceptLanguage;
+            String lang = (pref != null && pref.toLowerCase().startsWith("en")) ? "en" : "th";
+            return ResponseEntity.ok(productionService.getDailyProductionSummary(date, machineId, productId, lang));
         } catch (Exception e) {
             logger.error("Error fetching daily production summary: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
@@ -244,10 +257,23 @@ public class ProductionController {
     public ResponseEntity<DailyShiftSummaryDto> getDailySummaryByShift(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String machineId,
-            @RequestParam(required = false) Long productId) {
-        logger.info("Fetching daily production summary by shift for date: {}, machineId: {}, productId: {}", date, machineId, productId);
+            @RequestParam(required = false) Long productId,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        logger.info("Fetching daily production summary by shift for date: {}, machineId: {}, productId: {}, langHeader={}, langParam={}", date, machineId, productId, acceptLanguage, langParam);
         try {
-            return ResponseEntity.ok(productionService.getDailyProductionSummaryByShift(date, machineId, productId));
+            DailyShiftSummaryDto dto = productionService.getDailyProductionSummaryByShift(date, machineId, productId);
+            String pref = (langParam != null && !langParam.isBlank()) ? langParam : acceptLanguage;
+            String lang = (pref != null && pref.toLowerCase().startsWith("en")) ? "en" : "th";
+            try {
+                var dayNg = productionService.getShiftSpecificNgSummary(date, true, machineId, productId, lang);
+                var nightNg = productionService.getShiftSpecificNgSummary(date, false, machineId, productId, lang);
+                if (dto != null) {
+                    if (dto.getDayShiftData() != null) dto.getDayShiftData().setNgSummary(dayNg);
+                    if (dto.getNightShiftData() != null) dto.getNightShiftData().setNgSummary(nightNg);
+                }
+            } catch (Exception ignore) { }
+            return ResponseEntity.ok(dto);
         } catch (Exception e) {
             logger.error("Error fetching daily production summary by shift: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
@@ -259,10 +285,23 @@ public class ProductionController {
     public ResponseEntity<DailyShiftSummaryDto> getDailySummaryByShiftAlias(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String machineId,
-            @RequestParam(required = false) Long productId) {
-        logger.info("Fetching daily production summary by shift (alias) for date: {}, machineId: {}, productId: {}", date, machineId, productId);
+            @RequestParam(required = false) Long productId,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
+            @RequestParam(value = "lang", required = false) String langParam) {
+        logger.info("Fetching daily production summary by shift (alias) for date: {}, machineId: {}, productId: {}, langHeader={}, langParam={}", date, machineId, productId, acceptLanguage, langParam);
         try {
-            return ResponseEntity.ok(productionService.getDailyProductionSummaryByShift(date, machineId, productId));
+            DailyShiftSummaryDto dto = productionService.getDailyProductionSummaryByShift(date, machineId, productId);
+            String pref = (langParam != null && !langParam.isBlank()) ? langParam : acceptLanguage;
+            String lang = (pref != null && pref.toLowerCase().startsWith("en")) ? "en" : "th";
+            try {
+                var dayNg = productionService.getShiftSpecificNgSummary(date, true, machineId, productId, lang);
+                var nightNg = productionService.getShiftSpecificNgSummary(date, false, machineId, productId, lang);
+                if (dto != null) {
+                    if (dto.getDayShiftData() != null) dto.getDayShiftData().setNgSummary(dayNg);
+                    if (dto.getNightShiftData() != null) dto.getNightShiftData().setNgSummary(nightNg);
+                }
+            } catch (Exception ignore) { }
+            return ResponseEntity.ok(dto);
         } catch (Exception e) {
             logger.error("Error fetching daily production summary by shift (alias): {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();

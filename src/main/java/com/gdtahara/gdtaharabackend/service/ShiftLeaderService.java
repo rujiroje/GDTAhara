@@ -82,23 +82,15 @@ public class ShiftLeaderService {
 
             // 3) Final fallback: latest 5 raw
             return productionReportRepository.findLatest5Raw().stream()
-                .map(r -> {
-                    java.time.LocalDate startDate;
-                    Object dateObj = r[2];
-                    if (dateObj instanceof java.sql.Date sqlDate) {
-                        startDate = sqlDate.toLocalDate();
-                    } else if (dateObj instanceof java.time.LocalDate ld) {
-                        startDate = ld;
-                    } else {
-                        startDate = java.time.LocalDate.now();
-                    }
-                    return new ProductionReportSimpleViewDto(
+                .map(r -> new ProductionReportSimpleViewDto(
                         (Long) r[0],
-                        startDate,
+                        r[1] != null ? r[1].toString() : null,
+                        toLocalDate(r[2]),
+                        toLocalDate(r[3]),
                         (String) r[5],
-                        (String) r[6]
-                    );
-                })
+                        (String) r[6],
+                        null
+                ))
                 .collect(Collectors.toList());
         } catch (Exception e) {
             // ถ้า error ให้ return empty list แทนที่จะ throw exception
@@ -110,10 +102,19 @@ public class ShiftLeaderService {
     private ProductionReportSimpleViewDto convertToSimpleDto(ProductionReport report) {
         return new ProductionReportSimpleViewDto(
                 report.getId(),
+                report.getOrderNumber(),
                 report.getStartDate(),
+                report.getEndDate(),
                 report.getMachine() != null ? report.getMachine().getMachineName() : "Unknown Machine",
-                report.getProduct() != null ? report.getProduct().getProductName() : "Unknown Product"
+                report.getProduct() != null ? report.getProduct().getProductName() : "Unknown Product",
+                report.getMachine() != null ? String.valueOf(report.getMachine().getId()) : null
         );
+    }
+
+    private java.time.LocalDate toLocalDate(Object obj) {
+        if (obj instanceof java.sql.Date sqlDate) return sqlDate.toLocalDate();
+        if (obj instanceof java.time.LocalDate ld) return ld;
+        return null;
     }
 
     public ShiftLeaderDashboardDto getDashboardData(Long reportId) {

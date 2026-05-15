@@ -21,6 +21,9 @@ public class NgType {
     @Column(name = "ng_description_th")
     private String ngDescriptionTh;
 
+    @Column(name = "ng_description_en")
+    private String ngDescriptionEn;
+
     @Column(name = "ng_type")
     private String ngType;
 }
