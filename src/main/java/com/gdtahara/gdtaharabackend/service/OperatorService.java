@@ -1,6 +1,5 @@
 // =================================================================
 // File: src/main/java/com/gdtahara/gdtaharabackend/service/OperatorService.java
-// (ฉบับแก้ไข เพิ่มเมธอด getHourlyNgSummary)
 // =================================================================
 package com.gdtahara.gdtaharabackend.service;
 
@@ -47,45 +46,34 @@ public class OperatorService {
     @Transactional(readOnly = true)
     public List<NgType> getOperatorNgTypes() {
         System.out.println("🔍 Getting ALL NG Types for Operator buttons...");
-        
-        // แก้ไข: ส่ง NG Types ทั้งหมดให้ Operator สำหรับปุ่มบันทึก
         List<NgType> allNgTypes = ngTypeRepository.findAll();
         System.out.println("📊 Total NG Types for Operator: " + allNgTypes.size());
-        
         return allNgTypes;
     }
 
-    // **[ใหม่]** เมธอดสำหรับดึงรายการ active reports สำหรับ Operator
     @Transactional(readOnly = true)
     public List<ProductionReportSimpleViewDto> getActiveReportsForOperator() {
         try {
-            // หา reports ที่มีสถานะที่ถือว่าใช้งานได้ (In Progress/Active โดยนโยบายใหม่)
             List<ProductionReport> inProgressReports = productionReportRepository.findByStatusIn(
                 java.util.List.of("IN_PROGRESS", "In Progress", "ACTIVE")
             );
-            
+
             if (inProgressReports.isEmpty()) {
-                // ถ้าไม่มี ให้หา reports ทั้งหมดที่สร้างวันนี้
                 LocalDate today = LocalDate.now();
                 List<ProductionReport> todayReports = productionReportRepository.findByStartDate(today);
-        if (todayReports.isEmpty()) {
-            // ถ้ายังไม่มี ให้ใช้ native latest 5 rows (raw) แล้ว map
-            return productionReportRepository.findLatest5Raw().stream()
-                .map(r -> {
-                    java.time.LocalDate startDate = toLocalDate(r[2]);
-                    java.time.LocalDate endDate = toLocalDate(r[3]);
-                    return new ProductionReportSimpleViewDto(
-                        (Long) r[0],
-                        r[1] != null ? r[1].toString() : null,
-                        startDate,
-                        endDate,
-                        (String) r[5],
-                        (String) r[6],
-                        null
-                    );
-                })
-                .collect(Collectors.toList());
-        } else {
+                if (todayReports.isEmpty()) {
+                    return productionReportRepository.findLatest5Raw().stream()
+                        .map(r -> new ProductionReportSimpleViewDto(
+                            (Long) r[0],
+                            r[1] != null ? r[1].toString() : null,
+                            toLocalDate(r[2]),
+                            toLocalDate(r[3]),
+                            (String) r[5],
+                            (String) r[6],
+                            null
+                        ))
+                        .collect(Collectors.toList());
+                } else {
                     return todayReports.stream()
                             .map(this::convertToSimpleDto)
                             .collect(Collectors.toList());
@@ -100,7 +88,7 @@ public class OperatorService {
             return Collections.emptyList();
         }
     }
-    
+
     private ProductionReportSimpleViewDto convertToSimpleDto(ProductionReport report) {
         return new ProductionReportSimpleViewDto(
                 report.getId(),
@@ -118,26 +106,23 @@ public class OperatorService {
         if (obj instanceof java.time.LocalDate ld) return ld;
         return null;
     }
-    
-    // เพิ่ม method สำหรับ debug
+
     @Transactional(readOnly = true)
     public List<NgType> getAllNgTypesForDebug() {
         return ngTypeRepository.findAll();
     }
 
-    // **[แก้ไข]** เมธอดสำหรับดึงข้อมูลสรุป NG รายชั่วโมงของ Operator คนนั้นเอง
     @Transactional(readOnly = true)
     public Map<String, Long> getHourlyNgSummary(Long reportId, String username) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime startOfHour = now.truncatedTo(ChronoUnit.HOURS);
 
-        // **[ใหม่]** Filter เฉพาะ NG ที่ Operator คนนั้นเองบันทึก
         User operator = userRepository.findByUsername(username)
                 .orElseThrow(() -> new EntityNotFoundException("User not found: " + username));
 
         List<NgLog> hourlyLogs = ngLogRepository.findByReportIdAndTimestampBetween(reportId, startOfHour, now)
                 .stream()
-                .filter(log -> log.getUser().getId().equals(operator.getId())) // Filter เฉพาะ Operator คนนั้น
+                .filter(log -> log.getUser().getId().equals(operator.getId()))
                 .collect(Collectors.toList());
 
         System.out.println("🕐 Hourly NG Summary for " + username + ": " + hourlyLogs.size() + " logs");
@@ -166,7 +151,7 @@ public class OperatorService {
     public PackagingLog recordPackaging(Long reportId, PackagingLogRequestDto request, String username) {
         ProductionReport report = productionReportRepository.findById(reportId).orElseThrow(() -> new EntityNotFoundException("Production Report not found"));
         User operator = userRepository.findByUsername(username).orElseThrow(() -> new EntityNotFoundException("User not found: " + username));
-        
+
         LabelStock stock = labelStockRepository.findByProductId(report.getProduct().getId()).orElseThrow(() -> new EntityNotFoundException("ไม่พบสต็อกป้ายสำหรับผลิตภัณฑ์นี้"));
         if (stock.getCurrentStock() <= 0) {
             throw new IllegalStateException("ป้ายหมดสต็อก ไม่สามารถบันทึกได้");

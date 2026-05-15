@@ -5,7 +5,10 @@
 package com.gdtahara.gdtaharabackend.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+<<<<<<< HEAD
 import com.fasterxml.jackson.annotation.JsonFormat.Shape;
+=======
+>>>>>>> 6f6d8f0e8ca1272ce48104c687b482d938aaade8
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -47,6 +50,7 @@ public class ProductionReportDto {
     private Long parameterRecordCount;
     private Long qualityCheckCount;
     
+<<<<<<< HEAD
     // Additional display fields are computed via getters below to avoid unused-field warnings
     
     // Fields ที่ขาดหายไป
@@ -56,6 +60,16 @@ public class ProductionReportDto {
     private LocalDate startDate;
 
     @JsonFormat(shape = Shape.STRING, pattern = "yyyy-MM-dd")
+=======
+    // Additional fields for display
+    private String displayDate;
+    private String displayTime;
+    private String statusDisplayName;
+    
+    // Fields ที่ขาดหายไป
+    private String orderNumber;
+    private LocalDate startDate;
+>>>>>>> 6f6d8f0e8ca1272ce48104c687b482d938aaade8
     private LocalDate endDate;
     private Integer targetQty;
     private boolean finalizable;
@@ -78,8 +92,11 @@ public class ProductionReportDto {
             case "DRAFT": return "ร่าง";
             case "IN_PROGRESS": return "กำลังดำเนินการ";
             case "COMPLETED": return "เสร็จสิ้น";
+<<<<<<< HEAD
             case "ACTIVE": return "พร้อมทำงาน";
             case "INACTIVE": return "ปิดงาน";
+=======
+>>>>>>> 6f6d8f0e8ca1272ce48104c687b482d938aaade8
             case "CANCELLED": return "ยกเลิก";
             case "ON_HOLD": return "หยุดชั่วคราว";
             default: return status;

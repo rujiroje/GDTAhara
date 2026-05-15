@@ -56,7 +56,6 @@ public class ShiftLeaderService {
     public List<ProductionReportSimpleViewDto> getActiveReportsForShiftLeader() {
         LocalDate today = LocalDate.now();
         try {
-            // 1) Prefer fast active query: by status in active set OR date-overlap and non-terminal
             var activeStatuses = java.util.List.of("IN PROGRESS", "IN_PROGRESS", "ACTIVE");
             var terminalStatuses = java.util.List.of("COMPLETED", "CANCELLED", "CANCELED", "FINISHED", "CLOSED");
             List<ProductionReport> active = productionReportRepository.findActiveReportsFast(activeStatuses, terminalStatuses, today);
@@ -66,21 +65,18 @@ public class ShiftLeaderService {
                 return active.stream().map(this::convertToSimpleDto).collect(Collectors.toList());
             }
 
-            // 2) Fallback: reports that start today (created by PC just now)
             List<ProductionReport> todayReports = productionReportRepository.findByStartDate(today);
             logger.info("[SL] TodayReports startDate={} -> {} item(s)", today, (todayReports != null ? todayReports.size() : 0));
             if (todayReports != null && !todayReports.isEmpty()) {
                 return todayReports.stream().map(this::convertToSimpleDto).collect(Collectors.toList());
             }
 
-            // 2b) Secondary fallback: any report active on today's date by date overlap regardless of status (non-terminal), any machine
             List<ProductionReport> dateActive = productionReportRepository.findActiveOnDate(today, null);
             logger.info("[SL] DateActive overlap today={} -> {} item(s)", today, (dateActive != null ? dateActive.size() : 0));
             if (dateActive != null && !dateActive.isEmpty()) {
                 return dateActive.stream().map(this::convertToSimpleDto).collect(Collectors.toList());
             }
 
-            // 3) Final fallback: latest 5 raw
             return productionReportRepository.findLatest5Raw().stream()
                 .map(r -> new ProductionReportSimpleViewDto(
                         (Long) r[0],
@@ -93,12 +89,11 @@ public class ShiftLeaderService {
                 ))
                 .collect(Collectors.toList());
         } catch (Exception e) {
-            // ถ้า error ให้ return empty list แทนที่จะ throw exception
             logger.error("[SL] Error fetching active reports: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
-    
+
     private ProductionReportSimpleViewDto convertToSimpleDto(ProductionReport report) {
         return new ProductionReportSimpleViewDto(
                 report.getId(),
@@ -122,7 +117,7 @@ public class ShiftLeaderService {
                 .orElseThrow(() -> new EntityNotFoundException("Report not found with id: " + reportId));
 
         LocalDate today = LocalDate.now();
-        
+
         LocalDateTime dayShiftStart = today.atTime(3, 0);
         LocalDateTime dayShiftEnd = today.atTime(15, 0);
         LocalDateTime nightShiftStart = today.atTime(15, 0);
@@ -140,7 +135,6 @@ public class ShiftLeaderService {
                 nightShiftData
             );
         } catch (Exception e) {
-            // Return empty dashboard data if calculation fails
             ShiftDataDto emptyShift = createEmptyShiftData();
             return new ShiftLeaderDashboardDto(
                 (report.getMachine() != null && report.getMachine().getMachineName() != null) ? report.getMachine().getMachineName() : "Unknown Machine",
@@ -151,8 +145,7 @@ public class ShiftLeaderService {
             );
         }
     }
-    
-    // **[ใหม่]** เพิ่มเมธอดสำหรับดึงประวัติ NG Log ของ Shift Leader
+
     @Transactional(readOnly = true)
     public List<NgLog> getNgLogsForReport(Long reportId) {
         return ngLogRepository.findByReportIdAndSource(reportId, "ShiftLeader");
@@ -162,34 +155,34 @@ public class ShiftLeaderService {
     public MaterialStockTransaction recordStockTransaction(StockTransactionRequestDto request, String username) {
         User user = userRepository.findByUsername(username).orElseThrow(() -> new EntityNotFoundException("User not found"));
         Material material = materialRepository.findById(request.getMaterialId()).orElseThrow(() -> new EntityNotFoundException("Material not found"));
-        
+
         MaterialStockTransaction transaction = new MaterialStockTransaction();
         transaction.setMaterial(material);
         transaction.setUser(user);
         transaction.setTransactionType(request.getTransactionType());
         transaction.setQuantity(request.getQuantity());
         transaction.setLotNumber(request.getLotNumber());
-        
-        if(request.getProductionReportId() != null){
+
+        if (request.getProductionReportId() != null) {
             ProductionReport report = productionReportRepository.findById(request.getProductionReportId()).orElse(null);
             transaction.setProductionReport(report);
         }
 
         return transactionRepository.save(transaction);
     }
-    
+
     @Transactional
     public MaterialStockTransaction updateStockTransaction(Long transactionId, StockTransactionRequestDto request) {
         MaterialStockTransaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new EntityNotFoundException("Transaction not found with id: " + transactionId));
-        
+
         Material material = materialRepository.findById(request.getMaterialId())
                 .orElseThrow(() -> new EntityNotFoundException("Material not found"));
 
         transaction.setMaterial(material);
         transaction.setQuantity(request.getQuantity());
         transaction.setLotNumber(request.getLotNumber());
-        
+
         return transactionRepository.save(transaction);
     }
 
@@ -205,7 +198,7 @@ public class ShiftLeaderService {
         ngLog.setUser(user);
         ngLog.setQuantity(request.getQuantity());
         ngLog.setSource("ShiftLeader");
-        
+
         return ngLogRepository.save(ngLog);
     }
 
@@ -214,18 +207,15 @@ public class ShiftLeaderService {
             return createEmptyShiftData();
         }
         long reportId = report.getId();
-        
+
         try {
             LocalDateTime endInclusive = endTime != null ? endTime.minusNanos(1) : startTime;
             List<PackagingLog> packagingLogs = packagingLogRepository.findByReportIdAndTimestampBetween(reportId, startTime, endInclusive);
             List<NgLog> ngLogs = ngLogRepository.findByReportIdAndTimestampBetween(reportId, startTime, endInclusive);
-            
-            // Downtime summaries: build in Java to avoid DB-specific functions
+
             List<DowntimeEventSummaryDto> downtimeHistory = Collections.emptyList();
             try {
-                // reuse computed endInclusive above
                 List<DowntimeEvent> events = downtimeEventRepository.findByReportIdAndStartTimeBetween(reportId, startTime, endInclusive);
-
                 DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("HH:mm");
                 downtimeHistory = events.stream().map(event -> {
                     String startTimeStr = event.getStartTime() != null ? event.getStartTime().format(timeFmt) : "";
@@ -239,49 +229,46 @@ public class ShiftLeaderService {
                     }
                     String reason = event.getReason() != null ? event.getReason() : "ไม่ระบุ";
                     String technician = (event.getTechnician() != null && event.getTechnician().getUsername() != null)
-                            ? event.getTechnician().getUsername()
-                            : "ไม่ระบุ";
+                            ? event.getTechnician().getUsername() : "ไม่ระบุ";
                     return new DowntimeEventSummaryDto(startTimeStr, endTimeStr, durationStr, reason, technician, event.getSolution() != null ? event.getSolution() : "");
                 }).collect(Collectors.toList());
             } catch (Exception e) {
                 System.out.println("Warning: Cannot fetch downtime events: " + e.getMessage());
             }
-            
+
             List<MaterialUsageLog> materialUsageLogsRaw = materialUsageLogRepository.findByReportIdAndTimestampBetween(reportId, startTime, endTime);
             List<ScrapWeightLog> scrapWeightLogs = scrapWeightLogRepository.findByReportIdInAndTimestampBetween(Collections.singletonList(reportId), startTime, endInclusive);
 
-        long goodBoxes = packagingLogs.size();
-    Integer qtyPerBox = (report.getProduct() != null) ? report.getProduct().getQtyPerBox() : null;
-        long goodPieces = (qtyPerBox != null && qtyPerBox > 0) ? goodBoxes * qtyPerBox : 0;
-    long ngPieces = ngLogs.stream().mapToLong(l -> l.getQuantity() != null ? l.getQuantity() : 0).sum();
-        long totalPieces = goodPieces + ngPieces;
-        String yield = (totalPieces > 0) ? String.format("%.2f%%", ((double) goodPieces / totalPieces) * 100) : "0.00%";
-        BigDecimal totalScrapWeight = scrapWeightLogs.stream()
-            .map(log -> log.getWeightKg() != null ? log.getWeightKg() : BigDecimal.ZERO)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        logger.debug("[SL] calcShiftData: boxes={}, qtyPerBox={}, goodPieces={}, ngPieces={}, totalScrapKg={}", goodBoxes, qtyPerBox, goodPieces, ngPieces, totalScrapWeight);
+            long goodBoxes = packagingLogs.size();
+            Integer qtyPerBox = (report.getProduct() != null) ? report.getProduct().getQtyPerBox() : null;
+            long goodPieces = (qtyPerBox != null && qtyPerBox > 0) ? goodBoxes * qtyPerBox : 0;
+            long ngPieces = ngLogs.stream().mapToLong(l -> l.getQuantity() != null ? l.getQuantity() : 0).sum();
+            long totalPieces = goodPieces + ngPieces;
+            String yield = (totalPieces > 0) ? String.format("%.2f%%", ((double) goodPieces / totalPieces) * 100) : "0.00%";
+            BigDecimal totalScrapWeight = scrapWeightLogs.stream()
+                .map(log -> log.getWeightKg() != null ? log.getWeightKg() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            logger.debug("[SL] calcShiftData: boxes={}, qtyPerBox={}, goodPieces={}, ngPieces={}, totalScrapKg={}", goodBoxes, qtyPerBox, goodPieces, ngPieces, totalScrapWeight);
 
-        Map<String, Long> ngSummaryMap = ngLogs.stream()
-            .collect(Collectors.groupingBy(
-                log -> (log.getNgType() != null && log.getNgType().getNgDescriptionTh() != null) ? log.getNgType().getNgDescriptionTh() : "ไม่ระบุ",
-                Collectors.summingLong(l -> l.getQuantity() != null ? l.getQuantity() : 0)
-            ));
+            Map<String, Long> ngSummaryMap = ngLogs.stream()
+                .collect(Collectors.groupingBy(
+                    log -> (log.getNgType() != null && log.getNgType().getNgDescriptionTh() != null) ? log.getNgType().getNgDescriptionTh() : "ไม่ระบุ",
+                    Collectors.summingLong(l -> l.getQuantity() != null ? l.getQuantity() : 0)
+                ));
 
-        List<NgTypeSummaryDto> ngSummary = ngSummaryMap.entrySet().stream()
-            .map(entry -> new NgTypeSummaryDto(entry.getKey(), entry.getValue(), 0.0, entry.getValue()))
-            .collect(Collectors.toList());
+            List<NgTypeSummaryDto> ngSummary = ngSummaryMap.entrySet().stream()
+                .map(entry -> new NgTypeSummaryDto(entry.getKey(), entry.getValue(), 0.0, entry.getValue()))
+                .collect(Collectors.toList());
 
-        // downtimeHistory already populated via projection above
-
-        List<MaterialUsageLogDto> materialUsageLogs = materialUsageLogsRaw.stream().map(log ->
-            new MaterialUsageLogDto(
-                log.getTimestamp(),
-                log.getMaterialCode(),
-                log.getLotNumber(),
-                log.getQuantityKg(),
-                (log.getTechnician() != null ? log.getTechnician().getUsername() : "ไม่ระบุ")
-            )
-        ).collect(Collectors.toList());
+            List<MaterialUsageLogDto> materialUsageLogs = materialUsageLogsRaw.stream().map(log ->
+                new MaterialUsageLogDto(
+                    log.getTimestamp(),
+                    log.getMaterialCode(),
+                    log.getLotNumber(),
+                    log.getQuantityKg(),
+                    (log.getTechnician() != null ? log.getTechnician().getUsername() : "ไม่ระบุ")
+                )
+            ).collect(Collectors.toList());
 
             ShiftDataDto shiftData = new ShiftDataDto();
             shiftData.setGoodProductionBoxes(goodBoxes);
@@ -299,24 +286,10 @@ public class ShiftLeaderService {
         } catch (Exception e) {
             System.out.println("Error calculating shift data: " + e.getMessage());
             e.printStackTrace();
-            // Return empty shift data if calculation fails
-            ShiftDataDto emptyData = new ShiftDataDto();
-            emptyData.setGoodProductionBoxes(0L);
-            emptyData.setGoodProductionPieces(0L);
-            emptyData.setNgProductionPieces(0L);
-            emptyData.setTotalProductionPieces(0L);
-            emptyData.setYieldPercentage("0.00%");
-            emptyData.setNgSummary(Collections.emptyList());
-            emptyData.setDowntimeHistory(Collections.emptyList());
-            emptyData.setMaterialUsageLogs(Collections.emptyList());
-            emptyData.setDebugInfo("");
-            emptyData.setDebugPackagingLogCount(0L);
-            emptyData.setTotalScrapWeight(BigDecimal.ZERO);
-            return emptyData;
+            return createEmptyShiftData();
         }
     }
 
-    // **[เพิ่มใหม่]** Methods สำหรับการจัดการ Label Stock
     public List<LabelStockDto> getLabelStocks() {
         return productRepository.findAll().stream().map(product -> {
             LabelStock stock = labelStockRepository.findByProductId(product.getId()).orElse(null);
@@ -329,28 +302,27 @@ public class ShiftLeaderService {
     public void addLabelStock(Long productId, Integer quantityToAdd) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
-        
+
         LabelStock stock = labelStockRepository.findByProductId(productId).orElse(null);
         if (stock == null) {
             stock = new LabelStock();
             stock.setProduct(product);
             stock.setCurrentStock(0);
         }
-        
+
         stock.setCurrentStock(stock.getCurrentStock() + quantityToAdd);
         labelStockRepository.save(stock);
     }
 
-    // **[เพิ่มใหม่]** Methods สำหรับการจัดการ Material Stock
     public List<MaterialStockCardDto> getMaterialStocks() {
         return materialRepository.findAll().stream().map(material -> {
             List<MaterialStockTransactionDto> history = transactionRepository.findByMaterialIdOrderByTimestampDesc(material.getId())
                     .stream()
                     .map(this::convertToTransactionDto)
                     .collect(Collectors.toList());
-            
+
             Double currentStock = calculateCurrentStock(material.getId());
-            
+
             return new MaterialStockCardDto(
                 material.getId(),
                 material.getMaterialCode(),
@@ -362,10 +334,10 @@ public class ShiftLeaderService {
     }
 
     private MaterialStockTransactionDto convertToTransactionDto(MaterialStockTransaction transaction) {
-        String productionInfo = transaction.getProductionReport() != null 
+        String productionInfo = transaction.getProductionReport() != null
             ? transaction.getProductionReport().getProduct().getProductName() + " - " + transaction.getProductionReport().getMachine().getMachineName()
             : "";
-            
+
         return new MaterialStockTransactionDto(
             transaction.getId(),
             transaction.getTimestamp().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")),
@@ -406,14 +378,11 @@ public class ShiftLeaderService {
         return emptyShift;
     }
 
-    // **[เพิ่มใหม่]** สร้างข้อมูลตัวอย่างสำหรับการทดสอบ
     @Transactional
-    // เพิ่ม methods ที่ขาดหาย
     public List<String> getNgTypes() {
         try {
-            // สร้างรายการ NG Types พื้นฐาน
             return Arrays.asList(
-                "Dirty", "Scratch", "Dent", "Color Defect", 
+                "Dirty", "Scratch", "Dent", "Color Defect",
                 "Size Error", "Shape Error", "Other"
             );
         } catch (Exception e) {
@@ -421,12 +390,11 @@ public class ShiftLeaderService {
             return Collections.emptyList();
         }
     }
-    
+
     public List<String> getMachines() {
         try {
             List<Machine> machines = machineRepository.findAll();
             if (machines.isEmpty()) {
-                // ถ้าไม่มี machines ใน database ให้ return ตัวอย่าง
                 return Arrays.asList("Machine 1", "Machine 2", "Machine 3");
             }
             return machines.stream()
@@ -437,7 +405,7 @@ public class ShiftLeaderService {
             return Arrays.asList("Machine 1", "Machine 2", "Machine 3");
         }
     }
-    
+
     public String createSampleDataForTesting() {
         try {
             createSampleDataForTestingInternal();
@@ -447,14 +415,12 @@ public class ShiftLeaderService {
             return "Error creating sample data: " + e.getMessage();
         }
     }
-    
+
     private void createSampleDataForTestingInternal() {
-        // สร้าง NG Types สำหรับ Shift Leader ถ้ายังไม่มี
         try {
             createSampleNgTypes();
             createSampleProductionReport();
         } catch (Exception e) {
-            // Log error but don't fail - this is just sample data
             System.out.println("Warning: Could not create sample data - " + e.getMessage());
         }
     }
@@ -462,7 +428,7 @@ public class ShiftLeaderService {
     private void createSampleNgTypes() {
         String[] ngDescriptions = {
             "บิ่น/แตก (Crack)",
-            "สีไม่เท่า (Color variation)", 
+            "สีไม่เท่า (Color variation)",
             "ขนาดไม่ได้มาตรฐาน (Size defect)",
             "รอยย่น (Wrinkle)",
             "ข้อผิดพลาดการประกอบ (Assembly error)"
@@ -477,11 +443,10 @@ public class ShiftLeaderService {
     }
 
     private void createSampleProductionReport() {
-        // สร้าง ProductionReport ตัวอย่างถ้ามีข้อมูล Product และ Machine
         if (productRepository.count() > 0 && machineRepository.count() > 0) {
             Product product = productRepository.findAll().get(0);
             Machine machine = machineRepository.findAll().get(0);
-            
+
             ProductionReport report = new ProductionReport();
             report.setProduct(product);
             report.setMachine(machine);
@@ -489,7 +454,7 @@ public class ShiftLeaderService {
             report.setStartDate(LocalDate.now());
             report.setEndDate(LocalDate.now().plusDays(1));
             report.setTargetQty(1000);
-            
+
             productionReportRepository.save(report);
         }
     }
