@@ -117,6 +117,16 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
         <!-- Servlet/Web/Security come via starters; avoid mixing javax/jakarta explicitly -->
+
+        <!-- Flyway database migrations -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-sqlserver</artifactId>
+        </dependency>
     </dependencies>
 
     <profiles>
