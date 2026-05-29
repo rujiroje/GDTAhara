@@ -2,21 +2,27 @@ package com.gdtahara.gdtaharabackend.service;
 
 import com.gdtahara.gdtaharabackend.dto.DowntimeEventRequestDto;
 import com.gdtahara.gdtaharabackend.dto.NgLogRequestDto;
+import com.gdtahara.gdtaharabackend.dto.ParameterRecordRequest;
 import com.gdtahara.gdtaharabackend.dto.ScrapWeightLogRequestDto;
 import com.gdtahara.gdtaharabackend.model.*;
 import com.gdtahara.gdtaharabackend.repository.*;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -51,12 +57,17 @@ class TechnicianServiceTest {
         stubTechnician.setUsername("tech01");
     }
 
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
     // --- saveParameterRecord: mass-assignment guard ---
 
     @Test
     void saveParameterRecord_stripsIdFromRequestBody() {
         ParameterRecord incoming = new ParameterRecord();
-        incoming.setId(999L); // attacker-supplied id
+        incoming.setId(999L);
         incoming.setReportId(1L);
 
         when(userRepository.findByUsername("tech01")).thenReturn(Optional.of(stubTechnician));
@@ -67,7 +78,6 @@ class TechnicianServiceTest {
 
         technicianService.saveParameterRecord(incoming, "tech01");
 
-        // The id must have been nulled out before save
         ArgumentCaptor<ParameterRecord> captor = ArgumentCaptor.forClass(ParameterRecord.class);
         verify(parameterRecordRepository).save(captor.capture());
         assertThat(captor.getValue().getId()).isNull();
@@ -76,7 +86,7 @@ class TechnicianServiceTest {
     @Test
     void saveParameterRecord_forcesTechnicianIdFromUsername() {
         ParameterRecord incoming = new ParameterRecord();
-        incoming.setTechnicianId(777L); // attacker-supplied technician id
+        incoming.setTechnicianId(777L);
 
         when(userRepository.findByUsername("tech01")).thenReturn(Optional.of(stubTechnician));
         ParameterRecord saved = new ParameterRecord();
@@ -87,7 +97,7 @@ class TechnicianServiceTest {
 
         ArgumentCaptor<ParameterRecord> captor = ArgumentCaptor.forClass(ParameterRecord.class);
         verify(parameterRecordRepository).save(captor.capture());
-        assertThat(captor.getValue().getTechnicianId()).isEqualTo(55L); // from stubTechnician
+        assertThat(captor.getValue().getTechnicianId()).isEqualTo(55L);
     }
 
     @Test
@@ -166,5 +176,83 @@ class TechnicianServiceTest {
         technicianService.recordTechnicianNg(1L, dto, "tech01");
 
         verify(auditLogService).log(eq("CREATE"), eq("NgLog"), eq(30L), isNull(), any());
+    }
+
+    // --- updateParameterRecord: IDOR ownership check (M-6) ---
+
+    @Test
+    void updateParameterRecord_owner_succeeds() {
+        // Owner technician (id=55) updating their own record (technicianId=55)
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("tech01", null, "ROLE_Technician"));
+
+        ParameterRecord record = new ParameterRecord();
+        record.setId(10L);
+        record.setTechnicianId(55L);
+
+        when(parameterRecordRepository.findById(10L)).thenReturn(Optional.of(record));
+        when(userRepository.findByUsername("tech01")).thenReturn(Optional.of(stubTechnician));
+        when(parameterRecordRepository.save(any())).thenReturn(record);
+
+        ParameterRecordRequest request = new ParameterRecordRequest();
+        request.setParameters(new ParameterRecordRequest.ParameterData());
+
+        technicianService.updateParameterRecord(10L, request, "tech01");
+
+        verify(parameterRecordRepository).save(any());
+    }
+
+    @Test
+    void updateParameterRecord_dataAdmin_succeeds_regardless_of_ownership() {
+        // DataAdmin (different user, id=99) can update any record
+        User admin = new User();
+        admin.setId(99L);
+        admin.setUsername("admin01");
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("admin01", null, "ROLE_DataAdmin"));
+
+        ParameterRecord record = new ParameterRecord();
+        record.setId(20L);
+        record.setTechnicianId(55L); // owned by tech01, not admin01
+
+        when(parameterRecordRepository.findById(20L)).thenReturn(Optional.of(record));
+        when(parameterRecordRepository.save(any())).thenReturn(record);
+
+        ParameterRecordRequest request = new ParameterRecordRequest();
+        request.setParameters(new ParameterRecordRequest.ParameterData());
+
+        technicianService.updateParameterRecord(20L, request, "admin01");
+
+        verify(parameterRecordRepository).save(any());
+        // userRepository must NOT be called — isAdmin check short-circuits
+        verify(userRepository, never()).findByUsername(any());
+    }
+
+    @Test
+    void updateParameterRecord_differentTechnician_throwsAccessDenied() {
+        // tech02 (id=66) trying to update a record owned by tech01 (id=55)
+        User otherTech = new User();
+        otherTech.setId(66L);
+        otherTech.setUsername("tech02");
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("tech02", null, "ROLE_Technician"));
+
+        ParameterRecord record = new ParameterRecord();
+        record.setId(30L);
+        record.setTechnicianId(55L); // owned by tech01
+
+        when(parameterRecordRepository.findById(30L)).thenReturn(Optional.of(record));
+        when(userRepository.findByUsername("tech02")).thenReturn(Optional.of(otherTech));
+
+        ParameterRecordRequest request = new ParameterRecordRequest();
+        request.setParameters(new ParameterRecordRequest.ParameterData());
+
+        assertThatThrownBy(() -> technicianService.updateParameterRecord(30L, request, "tech02"))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("you do not own this parameter record");
+
+        verify(parameterRecordRepository, never()).save(any());
     }
 }

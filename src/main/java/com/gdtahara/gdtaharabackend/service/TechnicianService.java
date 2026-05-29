@@ -288,16 +288,8 @@ public class TechnicianService {
                     .orElseThrow(() -> new EntityNotFoundException("Parameter record not found with ID: " + recordId));
             logger.debug("Found record: {}", record.getId());
 
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            boolean isAdmin = auth != null && auth.getAuthorities().stream()
-                    .anyMatch(a -> a.getAuthority().equals("ROLE_DataAdmin")
-                            || a.getAuthority().equals("ROLE_Production Control"));
-            if (!isAdmin) {
-                var caller = userRepository.findByUsername(username)
-                        .orElseThrow(() -> new EntityNotFoundException("User not found: " + username));
-                if (!caller.getId().equals(record.getTechnicianId())) {
-                    throw new AccessDeniedException("Access denied: you do not own this parameter record");
-                }
+            if (!isAdminOrOwner(record, username)) {
+                throw new AccessDeniedException("Access denied: you do not own this parameter record");
             }
 
             // อัปเดตข้อมูล - recordTime ไม่ได้มีใน ParameterRecordRequest
@@ -319,15 +311,15 @@ public class TechnicianService {
                     java.util.Map.of("id", recordId),
                     java.util.Map.of("id", updatedRecord.getId(), "updatedBy", username));
             
-        } catch (EntityNotFoundException e) {
-            logger.error("Parameter record not found: {}", e.getMessage());
+        } catch (EntityNotFoundException | AccessDeniedException e) {
+            logger.error("Parameter record update rejected: {}", e.getMessage());
             throw e;
         } catch (Exception e) {
             logger.error("Error updating parameter record ID {}: {}", recordId, e.getMessage(), e);
             throw new RuntimeException("Failed to update parameter record: " + e.getMessage(), e);
         }
     }
-    
+
     /**
      * Record technician NG (defect)
      */
@@ -422,6 +414,15 @@ public class TechnicianService {
     /**
      * Utility method to convert Double to BigDecimal with null handling
      */
+    private boolean isAdminOrOwner(ParameterRecord record, String username) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_DataAdmin"));
+        if (isAdmin) return true;
+        var caller = userRepository.findByUsername(username).orElse(null);
+        return caller != null && caller.getId().equals(record.getTechnicianId());
+    }
+
     @SuppressWarnings("unused")
     private BigDecimal toBigDecimal(Double value) {
         if (value == null) {
