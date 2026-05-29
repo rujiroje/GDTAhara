@@ -24,11 +24,11 @@ CREATE TABLE machine_setup_job (
 
     CONSTRAINT pk_machine_setup_job PRIMARY KEY (id),
     CONSTRAINT fk_msj_machine
-        FOREIGN KEY (machine_id) REFERENCES machine(id),
+        FOREIGN KEY (machine_id) REFERENCES machines(id),
     CONSTRAINT fk_msj_from_product
-        FOREIGN KEY (from_product_id) REFERENCES product(id),
+        FOREIGN KEY (from_product_id) REFERENCES products(id),
     CONSTRAINT fk_msj_to_product
-        FOREIGN KEY (to_product_id) REFERENCES product(id),
+        FOREIGN KEY (to_product_id) REFERENCES products(id),
     CONSTRAINT fk_msj_plan
         FOREIGN KEY (production_plan_id) REFERENCES production_plan(id),
     CONSTRAINT fk_msj_assigned_to

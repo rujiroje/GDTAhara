@@ -18,9 +18,9 @@ CREATE TABLE production_plan (
     CONSTRAINT uk_production_plan_machine_date_product
         UNIQUE (machine_id, plan_date, product_id),
     CONSTRAINT fk_production_plan_machine
-        FOREIGN KEY (machine_id) REFERENCES machine(id),
+        FOREIGN KEY (machine_id) REFERENCES machines(id),
     CONSTRAINT fk_production_plan_product
-        FOREIGN KEY (product_id) REFERENCES product(id),
+        FOREIGN KEY (product_id) REFERENCES products(id),
     CONSTRAINT fk_production_plan_created_by
         FOREIGN KEY (created_by) REFERENCES users(id)
 )
