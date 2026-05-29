@@ -28,6 +28,8 @@ jobs:
 
       - name: Compile and run tests
         run: mvn verify --batch-mode --no-transfer-progress
+        env:
+          SPRING_PROFILES_ACTIVE: test
 
       - name: Upload test reports
         if: always()

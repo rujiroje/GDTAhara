@@ -11,7 +11,7 @@
 
 | # | Criterion | Status | Notes |
 |---|---|---|---|
-| 1 | Security — @PreAuthorize + tests | ⚠️ Partial | Tests written & passing; M-1, M-2, M-3, M-7 pending; M-4/M-5/M-6 closed |
+| 1 | Security — @PreAuthorize + tests | ⚠️ Partial | Tests written & passing; M-1, M-2, M-3, M-7 pending; M-4/M-5/M-6, S-1/S-2 closed |
 | 2 | AuditLog — every write logged + tests | ✅ Done | 6 tests passing |
 | 3 | DB Performance — N+1 fixed + indexes | ✅ Done | findAllWithFetch, 8 indexes, 1 test |
 | 4 | Benchmark — 1 000 ops/sec | ⏳ Pending | Requires running environment |
@@ -28,7 +28,9 @@
 
 | ID | Fix | File |
 |---|---|---|
-| S-1/S-2 | Default credential warning on startup | `config/SecurityCredentialValidator.java` |
+| S-1 | Removed `tst123##` fallback for DB password — app fails fast if SPRING_DATASOURCE_PASSWORD is unset | `application.properties` |
+| S-2 | Removed placeholder fallback for JWT secret — app fails fast if JWT_SECRET is unset | `application.properties` |
+| S-3 (partial) | DB username switched from `sa` to dedicated `gdpd`. DBA still needs to grant least-privilege (SELECT/INSERT/UPDATE/DELETE on GDTAHARA schema only) for full S-3 closure | env / DBA action |
 | AC-1 | `LoginRateLimitFilter` — 10 attempts/min per IP | `filter/LoginRateLimitFilter.java` |
 | MA-1 | `saveParameterRecord` strips `id`/`technicianId` from request body | `service/TechnicianService.java` |
 | AC-2 | `@Valid` added to all write-endpoint `@RequestBody` params | Multiple controllers |
@@ -55,6 +57,7 @@ These items were identified in the hardening checklist but not yet implemented:
 |---|---|---|
 | M-6 | IDOR check on `TechnicianController` parameter record PUT | Extracted `isAdminOrOwner()` helper in `TechnicianService`; bypasses DataAdmin only (aligned with NgLogService). 3 tests added. |
 | M-5 | IDOR check on `ShiftLeaderController` stock-transaction PUT | Extracted `isAdminOrOwner()` helper in `ShiftLeaderService`; DataAdmin-only bypass (aligned with NgLogService/TechnicianService). 3 tests added in new `ShiftLeaderServiceTest`. |
+| S-1, S-2 | Insecure default fallbacks removed | `application.properties` cleaned; `application-test.properties` added for CI/tests; README documents env setup |
 
 ### Tests written (24 passing)
 
@@ -190,7 +193,7 @@ Monitor via Grafana dashboard for memory leaks, connection pool exhaustion, and 
 |---|---|---|
 | 🔴 HIGH | Add @PreAuthorize to HistoricalReportController, ReportController (M-2, M-3) | Dev |
 | 🟡 MED | Register NVD API key + add GitHub secret `NVD_API_KEY` | Ops |
-| 🟡 MED | Create dedicated SQL Server login (least-privilege, not `sa`) | DBA |
+| 🟡 MED | Grant least-privilege permissions to `gdpd` SQL Server login (currently has whatever rights were given at user creation) | DBA |
 | 🟡 MED | Run k6 benchmark — verify ≥ 1 000 req/s | Dev/Ops |
 | 🟡 MED | Run 48-hour stability test | Ops |
 | 🟢 LOW | Reduce JWT expiry from 24h to 4h (coordinate with FE team) | Dev |

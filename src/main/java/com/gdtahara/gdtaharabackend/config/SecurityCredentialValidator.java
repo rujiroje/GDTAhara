@@ -6,6 +6,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+/**
+ * Defense-in-depth check at startup.
+ * After S-1/S-2 the application.properties has NO insecure defaults,
+ * but this validator catches operators who explicitly set:
+ *   SPRING_DATASOURCE_USERNAME=sa, or
+ *   SPRING_DATASOURCE_PASSWORD=tst123##, or
+ *   leave JWT_SECRET as the legacy placeholder.
+ * Expected dedicated user: 'gdpd' (or similar least-privilege account).
+ */
 @Component
 public class SecurityCredentialValidator {
 
