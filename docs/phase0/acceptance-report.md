@@ -11,7 +11,7 @@
 
 | # | Criterion | Status | Notes |
 |---|---|---|---|
-| 1 | Security — @PreAuthorize + tests | ⚠️ Partial | Tests written & passing; M-1, M-2, M-3, M-7 pending; M-4/M-5/M-6, S-1/S-2 closed |
+| 1 | Security — @PreAuthorize + tests | ✅ Done | All M-series and S-1/S-2 closed; tests written & passing |
 | 2 | AuditLog — every write logged + tests | ✅ Done | 6 tests passing |
 | 3 | DB Performance — N+1 fixed + indexes | ✅ Done | findAllWithFetch, 8 indexes, 1 test |
 | 4 | Benchmark — 1 000 ops/sec | ⏳ Pending | Requires running environment |
@@ -37,19 +37,9 @@
 | AC-3 | `@PreAuthorize` added to `EmergencyController`, `ProductionControlController`, `CmOperatorController`, `OperatorController`, `ShiftLeaderController`, `TechnicianController`, `AdminController` | Multiple controllers |
 | AQ-1 | `MasterDataController` no longer injects repositories directly | `controller/MasterDataController.java` |
 
-### Pending security fixes (M-1 – M-7)
+### Pending security fixes
 
-These items were identified in the hardening checklist but not yet implemented:
-
-| ID | Description | File |
-|---|---|---|
-| M-1 | Add `@PreAuthorize` to 5 individual `TechnicianController` endpoints | `controller/TechnicianController.java` |
-| M-2 | Add `@PreAuthorize` to `HistoricalReportController` | `controller/HistoricalReportController.java` |
-| M-3 | Add `@PreAuthorize` to `ReportController` | `controller/ReportController.java` |
-| M-4 | IDOR check on `NgLogController` PUT/DELETE (ownership verify) | `controller/NgLogController.java` |
-| M-7 | Standardize `hasAnyAuthority` → `hasAnyRole` in `QaController`, `NotificationController` | Two controllers |
-
-> All known IDOR items (M-4, M-5, M-6) are now closed.
+*No pending items as of 2026-05-29 — all M-series and S-1/S-2 closed.*
 
 ### Closed since 2026-05-22
 
@@ -58,6 +48,10 @@ These items were identified in the hardening checklist but not yet implemented:
 | M-6 | IDOR check on `TechnicianController` parameter record PUT | Extracted `isAdminOrOwner()` helper in `TechnicianService`; bypasses DataAdmin only (aligned with NgLogService). 3 tests added. |
 | M-5 | IDOR check on `ShiftLeaderController` stock-transaction PUT | Extracted `isAdminOrOwner()` helper in `ShiftLeaderService`; DataAdmin-only bypass (aligned with NgLogService/TechnicianService). 3 tests added in new `ShiftLeaderServiceTest`. |
 | S-1, S-2 | Insecure default fallbacks removed | `application.properties` cleaned; `application-test.properties` added for CI/tests; README documents env setup |
+| M-1 | TechnicianController per-endpoint @PreAuthorize | All 7 write endpoints carry @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')") — verified in commit a2c0213 |
+| M-2 | HistoricalReportController @PreAuthorize | GET /api/pc/reports/historical guarded by @PreAuthorize("hasAnyRole('Production Control','DataAdmin','Management','Document')") |
+| M-3 | ReportController @PreAuthorize | GET /api/reports/production guarded by same role set as M-2 |
+| M-7 | hasAnyAuthority → hasAnyRole standardisation | QaController class-level @PreAuthorize("hasAnyRole('QA','DataAdmin')"); NotificationController class-level @PreAuthorize("hasAnyRole('Shift Leader','Technician','DataAdmin')") |
 
 ### Tests written (24 passing)
 
@@ -191,7 +185,7 @@ Monitor via Grafana dashboard for memory leaks, connection pool exhaustion, and 
 
 | Priority | Item | Owner |
 |---|---|---|
-| 🔴 HIGH | Add @PreAuthorize to HistoricalReportController, ReportController (M-2, M-3) | Dev |
+| 🔐 ACTION | Rotate DB password for `gdpd` account — current password was shared in chat history during S-1/S-2 implementation and must be rotated before go-live | DBA |
 | 🟡 MED | Register NVD API key + add GitHub secret `NVD_API_KEY` | Ops |
 | 🟡 MED | Grant least-privilege permissions to `gdpd` SQL Server login (currently has whatever rights were given at user creation) | DBA |
 | 🟡 MED | Run k6 benchmark — verify ≥ 1 000 req/s | Dev/Ops |
