@@ -11,7 +11,7 @@
 
 | # | Criterion | Status | Notes |
 |---|---|---|---|
-| 1 | Security — @PreAuthorize + tests | ⚠️ Partial | Tests written & passing; M-1–M-5, M-7 pending; M-6 closed 2026-05-22 |
+| 1 | Security — @PreAuthorize + tests | ⚠️ Partial | Tests written & passing; M-1, M-2, M-3, M-7 pending; M-4/M-5/M-6 closed |
 | 2 | AuditLog — every write logged + tests | ✅ Done | 6 tests passing |
 | 3 | DB Performance — N+1 fixed + indexes | ✅ Done | findAllWithFetch, 8 indexes, 1 test |
 | 4 | Benchmark — 1 000 ops/sec | ⏳ Pending | Requires running environment |
@@ -45,23 +45,24 @@ These items were identified in the hardening checklist but not yet implemented:
 | M-2 | Add `@PreAuthorize` to `HistoricalReportController` | `controller/HistoricalReportController.java` |
 | M-3 | Add `@PreAuthorize` to `ReportController` | `controller/ReportController.java` |
 | M-4 | IDOR check on `NgLogController` PUT/DELETE (ownership verify) | `controller/NgLogController.java` |
-| M-5 | IDOR check on `ShiftLeaderController` stock-transaction PUT | `controller/ShiftLeaderController.java` |
 | M-7 | Standardize `hasAnyAuthority` → `hasAnyRole` in `QaController`, `NotificationController` | Two controllers |
 
-> **Risk:** M-4/M-5 are IDOR vulnerabilities — any authenticated user can modify another user's records. Prioritise before go-live.
+> All known IDOR items (M-4, M-5, M-6) are now closed.
 
 ### Closed since 2026-05-22
 
 | ID | Description | Resolution |
 |---|---|---|
 | M-6 | IDOR check on `TechnicianController` parameter record PUT | Extracted `isAdminOrOwner()` helper in `TechnicianService`; bypasses DataAdmin only (aligned with NgLogService). 3 tests added. |
+| M-5 | IDOR check on `ShiftLeaderController` stock-transaction PUT | Extracted `isAdminOrOwner()` helper in `ShiftLeaderService`; DataAdmin-only bypass (aligned with NgLogService/TechnicianService). 3 tests added in new `ShiftLeaderServiceTest`. |
 
-### Tests written (21 passing)
+### Tests written (24 passing)
 
 | Test class | Coverage |
 |---|---|
 | `AuditLogServiceTest` | save() called; exception swallowing |
 | `TechnicianServiceTest` | id stripped; technicianId forced from JWT; audit logs for downtime/scrap/NG/paramRecord; IDOR owner/admin/other-tech scenarios |
+| `ShiftLeaderServiceTest` | IDOR owner/admin/other-user scenarios for stock-transaction update |
 | `ProductionServiceQueryTest` | findAllWithFetch() called, findAll() never called |
 | `LoginRateLimitFilterTest` | 10 pass / 11th blocked; 429 body; separate IP buckets; path routing |
 | `SecurityAnnotationComplianceTest` | @PreAuthorize present on all write controllers; AuthController intentionally open |
@@ -187,7 +188,6 @@ Monitor via Grafana dashboard for memory leaks, connection pool exhaustion, and 
 
 | Priority | Item | Owner |
 |---|---|---|
-| 🔴 HIGH | Fix IDOR on NgLog/StockTransaction (M-4, M-5) | Dev |
 | 🔴 HIGH | Add @PreAuthorize to HistoricalReportController, ReportController (M-2, M-3) | Dev |
 | 🟡 MED | Register NVD API key + add GitHub secret `NVD_API_KEY` | Ops |
 | 🟡 MED | Create dedicated SQL Server login (least-privilege, not `sa`) | DBA |

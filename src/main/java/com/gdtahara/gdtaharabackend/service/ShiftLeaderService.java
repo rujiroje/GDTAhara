@@ -186,15 +186,8 @@ public class ShiftLeaderService {
         MaterialStockTransaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new EntityNotFoundException("Transaction not found with id: " + transactionId));
 
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        boolean isAdmin = auth != null && auth.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_DataAdmin"));
-        if (!isAdmin) {
-            boolean isOwner = transaction.getUser() != null
-                    && username.equals(transaction.getUser().getUsername());
-            if (!isOwner) {
-                throw new AccessDeniedException("Access denied: you do not own this transaction");
-            }
+        if (!isAdminOrOwner(transaction, username)) {
+            throw new AccessDeniedException("Access denied: you do not own this transaction");
         }
 
         Material material = materialRepository.findById(request.getMaterialId())
@@ -490,5 +483,14 @@ public class ShiftLeaderService {
 
             productionReportRepository.save(report);
         }
+    }
+
+    private boolean isAdminOrOwner(MaterialStockTransaction transaction, String username) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_DataAdmin"));
+        if (isAdmin) return true;
+        return transaction.getUser() != null
+                && username.equals(transaction.getUser().getUsername());
     }
 }
