@@ -4,6 +4,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -17,6 +19,8 @@ import java.io.IOException;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private static final Logger logger = LoggerFactory.getLogger(JwtAuthFilter.class);
 
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
@@ -33,20 +37,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         try {
             final String authHeader = request.getHeader("Authorization");
-            final String jwt;
-            final String username;
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                System.out.println("Authorization header is missing or invalid.");
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            jwt = authHeader.substring(7);
-            username = jwtUtil.extractUsername(jwt);
-
-            System.out.println("JWT Token: " + jwt);
-            System.out.println("Extracted Username: " + username);
+            final String jwt = authHeader.substring(7);
+            final String username = jwtUtil.extractUsername(jwt);
 
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
@@ -55,28 +53,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                             userDetails, null, userDetails.getAuthorities());
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
-
-                    System.out.println("Authenticated user: " + username);
-                    userDetails.getAuthorities().forEach(authority ->
-                        System.out.println("Granted Authority: " + authority.getAuthority())
-                    );
+                    logger.debug("Authenticated user: {}", username);
                 } else {
-                    System.out.println("Invalid JWT token.");
+                    logger.warn("JWT validation failed for request to {}", request.getRequestURI());
                 }
-            } else {
-                System.out.println("Authentication already exists or username is null.");
             }
 
-            // Log the current SecurityContextHolder Authentication
-            System.out.println("SecurityContextHolder Authentication: " + SecurityContextHolder.getContext().getAuthentication());
-
             filterChain.doFilter(request, response);
+
         } catch (Exception e) {
-            System.err.println("JWT Filter Error: " + e.getMessage());
-            e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            response.getWriter().write("{\"error\":\"Authentication error: " + e.getMessage() + "\"}");
-            return;
+            logger.warn("JWT authentication error on {}: {}", request.getRequestURI(), e.getClass().getSimpleName());
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"error\":\"Authentication failed\"}");
         }
     }
 }

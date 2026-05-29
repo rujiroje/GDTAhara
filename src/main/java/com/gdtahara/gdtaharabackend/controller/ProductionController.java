@@ -132,35 +132,35 @@ public class ProductionController {
 
     @PutMapping("/reports/{id}")
     @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin')")
-    public ResponseEntity<?> updateReport(@PathVariable Long id, @RequestBody ReportCreateRequest request) {
+    public ResponseEntity<?> updateReport(@PathVariable Long id, @RequestBody ReportCreateRequest request, Principal principal) {
         logger.info("Updating production report with ID: {}", id);
         try {
-            return ResponseEntity.ok(productionService.updateProductionReport(id, request));
+            return ResponseEntity.ok(productionService.updateProductionReport(id, request, principal.getName()));
         } catch (Exception e) {
             logger.error("Error updating production report with ID {}: {}", id, e.getMessage(), e);
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-    
+
     @DeleteMapping("/reports/{id}")
     @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin')")
-    public ResponseEntity<?> deleteReport(@PathVariable Long id) {
+    public ResponseEntity<?> deleteReport(@PathVariable Long id, Principal principal) {
         logger.info("Deleting production report with ID: {}", id);
         try {
-            productionService.deleteProductionReport(id);
+            productionService.deleteProductionReport(id, principal.getName());
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             logger.error("Error deleting production report with ID {}: {}", id, e.getMessage(), e);
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-    
+
     @PostMapping("/reports/{id}/finalize")
     @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin')")
-    public ResponseEntity<Void> finalizeReport(@PathVariable Long id) {
+    public ResponseEntity<Void> finalizeReport(@PathVariable Long id, Principal principal) {
         logger.info("Finalizing production report with ID: {}", id);
         try {
-            productionService.finalizeReport(id);
+            productionService.finalizeReport(id, principal.getName());
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             logger.error("Error finalizing production report with ID {}: {}", id, e.getMessage(), e);

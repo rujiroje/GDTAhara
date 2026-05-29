@@ -2,6 +2,7 @@ package com.gdtahara.gdtaharabackend.controller;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,6 +16,7 @@ public class ReportController {
     private static final Logger logger = LoggerFactory.getLogger(ReportController.class);
 
     @GetMapping("/production") // เปลี่ยนจาก "/reports" เป็น "/production"
+    @PreAuthorize("hasAnyRole('Production Control','DataAdmin','Management','Document')")
     public ResponseEntity<?> getReports() {
         logger.info("Fetching reports...");
         return ResponseEntity.ok(List.of("Report A", "Report B", "Report C"));

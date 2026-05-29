@@ -10,6 +10,8 @@ import com.gdtahara.gdtaharabackend.dto.ProductionReportSimpleViewDto;
 import com.gdtahara.gdtaharabackend.model.*;
 import com.gdtahara.gdtaharabackend.repository.*;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,9 +23,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@SuppressWarnings("unused")
+
 @Service
 @Transactional
 public class OperatorService {
+
+    private static final Logger logger = LoggerFactory.getLogger(OperatorService.class);
 
     private final ProductionReportRepository productionReportRepository;
     private final NgLogRepository ngLogRepository;
@@ -32,8 +38,9 @@ public class OperatorService {
     private final ProblemAlertRepository problemAlertRepository;
     private final UserRepository userRepository;
     private final NgTypeRepository ngTypeRepository;
+    private final AuditLogService auditLogService;
 
-    public OperatorService(ProductionReportRepository productionReportRepository, NgLogRepository ngLogRepository, LabelStockRepository labelStockRepository, PackagingLogRepository packagingLogRepository, ProblemAlertRepository problemAlertRepository, UserRepository userRepository, NgTypeRepository ngTypeRepository) {
+    public OperatorService(ProductionReportRepository productionReportRepository, NgLogRepository ngLogRepository, LabelStockRepository labelStockRepository, PackagingLogRepository packagingLogRepository, ProblemAlertRepository problemAlertRepository, UserRepository userRepository, NgTypeRepository ngTypeRepository, AuditLogService auditLogService) {
         this.productionReportRepository = productionReportRepository;
         this.ngLogRepository = ngLogRepository;
         this.labelStockRepository = labelStockRepository;
@@ -41,50 +48,31 @@ public class OperatorService {
         this.problemAlertRepository = problemAlertRepository;
         this.userRepository = userRepository;
         this.ngTypeRepository = ngTypeRepository;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
     public List<NgType> getOperatorNgTypes() {
-        System.out.println("🔍 Getting ALL NG Types for Operator buttons...");
         List<NgType> allNgTypes = ngTypeRepository.findAll();
-        System.out.println("📊 Total NG Types for Operator: " + allNgTypes.size());
+        logger.debug("Total NG Types for Operator: {}", allNgTypes.size());
         return allNgTypes;
     }
 
     @Transactional(readOnly = true)
     public List<ProductionReportSimpleViewDto> getActiveReportsForOperator() {
         try {
-            List<ProductionReport> inProgressReports = productionReportRepository.findByStatusIn(
-                java.util.List.of("IN_PROGRESS", "In Progress", "ACTIVE")
-            );
+            // Only return reports whose date range spans TODAY — never show future or expired orders
+            LocalDate today = LocalDate.now();
+            var terminalStatuses = java.util.List.of(
+                    "COMPLETED","COMPLETE","DONE","FINISHED","CANCELLED","CANCELED","CLOSED","FINALIZED");
+            List<ProductionReport> inProgressReports = productionReportRepository.findActiveReportsFast(
+                    java.util.List.of(), terminalStatuses, today);
 
-            if (inProgressReports.isEmpty()) {
-                LocalDate today = LocalDate.now();
-                List<ProductionReport> todayReports = productionReportRepository.findByStartDate(today);
-                if (todayReports.isEmpty()) {
-                    return productionReportRepository.findLatest5Raw().stream()
-                        .map(r -> new ProductionReportSimpleViewDto(
-                            (Long) r[0],
-                            r[1] != null ? r[1].toString() : null,
-                            toLocalDate(r[2]),
-                            toLocalDate(r[3]),
-                            (String) r[5],
-                            (String) r[6],
-                            null
-                        ))
-                        .collect(Collectors.toList());
-                } else {
-                    return todayReports.stream()
-                            .map(this::convertToSimpleDto)
-                            .collect(Collectors.toList());
-                }
-            } else {
-                return inProgressReports.stream()
-                        .map(this::convertToSimpleDto)
-                        .collect(Collectors.toList());
-            }
+            return inProgressReports.stream()
+                    .map(this::convertToSimpleDto)
+                    .collect(Collectors.toList());
         } catch (Exception e) {
-            System.out.println("Error fetching active reports for operator: " + e.getMessage());
+            logger.error("Error fetching active reports for operator: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
@@ -108,11 +96,6 @@ public class OperatorService {
     }
 
     @Transactional(readOnly = true)
-    public List<NgType> getAllNgTypesForDebug() {
-        return ngTypeRepository.findAll();
-    }
-
-    @Transactional(readOnly = true)
     public Map<String, Long> getHourlyNgSummary(Long reportId, String username) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime startOfHour = now.truncatedTo(ChronoUnit.HOURS);
@@ -125,7 +108,7 @@ public class OperatorService {
                 .filter(log -> log.getUser().getId().equals(operator.getId()))
                 .collect(Collectors.toList());
 
-        System.out.println("🕐 Hourly NG Summary for " + username + ": " + hourlyLogs.size() + " logs");
+        logger.debug("Hourly NG Summary for {}: {} logs", username, hourlyLogs.size());
 
         return hourlyLogs.stream()
                 .collect(Collectors.groupingBy(
@@ -145,7 +128,13 @@ public class OperatorService {
         ngLog.setNgType(ngType);
         ngLog.setQuantity(request.getQuantity());
         ngLog.setSource(request.getSource());
-        return ngLogRepository.save(ngLog);
+        NgLog saved = ngLogRepository.save(ngLog);
+        auditLogService.log("CREATE", "NgLog", saved.getId(), null,
+                Map.of("id", saved.getId(), "reportId", String.valueOf(reportId),
+                        "ngTypeId", String.valueOf(request.getNgTypeId()),
+                        "quantity", String.valueOf(request.getQuantity()),
+                        "source", String.valueOf(request.getSource())));
+        return saved;
     }
 
     public PackagingLog recordPackaging(Long reportId, PackagingLogRequestDto request, String username) {
@@ -164,7 +153,12 @@ public class OperatorService {
         packagingLog.setOperator(operator);
         packagingLog.setLotNumber(request.getLotNumber());
         packagingLog.setBoxNo(request.getBoxNo());
-        return packagingLogRepository.save(packagingLog);
+        PackagingLog savedPkg = packagingLogRepository.save(packagingLog);
+        auditLogService.log("CREATE", "PackagingLog", savedPkg.getId(), null,
+                Map.of("id", savedPkg.getId(), "reportId", String.valueOf(reportId),
+                        "lotNumber", String.valueOf(request.getLotNumber()),
+                        "boxNo", String.valueOf(request.getBoxNo())));
+        return savedPkg;
     }
 
     public void createProblemAlert(Long reportId, ProblemAlertRequestDto request, String username) {
@@ -175,7 +169,10 @@ public class OperatorService {
         alert.setReport(report);
         alert.setOperator(operator);
         alert.setMessage(request.getMessage());
-        problemAlertRepository.save(alert);
+        ProblemAlert savedAlert = problemAlertRepository.save(alert);
+        auditLogService.log("CREATE", "ProblemAlert", savedAlert.getId(), null,
+                Map.of("id", savedAlert.getId(), "reportId", String.valueOf(reportId),
+                        "message", String.valueOf(request.getMessage())));
     }
 
     public int getNextBoxNumber(Long reportId, String lotNumber) {

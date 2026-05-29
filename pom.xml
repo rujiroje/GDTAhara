@@ -42,6 +42,11 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!-- Database Driver -->
         <dependency>
@@ -101,8 +106,51 @@
             <groupId>org.hibernate.validator</groupId>
             <artifactId>hibernate-validator</artifactId>
         </dependency>
+        <!-- Actuator: /actuator/health, /actuator/prometheus -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- Prometheus metrics exporter for Grafana/Prometheus stack -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
         <!-- Servlet/Web/Security come via starters; avoid mixing javax/jakarta explicitly -->
     </dependencies>
+
+    <profiles>
+        <!-- Run with: mvn dependency-check:check -P security-scan -->
+        <profile>
+            <id>security-scan</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <version>10.0.4</version>
+                        <configuration>
+                            <!-- Fail build on CVSS >= 7 (High / Critical) -->
+                            <failBuildOnCVSS>7</failBuildOnCVSS>
+                            <!-- Suppress accepted/false-positive CVEs -->
+                            <suppressionFile>owasp-suppressions.xml</suppressionFile>
+                            <!-- NVD API key speeds up DB updates; set via env NVD_API_KEY -->
+                            <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+                            <formats>
+                                <format>HTML</format>
+                                <format>JSON</format>
+                            </formats>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals><goal>check</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <build>
         <plugins>

@@ -5,6 +5,7 @@ import com.gdtahara.gdtaharabackend.model.ParameterRecord;
 import com.gdtahara.gdtaharabackend.service.TechnicianService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -24,7 +25,7 @@ public class TechnicianController {
 
     @PostMapping("/reports/{reportId}/downtime")
     @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
-    public ResponseEntity<?> recordDowntime(@PathVariable Long reportId, @RequestBody DowntimeEventRequestDto requestDto, Principal principal) {
+    public ResponseEntity<?> recordDowntime(@PathVariable Long reportId, @Valid @RequestBody DowntimeEventRequestDto requestDto, Principal principal) {
         String username = (principal != null) ? principal.getName() : "system";
         logger.info("API: recordDowntime reportId={} by {}", reportId, username);
         try {
@@ -38,7 +39,7 @@ public class TechnicianController {
 
     @PostMapping("/reports/{reportId}/scrap-weight")
     @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
-    public ResponseEntity<?> recordScrapWeight(@PathVariable Long reportId, @RequestBody ScrapWeightLogRequestDto requestDto, Principal principal) {
+    public ResponseEntity<?> recordScrapWeight(@PathVariable Long reportId, @Valid @RequestBody ScrapWeightLogRequestDto requestDto, Principal principal) {
         String username = (principal != null) ? principal.getName() : "system";
         logger.info("API: recordScrapWeight reportId={} by {}", reportId, username);
         try {
@@ -51,6 +52,7 @@ public class TechnicianController {
     }
 
     @GetMapping("/reports/{reportId}/parameters")
+    @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
     public ResponseEntity<List<ParameterRecordViewDto>> getParameterRecords(@PathVariable Long reportId) {
         var records = technicianService.getParameterRecords(reportId);
         var view = records.stream()
@@ -60,6 +62,7 @@ public class TechnicianController {
     }
 
     @PostMapping("/reports/{reportId}/parameters")
+    @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
     public ResponseEntity<?> createParameterRecord(@PathVariable Long reportId, @RequestBody ParameterRecordRequest request, Principal principal) {
         try {
             String username = (principal != null) ? principal.getName() : "anonymous";
@@ -71,6 +74,7 @@ public class TechnicianController {
     }
 
     @PutMapping("/reports/parameters/{recordId}")
+    @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
     public ResponseEntity<?> updateParameterRecord(@PathVariable Long recordId, @RequestBody ParameterRecordRequest request, Principal principal) {
         try {
             String username = (principal != null) ? principal.getName() : "anonymous";
@@ -82,7 +86,8 @@ public class TechnicianController {
     }
 
     @PostMapping("/reports/{reportId}/ng-logs")
-    public ResponseEntity<?> recordNgLog(@PathVariable Long reportId, @RequestBody NgLogRequestDto requestDto, Principal principal) {
+    @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
+    public ResponseEntity<?> recordNgLog(@PathVariable Long reportId, @Valid @RequestBody NgLogRequestDto requestDto, Principal principal) {
         try {
             String username = (principal != null) ? principal.getName() : "anonymous";
             technicianService.recordTechnicianNg(reportId, requestDto, username);
@@ -93,10 +98,11 @@ public class TechnicianController {
     }
 
     @PostMapping("/parameter-records")
+    @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
     public ResponseEntity<?> createParameterChecklistRecord(@RequestBody ParameterRecord parameterRecord, Principal principal) {
         try {
-            // ถ้ามี field ผู้บันทึก ให้ตั้งค่า username ที่นี่ก่อนบันทึก
-            ParameterRecord savedRecord = technicianService.saveParameterRecord(parameterRecord);
+            String username = (principal != null) ? principal.getName() : "anonymous";
+            ParameterRecord savedRecord = technicianService.saveParameterRecord(parameterRecord, username);
             return ResponseEntity.ok(savedRecord);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());

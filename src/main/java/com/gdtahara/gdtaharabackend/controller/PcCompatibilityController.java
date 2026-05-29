@@ -153,9 +153,9 @@ public class PcCompatibilityController {
 
     @PutMapping("/reports/{id}")
     @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin')")
-    public ResponseEntity<?> updateReport(@PathVariable Long id, @RequestBody ReportCreateRequest request) {
+    public ResponseEntity<?> updateReport(@PathVariable Long id, @RequestBody ReportCreateRequest request, Principal principal) {
         try {
-            return ResponseEntity.ok(productionService.updateProductionReport(id, request));
+            return ResponseEntity.ok(productionService.updateProductionReport(id, request, principal != null ? principal.getName() : ""));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -163,12 +163,23 @@ public class PcCompatibilityController {
 
     @PostMapping("/reports/{id}/finalize")
     @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin')")
-    public ResponseEntity<Void> finalizeReport(@PathVariable Long id) {
+    public ResponseEntity<Void> finalizeReport(@PathVariable Long id, Principal principal) {
         try {
-            productionService.finalizeReport(id);
+            productionService.finalizeReport(id, principal != null ? principal.getName() : "");
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @DeleteMapping("/reports/{id}")
+    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin')")
+    public ResponseEntity<?> deleteReport(@PathVariable Long id, Principal principal) {
+        try {
+            productionService.deleteProductionReport(id, principal != null ? principal.getName() : "");
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 

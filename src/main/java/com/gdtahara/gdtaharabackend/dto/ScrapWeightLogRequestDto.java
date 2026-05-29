@@ -4,6 +4,8 @@
 // =================================================================
 package com.gdtahara.gdtaharabackend.dto;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import java.math.BigDecimal;
 
@@ -11,5 +13,8 @@ import java.math.BigDecimal;
 public class ScrapWeightLogRequestDto {
     private String scrapType;
     private String matType;
+
+    @NotNull(message = "Weight (kg) is required")
+    @DecimalMin(value = "0.0", message = "Weight must be non-negative")
     private BigDecimal weightKg;
 }

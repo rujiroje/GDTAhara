@@ -8,6 +8,9 @@ import com.gdtahara.gdtaharabackend.repository.*;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +32,8 @@ public class TechnicianService {
     private final NgLogRepository ngLogRepository;
     private final UserRepository userRepository;
     private final NgTypeRepository ngTypeRepository;
-    
+    private final AuditLogService auditLogService;
+
     public TechnicianService(
             ProductionReportRepository productionReportRepository,
             DowntimeEventRepository downtimeEventRepository,
@@ -37,7 +41,8 @@ public class TechnicianService {
             ParameterRecordRepository parameterRecordRepository,
             NgLogRepository ngLogRepository,
             UserRepository userRepository,
-            NgTypeRepository ngTypeRepository) {
+            NgTypeRepository ngTypeRepository,
+            AuditLogService auditLogService) {
         this.productionReportRepository = productionReportRepository;
         this.downtimeEventRepository = downtimeEventRepository;
         this.scrapWeightLogRepository = scrapWeightLogRepository;
@@ -45,6 +50,7 @@ public class TechnicianService {
         this.ngLogRepository = ngLogRepository;
         this.userRepository = userRepository;
         this.ngTypeRepository = ngTypeRepository;
+        this.auditLogService = auditLogService;
     }
     
     /**
@@ -93,12 +99,16 @@ public class TechnicianService {
             // solution is @Transient – safe to set if provided
             entity.setSolution(requestDto.getSolution());
 
-            downtimeEventRepository.save(entity);
+            var saved = downtimeEventRepository.save(entity);
+            auditLogService.log("CREATE", "DowntimeEvent", saved.getId(), null,
+                    java.util.Map.of("reportId", String.valueOf(reportId),
+                            "startTime", String.valueOf(requestDto.getStartTime()),
+                            "createdBy", username));
         } catch (Exception e) {
             logger.error("Failed to record downtime for report {}: {}", reportId, e.getMessage(), e);
             throw e;
         }
-        
+
         logger.info("Successfully recorded downtime for report ID: {}", reportId);
     }
     
@@ -142,12 +152,16 @@ public class TechnicianService {
             entity.setMatType((requestDto.getMatType() != null && !requestDto.getMatType().isBlank()) ? requestDto.getMatType() : null);
             entity.setWeightKg(requestDto.getWeightKg());
 
-            scrapWeightLogRepository.save(entity);
+            var saved = scrapWeightLogRepository.save(entity);
+            auditLogService.log("CREATE", "ScrapWeightLog", saved.getId(), null,
+                    java.util.Map.of("reportId", String.valueOf(reportId),
+                            "weightKg", String.valueOf(requestDto.getWeightKg()),
+                            "createdBy", username));
         } catch (Exception e) {
             logger.error("Failed to record scrap weight for report {}: {}", reportId, e.getMessage(), e);
             throw e;
         }
-        
+
         logger.info("Successfully recorded scrap weight for report ID: {}", reportId);
     }
     
@@ -240,6 +254,9 @@ public class TechnicianService {
             // Save (insert or update)
             ParameterRecord savedEntity = parameterRecordRepository.save(entity);
             logger.debug("Upserted parameter record (reportId={}, recordTime={}) with ID: {}", reportId, recordTimeKey, savedEntity.getId());
+            auditLogService.log("UPSERT", "ParameterRecord", savedEntity.getId(), null,
+                    java.util.Map.of("reportId", String.valueOf(reportId),
+                            "recordTime", recordTimeKey, "createdBy", username));
 
             logger.info("Successfully upserted parameter record for report ID: {}", reportId);
 
@@ -270,7 +287,19 @@ public class TechnicianService {
             ParameterRecord record = parameterRecordRepository.findById(recordId)
                     .orElseThrow(() -> new EntityNotFoundException("Parameter record not found with ID: " + recordId));
             logger.debug("Found record: {}", record.getId());
-            
+
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            boolean isAdmin = auth != null && auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_DataAdmin")
+                            || a.getAuthority().equals("ROLE_Production Control"));
+            if (!isAdmin) {
+                var caller = userRepository.findByUsername(username)
+                        .orElseThrow(() -> new EntityNotFoundException("User not found: " + username));
+                if (!caller.getId().equals(record.getTechnicianId())) {
+                    throw new AccessDeniedException("Access denied: you do not own this parameter record");
+                }
+            }
+
             // อัปเดตข้อมูล - recordTime ไม่ได้มีใน ParameterRecordRequest
             // TODO: เพิ่ม recordTime field ใน ParameterRecordRequest หรือส่งมาแยก
             
@@ -285,8 +314,10 @@ public class TechnicianService {
             // บันทึกการเปลี่ยนแปลง
             ParameterRecord updatedRecord = parameterRecordRepository.save(record);
             logger.debug("Updated parameter record with ID: {}", updatedRecord.getId());
-            
             logger.info("Successfully updated parameter record ID: {}", recordId);
+            auditLogService.log("UPDATE", "ParameterRecord", recordId,
+                    java.util.Map.of("id", recordId),
+                    java.util.Map.of("id", updatedRecord.getId(), "updatedBy", username));
             
         } catch (EntityNotFoundException e) {
             logger.error("Parameter record not found: {}", e.getMessage());
@@ -341,30 +372,46 @@ public class TechnicianService {
             String source = (requestDto.getSource() != null && !requestDto.getSource().isBlank()) ? requestDto.getSource() : "Technician_Process";
             entity.setSource(source);
 
-            ngLogRepository.save(entity);
+            var saved = ngLogRepository.save(entity);
+            auditLogService.log("CREATE", "NgLog", saved.getId(), null,
+                    java.util.Map.of("reportId", String.valueOf(reportId),
+                            "ngTypeId", String.valueOf(requestDto.getNgTypeId()),
+                            "quantity", String.valueOf(requestDto.getQuantity()),
+                            "createdBy", username));
         } catch (Exception e) {
             logger.error("Failed to record NG for report {}: {}", reportId, e.getMessage(), e);
             throw e;
         }
-        
+
         logger.info("Successfully recorded NG for report ID: {}", reportId);
     }
     
     /**
-     * Save Parameter Record from ParameterChecklistForm
+     * Save Parameter Record from ParameterChecklistForm.
+     * technicianId is always resolved from username — caller cannot override it.
      */
     @Transactional
-    public ParameterRecord saveParameterRecord(ParameterRecord parameterRecord) {
+    public ParameterRecord saveParameterRecord(ParameterRecord parameterRecord, String username) {
+        // Strip identity fields that should not come from the caller
+        parameterRecord.setId(null);
+
+        var technician = userRepository.findByUsername(username).orElseGet(() -> {
+            try {
+                var techs = userRepository.findByRole("Technician");
+                if (techs != null && !techs.isEmpty()) return techs.get(0);
+            } catch (Exception ignored) {}
+            throw new jakarta.persistence.EntityNotFoundException("User not found: " + username);
+        });
+        parameterRecord.setTechnicianId(technician.getId());
+
         try {
-            // Set creation timestamp
             parameterRecord.setCreatedAt(LocalDateTime.now());
-            
-            // Save the record
             ParameterRecord savedRecord = parameterRecordRepository.save(parameterRecord);
-            
             logger.info("Successfully saved parameter record with ID: {}", savedRecord.getId());
+            auditLogService.log("CREATE", "ParameterRecord", savedRecord.getId(), null,
+                    java.util.Map.of("id", savedRecord.getId(), "reportId",
+                            String.valueOf(savedRecord.getReportId()), "createdBy", username));
             return savedRecord;
-            
         } catch (Exception e) {
             logger.error("Error saving parameter record: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to save parameter record: " + e.getMessage());

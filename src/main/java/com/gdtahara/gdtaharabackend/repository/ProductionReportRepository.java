@@ -24,6 +24,13 @@ public interface ProductionReportRepository extends JpaRepository<ProductionRepo
     List<ProductionReport> findByStatus(String status);
     // รองรับค้นหาหลายสถานะ (เช่น IN_PROGRESS และ ACTIVE สำหรับงานที่กำลังดำเนินการ)
     List<ProductionReport> findByStatusIn(java.util.Collection<String> statuses);
+
+    // Fetch-join variants — eliminates N+1 when iterating machine/product associations
+    @Query("SELECT DISTINCT pr FROM ProductionReport pr LEFT JOIN FETCH pr.machine LEFT JOIN FETCH pr.product ORDER BY pr.createdAt DESC")
+    List<ProductionReport> findAllWithFetch();
+
+    @Query("SELECT DISTINCT pr FROM ProductionReport pr LEFT JOIN FETCH pr.machine LEFT JOIN FETCH pr.product WHERE pr.status IN :statuses")
+    List<ProductionReport> findByStatusInWithFetch(@Param("statuses") java.util.Collection<String> statuses);
     List<ProductionReport> findByStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqual(String status, LocalDate startDate, LocalDate endDate);
     List<ProductionReport> findByStartDateLessThanEqualAndEndDateGreaterThanEqual(LocalDate endDate, LocalDate startDate);
     List<ProductionReport> findByStartDate(LocalDate startDate);
@@ -46,25 +53,42 @@ public interface ProductionReportRepository extends JpaRepository<ProductionRepo
                           @Param("machineName") String machineName);
 
     // Fast, case-insensitive active reports query with left fetch joins to avoid N+1 and delays
-    // Returns reports considered "active" if status is in active set (case-insensitive),
-    // or if today is within [startDate, endDate] and status is not a terminal status.
+    // Returns reports whose date range spans TODAY and whose status is not terminal.
+    // Only shows what is actually active on the current day (startDate <= today <= endDate).
     @Query("SELECT DISTINCT pr FROM ProductionReport pr " +
         "LEFT JOIN FETCH pr.machine m " +
         "LEFT JOIN FETCH pr.product p " +
-        "WHERE (TRIM(UPPER(pr.status)) IN :activeStatuses) " +
-        "   OR ((pr.startDate IS NULL OR pr.startDate <= :today) " +
-        "       AND (pr.endDate IS NULL OR pr.endDate >= :today) " +
-        "       AND (pr.status IS NULL OR TRIM(UPPER(pr.status)) NOT IN :terminalStatuses)) " +
+        "WHERE pr.startDate <= :today " +
+        "  AND pr.endDate >= :today " +
+        "  AND (pr.status IS NULL OR TRIM(UPPER(pr.status)) NOT IN :terminalStatuses) " +
         "ORDER BY pr.createdAt DESC")
     List<ProductionReport> findActiveReportsFast(@Param("activeStatuses") java.util.Collection<String> activeStatuses,
                             @Param("terminalStatuses") java.util.Collection<String> terminalStatuses,
                             @Param("today") LocalDate today);
 
-    // Overlapping reports for machine schedule validation
+    // Overlapping reports for machine schedule validation (original — In Progress only)
     @Query("SELECT pr FROM ProductionReport pr WHERE pr.machine.id = :machineId AND pr.status = 'In Progress' AND pr.startDate <= :endDate AND pr.endDate >= :startDate")
     List<ProductionReport> findOverlappingReports(@Param("machineId") Long machineId,
                           @Param("startDate") LocalDate startDate,
                           @Param("endDate") LocalDate endDate);
+
+    // All active overlapping reports — used for duplicate date/machine validation on CREATE
+    @Query("SELECT pr FROM ProductionReport pr WHERE pr.machine.id = :machineId " +
+           "AND pr.status NOT IN ('Cancelled','CANCELLED','Closed','CLOSED','Finalized','FINALIZED') " +
+           "AND pr.startDate <= :endDate AND pr.endDate >= :startDate")
+    List<ProductionReport> findActiveOverlappingByMachine(@Param("machineId") Long machineId,
+                          @Param("startDate") LocalDate startDate,
+                          @Param("endDate") LocalDate endDate);
+
+    // Same as above but excludes one report ID — used on UPDATE to exclude self
+    @Query("SELECT pr FROM ProductionReport pr WHERE pr.machine.id = :machineId " +
+           "AND pr.id <> :excludeId " +
+           "AND pr.status NOT IN ('Cancelled','CANCELLED','Closed','CLOSED','Finalized','FINALIZED') " +
+           "AND pr.startDate <= :endDate AND pr.endDate >= :startDate")
+    List<ProductionReport> findActiveOverlappingByMachineExcluding(@Param("machineId") Long machineId,
+                          @Param("startDate") LocalDate startDate,
+                          @Param("endDate") LocalDate endDate,
+                          @Param("excludeId") Long excludeId);
 
     // Paginated lightweight list (DTO projection)
     @Query("SELECT new com.gdtahara.gdtaharabackend.dto.ProductionReportListDto(" +

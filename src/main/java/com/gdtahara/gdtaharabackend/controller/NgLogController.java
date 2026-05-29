@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
+
 @RestController
 @RequestMapping("/api/ng-logs")
 @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin')")
@@ -21,14 +23,14 @@ public class NgLogController {
     private NgLogService ngLogService;
 
     @PutMapping("/{id}")
-    public ResponseEntity<NgLog> updateNgLog(@PathVariable Long id, @RequestBody NgLogRequestDto request) {
-        NgLog updatedLog = ngLogService.updateNgLog(id, request);
+    public ResponseEntity<NgLog> updateNgLog(@PathVariable Long id, @RequestBody NgLogRequestDto request, Principal principal) {
+        NgLog updatedLog = ngLogService.updateNgLog(id, request, principal.getName());
         return ResponseEntity.ok(updatedLog);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteNgLog(@PathVariable Long id) {
-        ngLogService.deleteNgLog(id);
+    public ResponseEntity<Void> deleteNgLog(@PathVariable Long id, Principal principal) {
+        ngLogService.deleteNgLog(id, principal.getName());
         return ResponseEntity.noContent().build();
     }
 }

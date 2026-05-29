@@ -286,8 +286,6 @@ const OperatorDashboard = () => {
 
     return ( <div className="dashboard-card">
         <h2 className="dashboard-title">เลือกใบสั่งผลิตเพื่อเริ่มทำงาน</h2>
-        <MachineStatusPanel machines={machineList} />
-        
         {error && <p className="error-message">{error}</p>} 
         {activeReports.length === 0 && !error && <p>ไม่มีใบสั่งผลิตที่กำลังทำงานอยู่</p>} 
         <div className="report-selection-container"> {activeReports.map(report => ( <div key={report.id} className="report-card"> <h3>{report.machineName}</h3> <p>{report.productName}</p> {report.orderNumber && <p>Order No.: {report.orderNumber}</p>} <p>วันที่: {report.startDate} – {report.endDate}</p> <button className="select-button" onClick={() => setSelectedReport(report)}> เลือก </button> </div> ))} </div> </div> );

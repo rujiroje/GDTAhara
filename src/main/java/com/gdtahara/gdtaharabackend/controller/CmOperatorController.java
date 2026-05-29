@@ -8,9 +8,10 @@ import com.gdtahara.gdtaharabackend.dto.StockOutRequestDto;
 import com.gdtahara.gdtaharabackend.model.MaterialStockTransaction;
 import com.gdtahara.gdtaharabackend.service.CmOperatorService;
 import com.gdtahara.gdtaharabackend.service.MaterialStockService; // **[ใหม่]** Import
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*; // **[แก้ไข]** Import ให้ครบ
+import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.List; // **[ใหม่]** Import
@@ -29,7 +30,7 @@ public class CmOperatorController {
     }
 
     @PostMapping("/stock-out")
-    public ResponseEntity<?> recordStockOut(@RequestBody StockOutRequestDto request, Principal principal) {
+    public ResponseEntity<?> recordStockOut(@Valid @RequestBody StockOutRequestDto request, Principal principal) {
         try {
             MaterialStockTransaction transaction = cmOperatorService.recordStockOut(request, principal.getName());
             return ResponseEntity.ok(transaction);

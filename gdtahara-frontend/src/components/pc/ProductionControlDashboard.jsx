@@ -1995,10 +1995,11 @@ const ProductionOrderManagement = ({ onBack, onViewDetail, machines, products, a
                 <h3>{t('productionOverviewTitle')}</h3>
                 <div>
                   <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input" style={{marginRight: '1rem', display: 'inline-block', width: 'auto'}}>
-                    <option value="all">{t('all')}</option>
-                    <option value="IN_PROGRESS">{t('inProgress')}</option>
+                    <option value="all">{getLang() === 'en' ? 'All' : 'ทั้งหมด'}</option>
+                    <option value="IN_PROGRESS">{getLang() === 'en' ? 'In Progress' : 'กำลังดำเนินการ'}</option>
+                    <option value="PENDING">{getLang() === 'en' ? 'Pending (Not started)' : 'พร้อมทำงาน (รอเริ่ม)'}</option>
                     <option value="ACTIVE">{getLang() === 'en' ? 'Expired (Not closed)' : 'หมดเวลา (รอปิดงาน)'}</option>
-                    <option value="INACTIVE">{t('inactive')}</option>
+                    <option value="INACTIVE">{getLang() === 'en' ? 'Closed' : 'ปิดงานแล้ว'}</option>
                   </select>
                   {canManage && <button className="add-button" onClick={handleOpenCreateModal}>{t('createNewOrder') || 'สร้างใบสั่งผลิตใหม่'}</button>}
                 </div>
@@ -2742,6 +2743,8 @@ const ProductionControlDashboard = () => {
             productId={dailyContext?.productId || null}
             orderNumber={dailyContext?.orderNumber || null}
         />;
+    } else if (view === 'machineSchedule') {
+        return <MachineScheduleCalendar onBack={() => changeView('dashboard')} allReports={allReports} machines={machines} />;
     }
 
     // Default view: 'dashboard'
@@ -2751,6 +2754,9 @@ const ProductionControlDashboard = () => {
                 <h2 className="pc-dashboard-title">{t('productionOverviewTitle')}</h2>
                 <div>
                     <button className="manage-reports-button" onClick={() => changeView('history')} style={{ marginRight: '1rem' }}>{t('viewHistoricalReports')}</button>
+                    <button className="manage-reports-button" onClick={() => changeView('machineSchedule')} style={{ marginRight: '1rem', backgroundColor: '#6f42c1' }}>
+                      {getLang() === 'en' ? '📅 Machine Schedule' : '📅 ตารางแผนการผลิต'}
+                    </button>
                                         {canManage && (
                       <button className="manage-reports-button" onClick={() => changeView('manage')}>{t('manageProductionOrders')}</button>
                     )}
@@ -2777,6 +2783,205 @@ const ProductionControlDashboard = () => {
                         />
                     </div>
                 ))}
+            </div>
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Machine Schedule Calendar — monthly grid: rows = machines, columns = days
+// ─────────────────────────────────────────────────────────────────────────────
+const MachineScheduleCalendar = ({ onBack, allReports, machines }) => {
+    const today = new Date();
+    const [year, setYear]   = React.useState(today.getFullYear());
+    const [month, setMonth] = React.useState(today.getMonth()); // 0-indexed
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    const monthNames = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                        'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const monthNamesEn = ['January','February','March','April','May','June',
+                          'July','August','September','October','November','December'];
+
+    const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y-1); } else setMonth(m => m-1); };
+    const nextMonth = () => { if (month === 11) { setMonth(0);  setYear(y => y+1); } else setMonth(m => m+1); };
+
+    // Build lookup: machineName → list of reports active in this month
+    const reports = Array.isArray(allReports) ? allReports : [];
+
+    // Get unique machine names (from reports + master list)
+    const machineNames = React.useMemo(() => {
+        const fromReports = reports.map(r => r.machineName).filter(Boolean);
+        const fromMasters = Array.isArray(machines) ? machines.map(m => m.machineName || m.name).filter(Boolean) : [];
+        return [...new Set([...fromMasters, ...fromReports])].sort();
+    }, [reports, machines]);
+
+    // Color per status
+    const statusColor = (status) => {
+        if (!status) return '#adb5bd';
+        const s = status.toUpperCase();
+        if (s === 'IN_PROGRESS') return '#28a745';
+        if (s === 'PENDING')     return '#007bff';
+        if (s === 'ACTIVE')      return '#fd7e14';
+        if (s === 'INACTIVE')    return '#6c757d';
+        return '#adb5bd';
+    };
+    const statusLabel = (status) => {
+        if (!status) return '';
+        const s = status.toUpperCase();
+        if (s === 'IN_PROGRESS') return 'กำลังผลิต';
+        if (s === 'PENDING')     return 'รอเริ่ม';
+        if (s === 'ACTIVE')      return 'หมดเวลา';
+        if (s === 'INACTIVE')    return 'ปิดแล้ว';
+        return status;
+    };
+
+    // Check if a report covers a specific day in this month
+    const reportsForCell = (machineName, day) => {
+        const cellDate = new Date(year, month, day);
+        return reports.filter(r => {
+            if ((r.machineName || '') !== machineName) return false;
+            if (!r.startDate || !r.endDate) return false;
+            const start = new Date(r.startDate);
+            const end   = new Date(r.endDate);
+            return start <= cellDate && cellDate <= end;
+        });
+    };
+
+    const isToday = (day) => {
+        return today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+    };
+
+    const lang = typeof getLang === 'function' ? getLang() : 'th';
+
+    return (
+        <div style={{ padding: '1.5rem' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
+                <button onClick={onBack} className="back-button">&larr; {lang === 'en' ? 'Back' : 'กลับ'}</button>
+                <h2 style={{ margin: 0, flexGrow: 1 }}>
+                    📅 {lang === 'en' ? 'Machine Production Schedule' : 'ตารางแผนการผลิตตามเครื่องจักร'}
+                </h2>
+                {/* Month navigator */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button onClick={prevMonth} style={{ padding: '0.3rem 0.8rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc' }}>◀</button>
+                    <span style={{ fontWeight: 'bold', minWidth: '160px', textAlign: 'center', fontSize: '1rem' }}>
+                        {lang === 'en' ? monthNamesEn[month] : monthNames[month]} {year}
+                    </span>
+                    <button onClick={nextMonth} style={{ padding: '0.3rem 0.8rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc' }}>▶</button>
+                </div>
+            </div>
+
+            {/* Legend */}
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', fontSize: '0.8rem' }}>
+                {[['IN_PROGRESS','กำลังผลิต'],['PENDING','รอเริ่ม'],['ACTIVE','หมดเวลา'],['INACTIVE','ปิดแล้ว']].map(([s,label]) => (
+                    <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: statusColor(s), display: 'inline-block' }}/>
+                        {label}
+                    </span>
+                ))}
+            </div>
+
+            {/* Calendar table */}
+            <div style={{ overflowX: 'auto' }}>
+                <table style={{ borderCollapse: 'collapse', minWidth: '900px', width: '100%', fontSize: '0.78rem' }}>
+                    <thead>
+                        <tr style={{ backgroundColor: '#343a40', color: '#fff' }}>
+                            <th style={{ padding: '8px 12px', textAlign: 'left', minWidth: '110px', position: 'sticky', left: 0, backgroundColor: '#343a40', zIndex: 2 }}>
+                                {lang === 'en' ? 'Machine' : 'เครื่องจักร'}
+                            </th>
+                            {days.map(d => (
+                                <th key={d} style={{
+                                    padding: '6px 2px', textAlign: 'center', minWidth: '28px',
+                                    backgroundColor: isToday(d) ? '#ffc107' : '#343a40',
+                                    color: isToday(d) ? '#000' : '#fff',
+                                    fontWeight: isToday(d) ? 'bold' : 'normal'
+                                }}>{d}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {machineNames.map((machineName, rowIdx) => (
+                            <tr key={machineName} style={{ backgroundColor: rowIdx % 2 === 0 ? '#f8f9fa' : '#fff' }}>
+                                <td style={{
+                                    padding: '6px 10px', fontWeight: 600, fontSize: '0.8rem',
+                                    position: 'sticky', left: 0, backgroundColor: rowIdx % 2 === 0 ? '#f8f9fa' : '#fff',
+                                    borderRight: '2px solid #dee2e6', zIndex: 1
+                                }}>{machineName}</td>
+                                {days.map(d => {
+                                    const cellReports = reportsForCell(machineName, d);
+                                    return (
+                                        <td key={d} style={{
+                                            padding: '2px', textAlign: 'center', verticalAlign: 'middle',
+                                            border: '1px solid #dee2e6',
+                                            backgroundColor: isToday(d) ? '#fff9e6' : 'transparent'
+                                        }}>
+                                            {cellReports.map(r => (
+                                                <div key={r.id} title={`${r.orderNumber}\n${r.startDate} – ${r.endDate}\n${statusLabel(r.status)}`}
+                                                     style={{
+                                                         backgroundColor: statusColor(r.status),
+                                                         color: '#fff', borderRadius: '3px',
+                                                         padding: '1px 3px', fontSize: '0.65rem',
+                                                         marginBottom: '1px', cursor: 'default',
+                                                         whiteSpace: 'nowrap', overflow: 'hidden',
+                                                         maxWidth: '100%', textOverflow: 'ellipsis'
+                                                     }}>
+                                                    {r.orderNumber}
+                                                </div>
+                                            ))}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        ))}
+                        {machineNames.length === 0 && (
+                            <tr><td colSpan={daysInMonth + 1} style={{ textAlign: 'center', padding: '2rem', color: '#6c757d' }}>
+                                {lang === 'en' ? 'No data' : 'ไม่มีข้อมูล'}
+                            </td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Summary list for this month */}
+            <div style={{ marginTop: '2rem' }}>
+                <h4 style={{ marginBottom: '0.75rem' }}>
+                    {lang === 'en' ? 'Production Orders This Month' : `รายการใบสั่งผลิตในเดือน ${monthNames[month]} ${year}`}
+                </h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                        <tr style={{ backgroundColor: '#e9ecef' }}>
+                            {['เลขที่คำสั่ง','เครื่องจักร','ผลิตภัณฑ์','วันเริ่ม','วันสิ้นสุด','สถานะ'].map(h => (
+                                <th key={h} style={{ padding: '8px 10px', textAlign: 'left', border: '1px solid #dee2e6' }}>{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {reports.filter(r => {
+                            if (!r.startDate || !r.endDate) return false;
+                            const start = new Date(r.startDate);
+                            const end   = new Date(r.endDate);
+                            const mStart = new Date(year, month, 1);
+                            const mEnd   = new Date(year, month + 1, 0);
+                            return start <= mEnd && end >= mStart;
+                        }).sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+                        .map(r => (
+                            <tr key={r.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                                <td style={{ padding: '6px 10px', fontWeight: 600 }}>{r.orderNumber}</td>
+                                <td style={{ padding: '6px 10px' }}>{r.machineName}</td>
+                                <td style={{ padding: '6px 10px' }}>{r.productName}</td>
+                                <td style={{ padding: '6px 10px' }}>{r.startDate}</td>
+                                <td style={{ padding: '6px 10px' }}>{r.endDate}</td>
+                                <td style={{ padding: '6px 10px' }}>
+                                    <span style={{ backgroundColor: statusColor(r.status), color: '#fff', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+                                        {statusLabel(r.status)}
+                                    </span>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );

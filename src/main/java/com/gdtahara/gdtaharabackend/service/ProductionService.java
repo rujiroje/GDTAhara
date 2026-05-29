@@ -51,11 +51,14 @@ public class ProductionService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private AuditLogService auditLogService;
+
     @Transactional(readOnly = true)
     public List<ProductionReportDto> getAllProductionReports() {
         try {
             logger.info("🔍 ProductionService.getAllProductionReports() called");
-            List<ProductionReport> reports = productionReportRepository.findAll();
+            List<ProductionReport> reports = productionReportRepository.findAllWithFetch();
             logger.info("📊 Found {} production reports", reports.size());
             
             return reports.stream()
@@ -109,6 +112,18 @@ public class ProductionService {
             Product product = productRepository.findById(request.getProductId())
                     .orElseThrow(() -> new EntityNotFoundException("ไม่พบผลิตภัณฑ์ (productId=" + request.getProductId() + ")"));
 
+            // Duplicate date/machine check — prevent two active reports on the same machine in overlapping period
+            List<ProductionReport> conflicts = productionReportRepository.findActiveOverlappingByMachine(
+                    request.getMachineId(), request.getStartDate(), request.getEndDate());
+            if (!conflicts.isEmpty()) {
+                ProductionReport conflict = conflicts.get(0);
+                throw new IllegalArgumentException(
+                        "ไม่สามารถสร้างใบสั่งผลิตได้: เครื่องจักร \"" + machine.getMachineName() + "\" " +
+                        "มีใบสั่งผลิต [" + conflict.getOrderNumber() + "] " +
+                        "อยู่แล้วในช่วงวันที่ " + conflict.getStartDate() + " ถึง " + conflict.getEndDate() +
+                        " (สถานะ: " + conflict.getStatus() + ") กรุณาเลือกช่วงวันที่อื่น หรือยกเลิกใบสั่งผลิตเดิมก่อน");
+            }
+
             // PC user is mandatory (pc_id is NOT NULL). Try principal first, then fallback by role.
             User pcUser = null;
             try {
@@ -149,6 +164,9 @@ public class ProductionService {
 
             ProductionReport saved = productionReportRepository.save(report);
             logger.info("✅ Production report created with ID: {} by PC: {}", saved.getId(), pcUser.getUsername());
+            auditLogService.log("CREATE", "ProductionReport", saved.getId(), null,
+                    java.util.Map.of("id", saved.getId(), "orderNumber", String.valueOf(saved.getOrderNumber()),
+                            "status", String.valueOf(saved.getStatus())));
             return convertToProductionReportDto(saved);
         } catch (IllegalArgumentException | EntityNotFoundException | IllegalStateException ex) {
             // surface clear message to controller (HTTP 400)
@@ -163,33 +181,55 @@ public class ProductionService {
 
     @Transactional
     public ProductionReportDto updateProductionReport(Long id, ReportCreateRequest request) {
+        return updateProductionReport(id, request, null);
+    }
+
+    @Transactional
+    public ProductionReportDto updateProductionReport(Long id, ReportCreateRequest request, String username) {
         try {
             logger.info("🔄 Updating production report ID: {}", id);
-            
+
             ProductionReport report = productionReportRepository.findById(id)
                     .orElseThrow(() -> new EntityNotFoundException("Production report not found with id: " + id));
-            
+
+            String oldStatus = report.getStatus();
+            String oldOrder = report.getOrderNumber();
+
             report.setOrderNumber(request.getOrderNumber());
             report.setStartDate(request.getStartDate());
             report.setEndDate(request.getEndDate());
             report.setTargetQty(request.getTargetQty());
-            
+
             Machine machine = machineRepository.findById(request.getMachineId())
                     .orElseThrow(() -> new EntityNotFoundException("Machine not found with id: " + request.getMachineId()));
             Product product = productRepository.findById(request.getProductId())
                     .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + request.getProductId()));
-            
+
+            // Duplicate date/machine check on update — exclude this report from conflict search
+            List<ProductionReport> conflicts = productionReportRepository.findActiveOverlappingByMachineExcluding(
+                    request.getMachineId(), request.getStartDate(), request.getEndDate(), id);
+            if (!conflicts.isEmpty()) {
+                ProductionReport conflict = conflicts.get(0);
+                throw new IllegalArgumentException(
+                        "ไม่สามารถแก้ไขใบสั่งผลิตได้: เครื่องจักร \"" + machine.getMachineName() + "\" " +
+                        "มีใบสั่งผลิต [" + conflict.getOrderNumber() + "] " +
+                        "อยู่แล้วในช่วงวันที่ " + conflict.getStartDate() + " ถึง " + conflict.getEndDate() +
+                        " (สถานะ: " + conflict.getStatus() + ") กรุณาเลือกช่วงวันที่อื่น");
+            }
+
             report.setMachine(machine);
             report.setProduct(product);
-        // Re-derive status if not finalized
-        String existing = report.getStatus();
-        if (!isTerminalStatus(existing)) {
-        report.setStatus(deriveStatusForDates(report.getStartDate(), report.getEndDate(), existing));
-        }
-            
+            String existing = report.getStatus();
+            if (!isTerminalStatus(existing)) {
+                report.setStatus(deriveStatusForDates(report.getStartDate(), report.getEndDate(), existing));
+            }
+
             ProductionReport savedReport = productionReportRepository.save(report);
             logger.info("✅ Production report updated successfully");
-            
+            auditLogService.log("UPDATE", "ProductionReport", id,
+                    java.util.Map.of("id", id, "orderNumber", String.valueOf(oldOrder), "status", String.valueOf(oldStatus)),
+                    java.util.Map.of("id", savedReport.getId(), "orderNumber", String.valueOf(savedReport.getOrderNumber()),
+                            "status", String.valueOf(savedReport.getStatus())));
             return convertToProductionReportDto(savedReport);
         } catch (Exception e) {
             logger.error("❌ Error updating production report: {}", e.getMessage(), e);
@@ -199,12 +239,20 @@ public class ProductionService {
 
     @Transactional
     public void deleteProductionReport(Long id) {
+        deleteProductionReport(id, null);
+    }
+
+    @Transactional
+    public void deleteProductionReport(Long id, String username) {
         try {
             logger.info("🗑️ Deleting production report ID: {}", id);
-            
+
             ProductionReport report = productionReportRepository.findById(id)
                     .orElseThrow(() -> new EntityNotFoundException("Production report not found with id: " + id));
-            
+
+            auditLogService.log("DELETE", "ProductionReport", id,
+                    java.util.Map.of("id", id, "orderNumber", String.valueOf(report.getOrderNumber()),
+                            "status", String.valueOf(report.getStatus())), null);
             productionReportRepository.delete(report);
             logger.info("✅ Production report deleted successfully");
         } catch (Exception e) {
@@ -235,7 +283,14 @@ public class ProductionService {
 
     @Transactional
     public void finalizeReport(Long id) {
+        finalizeReport(id, null);
+    }
+
+    @Transactional
+    public void finalizeReport(Long id, String username) {
         finalizeProductionReport(id);
+        auditLogService.log("FINALIZE", "ProductionReport", id,
+                java.util.Map.of("id", id), java.util.Map.of("id", id, "status", "COMPLETED"));
     }
 
     @Transactional(readOnly = true)
@@ -620,13 +675,14 @@ public class ProductionService {
     private String deriveDisplayStatus(ProductionReport report) {
         String raw = report.getStatus() != null ? report.getStatus().trim().toUpperCase() : "";
         if (isTerminalStatus(raw)) {
-            return "INACTIVE"; // display as Inactive if closed/completed
+            return "INACTIVE";
         }
         LocalDate start = report.getStartDate();
-        LocalDate end = report.getEndDate();
+        LocalDate end   = report.getEndDate();
         LocalDate today = LocalDate.now();
-        boolean within = (start == null || !today.isBefore(start)) && (end == null || !today.isAfter(end));
-        return within ? "IN_PROGRESS" : "ACTIVE";
+        if (start != null && today.isBefore(start)) return "PENDING";   // future — not yet started
+        if (end   != null && today.isAfter(end))    return "ACTIVE";    // expired — past end date
+        return "IN_PROGRESS";                                            // today within range
     }
 
     @Transactional(readOnly = true)
@@ -675,78 +731,50 @@ public class ProductionService {
     // --- Helpers ---
     private List<ProductionReport> getActiveReportsRobust() {
         logger.info("🔍 Starting getActiveReportsRobust()...");
-        
+
         java.time.LocalDate today = java.time.LocalDate.now();
-        java.util.List<String> activeStatuses = java.util.List.of("IN_PROGRESS", "IN PROGRESS", "IN-PROGRESS", "INPROGRESS", "ACTIVE");
-        java.util.List<String> terminalStatuses = java.util.List.of("COMPLETED", "COMPLETE", "DONE", "FINISHED");
-        
+        // Terminal statuses — reports with these statuses are excluded even if date spans today
+        java.util.List<String> terminalStatuses = java.util.List.of(
+                "COMPLETED", "COMPLETE", "DONE", "FINISHED",
+                "CANCELLED", "CANCELED", "CLOSED", "FINALIZED");
+
         try {
-            // Try the optimized fast query first
+            // Primary query: startDate <= today <= endDate AND status not terminal
             List<ProductionReport> fast = productionReportRepository.findActiveReportsFast(
-                    activeStatuses.stream().map(String::toUpperCase).toList(),
-                    terminalStatuses.stream().map(String::toUpperCase).toList(),
+                    java.util.List.of(), // activeStatuses no longer used in query
+                    terminalStatuses,
                     today
             );
             logger.info("⚡ Fast active detection returned {} record(s)", fast.size());
-            
             if (!fast.isEmpty()) {
                 return fast;
             }
-            
         } catch (Exception ex) {
-            logger.warn("⚠️ Fast active detection failed: {} — falling back to simple search", ex.getMessage());
+            logger.warn("⚠️ Fast active detection failed: {} — falling back", ex.getMessage());
         }
-        
-        // Fallback: Try simple status-based queries
+
+        // Fallback: filter all reports in-memory by date range AND status
+        logger.info("🔍 Fallback: querying ALL reports and filtering by today={}", today);
         java.util.List<ProductionReport> result = new java.util.ArrayList<>();
         java.util.Set<Long> seen = new java.util.HashSet<>();
-        
-        for (String status : java.util.List.of("IN_PROGRESS", "IN PROGRESS", "ACTIVE", "In Progress")) {
-            try {
-                logger.info("🔍 Trying status: '{}'", status);
-                List<ProductionReport> reports = productionReportRepository.findByStatus(status);
-                logger.info("📊 Found {} reports with status '{}'", reports.size(), status);
-                
-                for (ProductionReport pr : reports) {
-                    if (pr != null && pr.getId() != null && seen.add(pr.getId())) {
-                        result.add(pr);
-                        logger.info("✅ Added report ID: {} (Machine: {}, Product: {})", 
-                            pr.getId(),
-                            pr.getMachine() != null ? pr.getMachine().getMachineName() : "null",
-                            pr.getProduct() != null ? pr.getProduct().getProductName() : "null");
-                    }
+        try {
+            List<ProductionReport> allReports = productionReportRepository.findAll();
+            for (ProductionReport report : allReports) {
+                if (report == null || report.getId() == null) continue;
+                // Date range must span today
+                if (report.getStartDate() == null || report.getEndDate() == null) continue;
+                if (report.getStartDate().isAfter(today) || report.getEndDate().isBefore(today)) continue;
+                // Status must not be terminal
+                String upperStatus = report.getStatus() != null ? report.getStatus().trim().toUpperCase() : "";
+                if (terminalStatuses.contains(upperStatus)) continue;
+                if (seen.add(report.getId())) {
+                    result.add(report);
                 }
-            } catch (Exception ignore) {
-                logger.warn("⚠️ Failed to query status '{}': {}", status, ignore.getMessage());
             }
+        } catch (Exception e) {
+            logger.error("❌ Fallback failed: {}", e.getMessage(), e);
         }
-        
-        // Final fallback: get all reports and filter by status
-        if (result.isEmpty()) {
-            logger.info("🔍 Final fallback: querying ALL reports and filtering...");
-            try {
-                List<ProductionReport> allReports = productionReportRepository.findAll();
-                logger.info("📊 Total reports in database: {}", allReports.size());
-                
-                for (ProductionReport report : allReports) {
-                    if (report != null && report.getStatus() != null) {
-                        String status = report.getStatus().trim().toUpperCase();
-                        logger.debug("🔍 Checking report {} with status: '{}'", report.getId(), status);
-                        
-                        if (activeStatuses.stream().anyMatch(s -> s.equals(status)) && seen.add(report.getId())) {
-                            result.add(report);
-                            logger.info("✅ Added report ID: {} (status: '{}', Machine: {}, Product: {})", 
-                                report.getId(), report.getStatus(),
-                                report.getMachine() != null ? report.getMachine().getMachineName() : "null",
-                                report.getProduct() != null ? report.getProduct().getProductName() : "null");
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                logger.error("❌ Final fallback failed: {}", e.getMessage(), e);
-            }
-        }
-        
+
         logger.info("🏁 getActiveReportsRobust() completed - returning {} active reports", result.size());
         return result;
     }
@@ -855,8 +883,7 @@ public class ProductionService {
 
     @Transactional(readOnly = true)
     public List<ProductionReportDto> getTodaysActiveProductionReports() {
-        // For now, return all active reports
-        return getActiveProductionReports();
+        return getActiveProductionReports(); // getActiveReportsRobust() already filters by today
     }
 
     @Transactional(readOnly = true)

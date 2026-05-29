@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -31,6 +32,7 @@ public class CmOperatorService {
     @Autowired private MaterialRepository materialRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private MaterialUsageLogRepository materialUsageLogRepository;
+    @Autowired private AuditLogService auditLogService;
 
     public MaterialStockTransaction recordStockOut(StockOutRequestDto request, String username) {
         // 1. ตรวจสอบข้อมูล
@@ -67,6 +69,14 @@ public class CmOperatorService {
         materialUsageLog.setTechnician(user);
         // ไม่ต้อง setTimestamp เพราะ @PrePersist จะทำให้
         materialUsageLogRepository.save(materialUsageLog);
+
+        auditLogService.log("STOCK_OUT", "MaterialStockTransaction", savedTransaction.getId(), null,
+                Map.of("id", savedTransaction.getId(),
+                        "materialId", String.valueOf(request.getMaterialId()),
+                        "materialName", material.getMaterialName(),
+                        "quantity", String.valueOf(request.getQuantity()),
+                        "lotNumber", String.valueOf(request.getLotNumber()),
+                        "reportId", String.valueOf(request.getProductionReportId())));
 
         return savedTransaction;
     }

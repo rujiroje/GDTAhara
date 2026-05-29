@@ -2,12 +2,14 @@ package com.gdtahara.gdtaharabackend.controller;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @RestController
 @ConditionalOnProperty(name = "app.mode", havingValue = "emergency")
+@PreAuthorize("hasRole('DataAdmin')")
 public class EmergencyController {
 
     private static final Logger logger = LoggerFactory.getLogger(EmergencyController.class);

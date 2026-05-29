@@ -6,6 +6,8 @@ package com.gdtahara.gdtaharabackend.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -16,7 +18,9 @@ import java.util.List;
 @Data
 @Entity
 @Table(name = "users")
-public class User implements UserDetails { // คลาส User ของเราจะทำหน้าที่เป็น UserDetails โดยตรง
+public class User implements UserDetails {
+
+    private static final Logger logger = LoggerFactory.getLogger(User.class);
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -47,7 +51,7 @@ public class User implements UserDetails { // คลาส User ของเร�
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         String authority = "ROLE_" + this.role;
-        System.out.println("User " + this.username + " has authority: " + authority);
+        logger.debug("User {} has authority: {}", this.username, authority);
         return List.of(new SimpleGrantedAuthority(authority));
     }
 

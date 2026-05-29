@@ -14,12 +14,16 @@ import com.gdtahara.gdtaharabackend.repository.MaterialRepository; // **[ให�
 import com.gdtahara.gdtaharabackend.repository.NgTypeRepository;
 import com.gdtahara.gdtaharabackend.repository.ParameterChecklistRepository;
 import com.gdtahara.gdtaharabackend.repository.ProductRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
 @Service
 public class MasterDataService {
+
+    private static final Logger logger = LoggerFactory.getLogger(MasterDataService.class);
 
     @Autowired private ProductRepository productRepository;
     @Autowired private MachineRepository machineRepository;
@@ -48,24 +52,9 @@ public class MasterDataService {
     public void deleteParameterChecklist(Long id) { parameterChecklistRepository.deleteById(id); }
 
     // Material methods [ใหม่]
-    public List<Material> getAllMaterials() { 
+    public List<Material> getAllMaterials() {
         List<Material> materials = materialRepository.findAll();
-        System.out.println("🔍 MasterDataService.getAllMaterials() - Found " + materials.size() + " materials");
-        
-        // Debug: แสดง material types ที่มีอยู่
-        if (!materials.isEmpty()) {
-            materials.stream()
-                .map(Material::getMaterialType)
-                .distinct()
-                .forEach(type -> System.out.println("  - Material Type: " + type));
-            
-            // แสดงตัวอย่าง materials
-            System.out.println("🔍 Sample materials:");
-            materials.stream().limit(5).forEach(m -> 
-                System.out.println("  - " + m.getMaterialCode() + " | " + m.getMaterialName() + " | Type: " + m.getMaterialType())
-            );
-        }
-        
+        logger.debug("getAllMaterials() found {} materials", materials.size());
         return materials;
     }
     public Material saveMaterial(Material material) { return materialRepository.save(material); }

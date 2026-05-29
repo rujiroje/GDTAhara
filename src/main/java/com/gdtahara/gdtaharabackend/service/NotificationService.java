@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -16,6 +17,9 @@ public class NotificationService {
 
     @Autowired
     private ProblemAlertRepository problemAlertRepository;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     @Transactional(readOnly = true)
     public List<ProblemAlertViewDto> getActiveAlerts() {
@@ -25,11 +29,15 @@ public class NotificationService {
     }
 
     @Transactional
-    public void acknowledgeAlert(Long alertId) {
+    public void acknowledgeAlert(Long alertId, String username) {
         ProblemAlert alert = problemAlertRepository.findById(alertId)
                 .orElseThrow(() -> new RuntimeException("Alert not found with id: " + alertId));
+        String oldStatus = alert.getStatus();
         alert.setStatus("Acknowledged");
         problemAlertRepository.save(alert);
+        auditLogService.log("ACKNOWLEDGE", "ProblemAlert", alertId,
+                Map.of("id", alertId, "status", String.valueOf(oldStatus)),
+                Map.of("id", alertId, "status", "Acknowledged", "acknowledgedBy", username));
     }
 
     private ProblemAlertViewDto convertToDto(ProblemAlert alert) {

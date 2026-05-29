@@ -1,7 +1,3 @@
-// =================================================================
-// File: src/main/java/com/gdtahara/gdtaharabackend/service/NgLogService.java
-// (สร้างไฟล์ใหม่)
-// =================================================================
 package com.gdtahara.gdtaharabackend.service;
 
 import com.gdtahara.gdtaharabackend.dto.NgLogRequestDto;
@@ -10,34 +6,62 @@ import com.gdtahara.gdtaharabackend.repository.NgLogRepository;
 import com.gdtahara.gdtaharabackend.repository.NgTypeRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Map;
 
 @Service
 @Transactional
 public class NgLogService {
 
-    @Autowired
-    private NgLogRepository ngLogRepository;
+    @Autowired private NgLogRepository ngLogRepository;
+    @Autowired private NgTypeRepository ngTypeRepository;
+    @Autowired private AuditLogService auditLogService;
 
-    @Autowired
-    private NgTypeRepository ngTypeRepository;
-
-    public NgLog updateNgLog(Long id, NgLogRequestDto request) {
+    public NgLog updateNgLog(Long id, NgLogRequestDto request, String username) {
         NgLog ngLog = ngLogRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("NG Log not found with id: " + id));
-        
+
+        if (!isAdminOrOwner(ngLog, username)) {
+            throw new AccessDeniedException("Access denied: you do not own this record");
+        }
+
+        Integer oldQty = ngLog.getQuantity();
+        Long oldTypeId = ngLog.getNgType() != null ? ngLog.getNgType().getId() : null;
+
         ngLog.setNgType(ngTypeRepository.findById(request.getNgTypeId())
                 .orElseThrow(() -> new EntityNotFoundException("NG Type not found")));
         ngLog.setQuantity(request.getQuantity());
 
-        return ngLogRepository.save(ngLog);
+        NgLog saved = ngLogRepository.save(ngLog);
+        auditLogService.log("UPDATE", "NgLog", id,
+                Map.of("id", id, "quantity", String.valueOf(oldQty), "ngTypeId", String.valueOf(oldTypeId)),
+                Map.of("id", id, "quantity", String.valueOf(saved.getQuantity()), "ngTypeId", String.valueOf(request.getNgTypeId())));
+        return saved;
     }
 
-    public void deleteNgLog(Long id) {
-        if (!ngLogRepository.existsById(id)) {
-            throw new EntityNotFoundException("NG Log not found with id: " + id);
+    public void deleteNgLog(Long id, String username) {
+        NgLog ngLog = ngLogRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("NG Log not found with id: " + id));
+
+        if (!isAdminOrOwner(ngLog, username)) {
+            throw new AccessDeniedException("Access denied: you do not own this record");
         }
-        ngLogRepository.deleteById(id);
+
+        auditLogService.log("DELETE", "NgLog", id,
+                Map.of("id", id, "quantity", String.valueOf(ngLog.getQuantity())), null);
+        ngLogRepository.delete(ngLog);
+    }
+
+    private boolean isAdminOrOwner(NgLog ngLog, String username) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_DataAdmin"));
+        if (isAdmin) return true;
+        return ngLog.getUser() != null && username.equals(ngLog.getUser().getUsername());
     }
 }
