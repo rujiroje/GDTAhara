@@ -17,7 +17,7 @@ const mockMaterials = [
     { id: 10, materialCode: 'AD003', materialName: 'Admer สีฟ้า', materialType: 'admer', unit: 'KG' }, // ต่างกรณี
 ];
 
-const mockReports = [
+const _mockReports = [
     { id: 1, orderNumber: 'ORD-2025-001', machineName: 'Machine A', productName: 'Product X', startDate: '2025-09-19', endDate: '2025-09-20' },
     { id: 2, orderNumber: 'ORD-2025-002', machineName: 'Machine B', productName: 'Product Y', startDate: '2025-09-19', endDate: '2025-09-20' },
 ];

@@ -14,7 +14,7 @@ import ShiftLeaderNgLogPage from './ShiftLeaderNgLogPage'; // 2. Import
 const ShiftLeaderDashboard = () => {
     // State สำหรับควบคุมว่าจะแสดงหน้าจอไหน: 'main', 'labels', 'materials'
     const [view, setView] = useState('main'); 
-    const [selectedReportId, setSelectedReportId] = useState(null);
+    const [_selectedReportId, setSelectedReportId] = useState(null);
     const [dashboardData, setDashboardData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');

@@ -22,7 +22,7 @@ api.interceptors.request.use(config => {
         if (!config.params) config.params = {};
         config.params.lang = lang;
         config.headers['Accept-Language'] = lang;
-    } catch {}
+    } catch { /* intentional: no-op if localStorage/navigator unavailable */ }
     return config;
 }, error => Promise.reject(error));
 

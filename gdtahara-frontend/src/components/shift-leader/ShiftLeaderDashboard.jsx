@@ -345,7 +345,7 @@ const NgRecording = ({ onBack, activeReports }) => {
 const ShiftLeaderDashboard = () => {
     const [view, setView] = useState('main'); 
     const [activeReports, setActiveReports] = useState([]);
-    const [selectedReportId, setSelectedReportId] = useState(null);
+    const [_selectedReportId, setSelectedReportId] = useState(null);
     const [dashboardData, setDashboardData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');

@@ -392,7 +392,7 @@ const TechnicianDashboard = () => {
         setter(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleBackToReportSelection = () => {
+    const _handleBackToReportSelection = () => {
         setSelectedReport(null);
         setCurrentView('reportList');
         fetchActiveReports(); // Add this line

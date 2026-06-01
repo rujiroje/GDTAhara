@@ -67,7 +67,7 @@ const CmOperatorDashboard = () => {
         if (!materialId) {
             setLotNumbers([]);
             return;
-        };
+        }
         setLoadingLots(true);
         try {
             const response = await api.get(`/cm-operator/materials/${materialId}/lot-numbers`);
@@ -98,7 +98,7 @@ const CmOperatorDashboard = () => {
     
     const handleSelectReport = (report) => {
         setSelectedReport(report);
-        setFormData(prev => ({ ...initialFormData, productionReportId: report.id }));
+        setFormData(_prev => ({ ...initialFormData, productionReportId: report.id }));
     };
 
     const handleSubmit = async (e) => {

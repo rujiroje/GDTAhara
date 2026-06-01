@@ -17,7 +17,7 @@ api.interceptors.request.use(config => {
         if (!config.params) config.params = {};
         config.params.lang = lang;
         config.headers['Accept-Language'] = lang;
-    } catch {}
+    } catch { /* intentional: no-op if localStorage/navigator unavailable */ }
     return config;
 }, error => Promise.reject(error));
 
@@ -279,7 +279,7 @@ const OperatorDashboard = () => {
         return ( <div className="dashboard-card"> {activeTask === null && renderTaskChoice()} {activeTask === 'ng' && renderNgRecording()} {activeTask === 'packaging' && renderPackagingRecording()} <Modal isOpen={isAlertModalOpen} onClose={() => setIsAlertModalOpen(false)} title="แจ้งปัญหา"> <form onSubmit={handleAlertSubmit}> <div className="form-group"> <label className="form-label">กรุณาระบุเหตุผล</label> <textarea value={alertReason} onChange={(e) => setAlertReason(e.target.value)} className="form-input" rows="4" required /> </div> <div className="form-actions"> <button type="button" onClick={() => setIsAlertModalOpen(false)} className="cancel-button">ยกเลิก</button> <button type="submit" className="save-button">ยืนยันการแจ้ง</button> </div> </form> </Modal> </div> );
     }
 
-    const machineList = activeReports
+    const _machineList = activeReports
         .filter((r, i, arr) => r.machineId && arr.findIndex(x => x.machineId === r.machineId) === i)
         .map(r => ({ id: parseInt(r.machineId), machineName: r.machineName }))
         .filter(m => !isNaN(m.id));

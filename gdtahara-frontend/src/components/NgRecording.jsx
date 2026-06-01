@@ -36,7 +36,7 @@ const NgRecording = ({ report, onBack }) => {
         }
     };
 
-    const handleAlertSubmit = async (e) => {
+    const _handleAlertSubmit = async (e) => {
         e.preventDefault();
         try {
             await axiosInstance.post(`/operator/reports/${report.id}/alert`, { message: alertReason });

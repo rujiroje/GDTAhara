@@ -74,7 +74,7 @@ const DataForm = ({ item, type, onSave, onCancel }) => {
                     <div className="form-group"><label className="form-label">Machine Code</label><input name="machineCode" value={formData.machineCode || ''} onChange={handleChange} className="form-input" required /></div>
                     <div className="form-group"><label className="form-label">Machine Name</label><input name="machineName" value={formData.machineName || ''} onChange={handleChange} className="form-input" /></div>
                 </>;
-            case 'ng-types':
+            case 'ng-types': {
                  const ngCategories = ['Operator', 'Technician', 'QA', 'Shift Leader'];
                  return <>
                     <div className="form-group"><label className="form-label">NG Code</label><input name="ngCode" value={formData.ngCode || ''} onChange={handleChange} className="form-input" required /></div>
@@ -86,7 +86,7 @@ const DataForm = ({ item, type, onSave, onCancel }) => {
                             {ngCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                         </select>
                     </div>
-                </>;
+                </>; }
              case 'parameter-checklists':
                 return <>
                     <div className="form-grid">
@@ -96,7 +96,7 @@ const DataForm = ({ item, type, onSave, onCancel }) => {
                         <div className="form-group"><label className="form-label">Unit</label><input name="unit" value={formData.unit || ''} onChange={handleChange} className="form-input" /></div>
                     </div>
                 </>;
-            default: // users
+            default: { // users
                 const isNewUser = !item?.id;
                 return <>
                     <div className="form-group"><label className="form-label">Username</label><input name="username" value={formData.username || ''} onChange={handleChange} className="form-input" required /></div>
@@ -110,7 +110,7 @@ const DataForm = ({ item, type, onSave, onCancel }) => {
                             {roles.map(role => <option key={role} value={role}>{role}</option>)}
                         </select>
                     </div>
-                </>;
+                </>; }
         }
     };
 
