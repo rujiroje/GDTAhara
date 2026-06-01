@@ -3,6 +3,7 @@ import Chart from 'react-apexcharts';
 import axios from 'axios';
 import { t, getLang } from '../../i18n/t';
 import { useAuth } from '../../App';
+import PlanImportPanel from './PlanImportPanel';
 
 // --- API Service ---
 const API_URL = 'http://localhost:8080/api';
@@ -2745,6 +2746,8 @@ const ProductionControlDashboard = () => {
         />;
     } else if (view === 'machineSchedule') {
         return <MachineScheduleCalendar onBack={() => changeView('dashboard')} allReports={allReports} machines={machines} />;
+    } else if (view === 'import') {
+        return <PlanImportPanel onBack={() => changeView('dashboard')} />;
     }
 
     // Default view: 'dashboard'
@@ -2758,7 +2761,12 @@ const ProductionControlDashboard = () => {
                       {getLang() === 'en' ? '📅 Machine Schedule' : '📅 ตารางแผนการผลิต'}
                     </button>
                                         {canManage && (
-                      <button className="manage-reports-button" onClick={() => changeView('manage')}>{t('manageProductionOrders')}</button>
+                      <>
+                        <button className="manage-reports-button" onClick={() => changeView('import')} style={{ marginRight: '1rem', backgroundColor: '#0d6efd' }}>
+                          📥 นำเข้าแผน Excel
+                        </button>
+                        <button className="manage-reports-button" onClick={() => changeView('manage')}>{t('manageProductionOrders')}</button>
+                      </>
                     )}
                 </div>
             </div>
