@@ -3,6 +3,7 @@ import axiosInstance from '../api/axios';
 import {
     Typography, Paper, Button, Box, CircularProgress, Grid
 } from '@mui/material';
+import RunCardV2 from '../components/operator/RunCardV2';
 
 // เราจะสร้าง Component สำหรับการบันทึกข้อมูลในขั้นตอนต่อไป
 // import NgRecording from '../components/NgRecording';
@@ -66,6 +67,24 @@ const OperatorDashboard = () => {
 
     if (loading) return <CircularProgress />;
     if (error && view === 'select_report') return <Typography color="error">{error}</Typography>;
+
+    // View: Run Card v2
+    if (view === 'run_card') {
+        return (
+            <Paper sx={{ p: 2 }}>
+                <Button variant="outlined" onClick={() => setView('select_task')} sx={{ mb: 1 }}>
+                    &larr; กลับ
+                </Button>
+                <Typography variant="h6" gutterBottom>
+                    Run Card v2 — {selectedReport?.machineName}
+                </Typography>
+                <RunCardV2
+                    activeReports={activeReports}
+                    initialReport={selectedReport}
+                />
+            </Paper>
+        );
+    }
 
     // View: NG Recording Task
     if (view === 'ng_task') {
@@ -136,14 +155,26 @@ const OperatorDashboard = () => {
                         </Paper>
                     </Grid>
                     <Grid item xs={12} md={5}>
-                        <Paper 
-                            variant="outlined" 
+                        <Paper
+                            variant="outlined"
                             sx={{ p: 4, textAlign: 'center', cursor: 'pointer', '&:hover': { borderColor: 'primary.main', backgroundColor: '#f5f5f5' } }}
                             onClick={() => setView('packaging_task')}
                         >
                             <Typography variant="h6">บันทึกการบรรจุ (Packaging)</Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                                 บันทึกหมายเลขกล่องและ Lot Number
+                            </Typography>
+                        </Paper>
+                    </Grid>
+                    <Grid item xs={12} md={5}>
+                        <Paper
+                            variant="outlined"
+                            sx={{ p: 4, textAlign: 'center', cursor: 'pointer', '&:hover': { borderColor: 'success.main', backgroundColor: '#f0f9f0' } }}
+                            onClick={() => setView('run_card')}
+                        >
+                            <Typography variant="h6" color="success.main">Run Card v2</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                ยืนยันกล่อง · ดู Barcode · พิมพ์ Label
                             </Typography>
                         </Paper>
                     </Grid>

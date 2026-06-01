@@ -9,7 +9,7 @@ import { useAuth } from "../App";
 import AdminDashboard from "../components/admin/AdminDashboard";
 import ProductionControlDashboard from "../components/pc/ProductionControlDashboard";
 import ShiftLeaderDashboard from "../components/shift-leader/ShiftLeaderDashboard";
-import OperatorDashboard from "../components/operator/OperatorDashboard";
+import OperatorDashboard from "./OperatorDashboard"; // MUI version with Run Card v2
 import TechnicianDashboard from "../components/technician/TechnicianDashboard";
 import QaDashboard from "../components/qa/QaDashboard";
 import CmOperatorDashboard from "../components/cm-operator/CmOperatorDashboard";
