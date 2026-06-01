@@ -50,6 +50,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/test-api.html", "/favicon.ico", "/static/**").permitAll()
                 .requestMatchers("/health", "/").permitAll()
+                // Swagger UI — must be open so JWT filter does not block the browser UI
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 // Actuator: health for load-balancer; prometheus for Prometheus scraper
                 // Restrict /actuator/prometheus at the network/firewall level in production
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
