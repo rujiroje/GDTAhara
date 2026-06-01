@@ -94,6 +94,12 @@ public class SubLotService {
     }
 
     @Transactional(readOnly = true)
+    public SubLot getById(Long id) {
+        return subLotRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("SubLot not found: " + id));
+    }
+
+    @Transactional(readOnly = true)
     public Optional<SubLot> findBySubLotNumber(String subLotNumber) {
         return subLotRepository.findBySubLotNumber(subLotNumber);
     }

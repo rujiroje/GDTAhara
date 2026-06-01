@@ -7,7 +7,9 @@ import com.gdtahara.gdtaharabackend.dto.ProductionPlanResponse;
 import com.gdtahara.gdtaharabackend.dto.UpdatePlanRequest;
 import com.gdtahara.gdtaharabackend.exception.GlobalExceptionHandler;
 import com.gdtahara.gdtaharabackend.model.ProductionPlan;
+import com.gdtahara.gdtaharabackend.security.JwtUtil;
 import com.gdtahara.gdtaharabackend.service.ProductionPlanService;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -38,6 +40,8 @@ class ProductionPlanControllerIT {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
+    @MockitoBean JwtUtil jwtUtil;
+    @MockitoBean UserDetailsService userDetailsService;
     @MockitoBean ProductionPlanService productionPlanService;
 
     // ── 401 / 403 ────────────────────────────────────────────────────
@@ -52,9 +56,16 @@ class ProductionPlanControllerIT {
     @Test
     @WithMockUser(roles = {"Operator"})
     void createPlan_wrongRole_returns403() throws Exception {
+        // Valid body required: @Valid runs before @PreAuthorize; must pass validation to reach auth check
+        CreatePlanRequest req = new CreatePlanRequest();
+        req.setPlanDate(LocalDate.of(2026, 6, 1));
+        req.setMachineId(1L);
+        req.setProductId(1L);
+        req.setTargetQty(500);
+        req.setSource("manual");
         mockMvc.perform(post("/api/production-plans/")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isForbidden());
     }
 

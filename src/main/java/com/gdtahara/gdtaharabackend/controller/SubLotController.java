@@ -5,12 +5,14 @@ import com.gdtahara.gdtaharabackend.dto.MarkLabeledRequest;
 import com.gdtahara.gdtaharabackend.dto.SubLotResponse;
 import com.gdtahara.gdtaharabackend.model.SubLot;
 import com.gdtahara.gdtaharabackend.service.SubLotService;
+import com.gdtahara.gdtaharabackend.util.BarcodeGenerator;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -28,9 +30,11 @@ public class SubLotController {
     private static final Logger logger = LoggerFactory.getLogger(SubLotController.class);
 
     private final SubLotService subLotService;
+    private final BarcodeGenerator barcodeGenerator;
 
-    public SubLotController(SubLotService subLotService) {
+    public SubLotController(SubLotService subLotService, BarcodeGenerator barcodeGenerator) {
         this.subLotService = subLotService;
+        this.barcodeGenerator = barcodeGenerator;
     }
 
     @PostMapping("/confirm-box")
@@ -59,6 +63,21 @@ public class SubLotController {
         SubLot subLot = subLotService.findBySubLotNumber(subLotNumber)
                 .orElseThrow(() -> new EntityNotFoundException("SubLot not found: " + subLotNumber));
         return ResponseEntity.ok(SubLotResponse.from(subLot));
+    }
+
+    @GetMapping(value = "/{id}/barcode", produces = MediaType.IMAGE_PNG_VALUE)
+    @PreAuthorize("hasAnyRole('Operator','Shift Leader','Production Control','DataAdmin','QA','Management')")
+    public ResponseEntity<byte[]> getBarcode(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "code128") String format,
+            @RequestParam(defaultValue = "400") int w,
+            @RequestParam(defaultValue = "120") int h) {
+        SubLot subLot = subLotService.getById(id);
+        String payload = subLot.getSubLotNumber();
+        byte[] bytes = "qr".equalsIgnoreCase(format)
+                ? barcodeGenerator.generateQrPng(payload, w)
+                : barcodeGenerator.generateCode128Png(payload, w, h);
+        return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(bytes);
     }
 
     @PutMapping("/{id}/labeled")

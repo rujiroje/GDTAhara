@@ -7,7 +7,10 @@ import com.gdtahara.gdtaharabackend.exception.GlobalExceptionHandler;
 import com.gdtahara.gdtaharabackend.model.ProductionReport;
 import com.gdtahara.gdtaharabackend.model.SubLot;
 import com.gdtahara.gdtaharabackend.model.User;
+import com.gdtahara.gdtaharabackend.security.JwtUtil;
 import com.gdtahara.gdtaharabackend.service.SubLotService;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import com.gdtahara.gdtaharabackend.util.BarcodeGenerator;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,7 +41,10 @@ class SubLotControllerIT {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
+    @MockitoBean JwtUtil jwtUtil;
+    @MockitoBean UserDetailsService userDetailsService;
     @MockitoBean SubLotService subLotService;
+    @MockitoBean BarcodeGenerator barcodeGenerator;
 
     private SubLot stubSubLot(Long id, String number) {
         ProductionReport report = new ProductionReport();
@@ -153,5 +159,42 @@ class SubLotControllerIT {
         when(subLotService.findBySubLotNumber("UNKNOWN")).thenReturn(Optional.empty());
         mockMvc.perform(get("/api/sub-lots/by-number/UNKNOWN"))
                 .andExpect(status().isNotFound());
+    }
+
+    // ── GET /{id}/barcode ─────────────────────────────────────────────
+
+    @Test
+    @WithMockUser(roles = {"Operator"})
+    void barcode_returnsPng() throws Exception {
+        byte[] pngBytes = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4};
+        when(subLotService.getById(1L))
+                .thenReturn(stubSubLot(1L, "PL-RBL101-20251001-D-B0001"));
+        when(barcodeGenerator.generateCode128Png(eq("PL-RBL101-20251001-D-B0001"), anyInt(), anyInt()))
+                .thenReturn(pngBytes);
+
+        mockMvc.perform(get("/api/sub-lots/1/barcode"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_PNG))
+                .andExpect(result ->
+                        org.assertj.core.api.Assertions
+                                .assertThat(result.getResponse().getContentAsByteArray().length)
+                                .isGreaterThan(0));
+    }
+
+    @Test
+    @WithMockUser(roles = {"Operator"})
+    void barcode_notFound_returns404() throws Exception {
+        when(subLotService.getById(99L))
+                .thenThrow(new EntityNotFoundException("SubLot not found: 99"));
+
+        mockMvc.perform(get("/api/sub-lots/99/barcode"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithAnonymousUser
+    void barcode_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/sub-lots/1/barcode"))
+                .andExpect(status().isUnauthorized());
     }
 }

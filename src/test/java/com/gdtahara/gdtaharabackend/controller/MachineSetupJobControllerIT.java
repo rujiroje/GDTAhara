@@ -5,7 +5,9 @@ import com.gdtahara.gdtaharabackend.config.TestMvcSecurityConfig;
 import com.gdtahara.gdtaharabackend.dto.SkipSetupRequest;
 import com.gdtahara.gdtaharabackend.exception.GlobalExceptionHandler;
 import com.gdtahara.gdtaharabackend.model.MachineSetupJob;
+import com.gdtahara.gdtaharabackend.security.JwtUtil;
 import com.gdtahara.gdtaharabackend.service.MachineSetupJobService;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,8 @@ class MachineSetupJobControllerIT {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
+    @MockitoBean JwtUtil jwtUtil;
+    @MockitoBean UserDetailsService userDetailsService;
     @MockitoBean MachineSetupJobService machineSetupJobService;
 
     private MachineSetupJob stubJob(Long id, String status) {
