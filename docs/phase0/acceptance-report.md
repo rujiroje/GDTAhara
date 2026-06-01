@@ -191,3 +191,20 @@ Monitor via Grafana dashboard for memory leaks, connection pool exhaustion, and 
 | 🟡 MED | Run k6 benchmark — verify ≥ 1 000 req/s | Dev/Ops |
 | 🟡 MED | Run 48-hour stability test | Ops |
 | 🟢 LOW | Reduce JWT expiry from 24h to 4h (coordinate with FE team) | Dev |
+
+---
+
+## Cross-link: Phase 1 W10 Completion (2026-06-01)
+
+Phase 1 W10 migrations V4-V9 successfully applied to GDTahara dev DB.
+See docs/phase1/w10-deployment-log.md for full timeline.
+
+IMPORTANT CORRECTIONS to Phase 0 status (discovered during W10):
+- AuditLog feature: Was non-functional from Phase 0 completion until
+  2026-05-29 (audit_logs table was missing). All write operations
+  before that date have NO audit trail. Tests passed only because they
+  used Mockito (did not hit DB).
+- Performance indexes (V3): Were not actually present until 2026-05-29.
+  Query performance was sub-optimal during Phase 0 use.
+
+Both issues resolved as part of Phase 1 W10.1 (Flyway installation).
