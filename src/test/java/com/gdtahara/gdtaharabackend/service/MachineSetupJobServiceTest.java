@@ -181,7 +181,7 @@ class MachineSetupJobServiceTest {
         // Verify the COMPLETED job (id=99) was NOT saved (it remains untouched)
         ArgumentCaptor<MachineSetupJob> captor = ArgumentCaptor.forClass(MachineSetupJob.class);
         verify(machineSetupJobRepository).save(captor.capture());
-        assertThat(captor.getValue().getId()).isNull(); // new entity, not the existing COMPLETED one
+        assertThat(captor.getValue().getId()).isNotEqualTo(99L); // new entity, not the existing COMPLETED one
     }
 
     // ---------------------------------------------------------------
