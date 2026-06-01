@@ -8,6 +8,7 @@ import com.gdtahara.gdtaharabackend.dto.UpdatePlanRequest;
 import com.gdtahara.gdtaharabackend.exception.GlobalExceptionHandler;
 import com.gdtahara.gdtaharabackend.model.ProductionPlan;
 import com.gdtahara.gdtaharabackend.security.JwtUtil;
+import com.gdtahara.gdtaharabackend.service.ProductionPlanImportService;
 import com.gdtahara.gdtaharabackend.service.ProductionPlanService;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ class ProductionPlanControllerIT {
     @MockitoBean JwtUtil jwtUtil;
     @MockitoBean UserDetailsService userDetailsService;
     @MockitoBean ProductionPlanService productionPlanService;
+    @MockitoBean ProductionPlanImportService productionPlanImportService;
 
     // ── 401 / 403 ────────────────────────────────────────────────────
 

@@ -1,10 +1,12 @@
 package com.gdtahara.gdtaharabackend.controller;
 
 import com.gdtahara.gdtaharabackend.dto.CreatePlanRequest;
+import com.gdtahara.gdtaharabackend.dto.ImportResult;
 import com.gdtahara.gdtaharabackend.dto.ProductionPlanResponse;
 import com.gdtahara.gdtaharabackend.dto.ShiftSplitResponse;
 import com.gdtahara.gdtaharabackend.dto.UpdatePlanRequest;
 import com.gdtahara.gdtaharabackend.model.ProductionPlan;
+import com.gdtahara.gdtaharabackend.service.ProductionPlanImportService;
 import com.gdtahara.gdtaharabackend.service.ProductionPlanService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
@@ -13,9 +15,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
 import java.time.LocalDate;
@@ -29,10 +33,23 @@ public class ProductionPlanController {
 
     private static final Logger logger = LoggerFactory.getLogger(ProductionPlanController.class);
 
-    private final ProductionPlanService productionPlanService;
+    private final ProductionPlanService       productionPlanService;
+    private final ProductionPlanImportService importService;
 
-    public ProductionPlanController(ProductionPlanService productionPlanService) {
+    public ProductionPlanController(ProductionPlanService productionPlanService,
+                                    ProductionPlanImportService importService) {
         this.productionPlanService = productionPlanService;
+        this.importService         = importService;
+    }
+
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('Production Control','DataAdmin')")
+    public ResponseEntity<ImportResult> importPlans(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) String factoryCode,
+            Principal principal) {
+        logger.info("Import plan file: {} by {}", file.getOriginalFilename(), principal.getName());
+        return ResponseEntity.ok(importService.importPlanWorkbook(file, factoryCode, principal.getName()));
     }
 
     @PostMapping("/")

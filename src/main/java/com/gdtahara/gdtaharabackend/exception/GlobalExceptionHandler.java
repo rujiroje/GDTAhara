@@ -1,5 +1,6 @@
 package com.gdtahara.gdtaharabackend.exception;
 
+import com.gdtahara.gdtaharabackend.exception.PlanParseException;
 import com.gdtahara.gdtaharabackend.print.PrintException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -54,6 +55,12 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(body(HttpStatus.BAD_REQUEST, message, req));
+    }
+
+    @ExceptionHandler(PlanParseException.class)
+    public ResponseEntity<ErrorResponse> handlePlanParse(PlanParseException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(body(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(), req));
     }
 
     @ExceptionHandler(PrintException.class)

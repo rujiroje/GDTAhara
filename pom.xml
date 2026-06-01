@@ -142,6 +142,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Apache POI — Excel import — Phase 1 W16 -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.3.0</version>
+        </dependency>
+
         <!-- ZXing barcode library — Phase 1 W13 -->
         <dependency>
             <groupId>com.google.zxing</groupId>

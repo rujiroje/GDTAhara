@@ -118,6 +118,14 @@ public interface ProductionReportRepository extends JpaRepository<ProductionRepo
     // Status count
     long countByStatus(String status);
 
+    /** True when any non-terminal report covers (machine, date) — used by Excel import policy. */
+    @Query("SELECT CASE WHEN COUNT(pr) > 0 THEN true ELSE false END " +
+           "FROM ProductionReport pr " +
+           "WHERE pr.machine.id = :machineId " +
+           "AND pr.startDate <= :date AND pr.endDate >= :date")
+    boolean existsForMachineOnDate(@Param("machineId") Long machineId,
+                                   @Param("date") LocalDate date);
+
     // Find by order number
     @Query("SELECT pr FROM ProductionReport pr WHERE pr.orderNumber = :orderNumber")
     Optional<ProductionReport> findByOrderNumber(@Param("orderNumber") String orderNumber);
