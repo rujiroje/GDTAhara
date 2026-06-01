@@ -22,6 +22,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class ProductionPlanService {
@@ -151,6 +152,11 @@ public class ProductionPlanService {
         LocalDate first = LocalDate.of(year, month, 1);
         LocalDate last = first.withDayOfMonth(first.lengthOfMonth());
         return productionPlanRepository.findByPlanDateBetween(first, last);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<ProductionPlan> findById(Long id) {
+        return productionPlanRepository.findById(id);
     }
 
     public ShiftSplit splitTargetByShift(ProductionPlan plan) {
