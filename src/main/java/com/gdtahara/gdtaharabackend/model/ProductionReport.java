@@ -53,6 +53,22 @@ public class ProductionReport {
     @Column(name = "finalized_at")
     private LocalDateTime finalizedAt;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "production_plan_id", nullable = true)
+    private ProductionPlan productionPlan;
+
+    @Column(name = "parent_lot_number", nullable = true, unique = true, length = 100)
+    private String parentLotNumber;
+
+    @Column(name = "shift", nullable = true, length = 20)
+    private String shift;
+
+    @Column(name = "actual_qty", nullable = true)
+    private Integer actualQty;
+
+    @Column(name = "diff_qty", insertable = false, updatable = false)
+    private Integer diffQty;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
