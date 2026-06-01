@@ -65,6 +65,12 @@ export const getBarcodeBlob = async (id) => {
   return URL.createObjectURL(response.data);
 };
 
+/** Look up a single sub-lot by its printed sub-lot number (barcode). */
+export const getSubLotByNumber = async (subLotNumber) => {
+  const response = await axiosInstance.get(`/sub-lots/by-number/${encodeURIComponent(subLotNumber)}`);
+  return response.data;
+};
+
 // ── Excel Plan Import ─────────────────────────────────────────────
 
 /**

@@ -4,6 +4,7 @@ import {
     Typography, Paper, Button, Box, CircularProgress, Grid
 } from '@mui/material';
 import RunCardV2 from '../components/operator/RunCardV2';
+import TrackOutPanel from '../components/operator/TrackOutPanel';
 
 // เราจะสร้าง Component สำหรับการบันทึกข้อมูลในขั้นตอนต่อไป
 // import NgRecording from '../components/NgRecording';
@@ -67,6 +68,11 @@ const OperatorDashboard = () => {
 
     if (loading) return <CircularProgress />;
     if (error && view === 'select_report') return <Typography color="error">{error}</Typography>;
+
+    // View: Track-Out (barcode scan)
+    if (view === 'track_out') {
+        return <TrackOutPanel onBack={() => setView('select_report')} />;
+    }
 
     // View: Run Card v2
     if (view === 'run_card') {
@@ -178,6 +184,18 @@ const OperatorDashboard = () => {
                             </Typography>
                         </Paper>
                     </Grid>
+                    <Grid item xs={12} md={5}>
+                        <Paper
+                            variant="outlined"
+                            sx={{ p: 4, textAlign: 'center', cursor: 'pointer', '&:hover': { borderColor: 'warning.main', backgroundColor: '#fffbf0' } }}
+                            onClick={() => setView('track_out')}
+                        >
+                            <Typography variant="h6" color="warning.dark">Track-Out</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                สแกน Barcode · ตรวจสอบกล่อง · พิมพ์ / Mark Labeled
+                            </Typography>
+                        </Paper>
+                    </Grid>
                 </Grid>
             </Paper>
         );
@@ -186,7 +204,12 @@ const OperatorDashboard = () => {
     // View เริ่มต้น: เลือกใบสั่งผลิต
     return (
         <Paper sx={{ p: 2 }}>
-            <Typography variant="h5" gutterBottom>เลือกใบสั่งผลิตเพื่อเริ่มทำงาน</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h5">เลือกใบสั่งผลิตเพื่อเริ่มทำงาน</Typography>
+                <Button variant="outlined" color="warning" onClick={() => setView('track_out')}>
+                    📦 Track-Out / สแกน Barcode
+                </Button>
+            </Box>
             
             {/* Debug Information Panel */}
             <Paper variant="outlined" sx={{ p: 2, mb: 3, backgroundColor: '#f5f5f5' }}>
