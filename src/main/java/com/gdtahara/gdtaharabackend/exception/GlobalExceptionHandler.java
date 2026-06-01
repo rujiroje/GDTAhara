@@ -1,5 +1,6 @@
 package com.gdtahara.gdtaharabackend.exception;
 
+import com.gdtahara.gdtaharabackend.print.PrintException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -53,6 +54,13 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(body(HttpStatus.BAD_REQUEST, message, req));
+    }
+
+    @ExceptionHandler(PrintException.class)
+    public ResponseEntity<ErrorResponse> handlePrintException(PrintException ex, HttpServletRequest req) {
+        logger.error("Print failed [{}]: {}", req.getRequestURI(), ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(body(HttpStatus.BAD_GATEWAY, ex.getMessage(), req));
     }
 
     @ExceptionHandler(Exception.class)
