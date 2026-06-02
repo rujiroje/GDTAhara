@@ -34,17 +34,20 @@ public class ProductionPlanService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
+    private final MachineSetupJobService setupJobService;
 
     public ProductionPlanService(ProductionPlanRepository productionPlanRepository,
                                  MachineRepository machineRepository,
                                  ProductRepository productRepository,
                                  UserRepository userRepository,
-                                 AuditLogService auditLogService) {
+                                 AuditLogService auditLogService,
+                                 MachineSetupJobService setupJobService) {
         this.productionPlanRepository = productionPlanRepository;
         this.machineRepository = machineRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.auditLogService = auditLogService;
+        this.setupJobService = setupJobService;
     }
 
     public record ShiftSplit(int dayTarget, int nightTarget) {}
@@ -92,6 +95,10 @@ public class ProductionPlanService {
                         "productId", String.valueOf(productId),
                         "createdBy", username));
 
+        // Trigger setup-job scan for the affected day window (±1 day) so that any
+        // product change between adjacent plans is detected immediately on manual entry.
+        triggerSetupJobScan(planDate, saved.getId(), "createPlan");
+
         logger.info("Created production plan id={}", saved.getId());
         return saved;
     }
@@ -132,6 +139,12 @@ public class ProductionPlanService {
                 Map.of("targetQty", String.valueOf(saved.getTargetQty()),
                         "status", saved.getStatus() != null ? saved.getStatus() : "",
                         "updatedBy", username));
+
+        // Re-scan setup jobs in case target-qty or product-context changed.
+        LocalDate pd = saved.getPlanDate();
+        if (pd != null) {
+            triggerSetupJobScan(pd, planId, "updatePlan");
+        }
 
         logger.info("Updated plan {}", planId);
         return saved;
@@ -174,5 +187,16 @@ public class ProductionPlanService {
                 .intValue();
         int nightTarget = plan.getTargetQty() - dayTarget;
         return new ShiftSplit(dayTarget, nightTarget);
+    }
+
+    // ── private helpers ───────────────────────────────────────────────────────
+
+    private void triggerSetupJobScan(LocalDate planDate, Long contextId, String caller) {
+        try {
+            setupJobService.scanAndCreateSetupJobs(
+                    planDate.minusDays(1), planDate.plusDays(1));
+        } catch (Exception e) {
+            logger.warn("Setup job scan failed after {} (id={}): {}", caller, contextId, e.getMessage());
+        }
     }
 }

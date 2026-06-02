@@ -37,17 +37,20 @@ class ProductionPlanServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private UserRepository userRepository;
     @Mock private AuditLogService auditLogService;
+    @Mock private MachineSetupJobService setupJobService;
 
     private ProductionPlanService service;
 
     private Machine stubMachine;
     private Product stubProduct;
-    private User stubUser;
+    private User    stubUser;
 
     @BeforeEach
     void setUp() {
-        service = new ProductionPlanService(productionPlanRepository, machineRepository,
-                productRepository, userRepository, auditLogService);
+        service = new ProductionPlanService(
+                productionPlanRepository, machineRepository,
+                productRepository, userRepository,
+                auditLogService, setupJobService);
 
         stubMachine = new Machine();
         stubMachine.setId(1L);
@@ -64,6 +67,8 @@ class ProductionPlanServiceTest {
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
     }
+
+    // ── createPlan ────────────────────────────────────────────────────────────
 
     @Test
     void createPlan_savesAndAudits() {
@@ -104,7 +109,55 @@ class ProductionPlanServiceTest {
                 .hasMessageContaining("already exists");
 
         verify(productionPlanRepository, never()).save(any());
+        verify(setupJobService, never()).scanAndCreateSetupJobs(any(), any());
     }
+
+    @Test
+    void createPlan_triggersSetupJobScan() {
+        when(machineRepository.findById(1L)).thenReturn(Optional.of(stubMachine));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(stubProduct));
+        when(userRepository.findByUsername("planner01")).thenReturn(Optional.of(stubUser));
+        when(productionPlanRepository.findByMachineIdAndPlanDateAndProductId(any(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        ProductionPlan saved = new ProductionPlan();
+        saved.setId(7L);
+        when(productionPlanRepository.save(any())).thenReturn(saved);
+
+        LocalDate planDate = LocalDate.of(2026, 6, 3);
+        service.createPlan(planDate, 1L, 1L, 1200,
+                null, null, null, "manual", null, "planner01");
+
+        // Scan must cover the adjacent day window so product-change detection works
+        verify(setupJobService).scanAndCreateSetupJobs(
+                planDate.minusDays(1), planDate.plusDays(1));
+    }
+
+    @Test
+    void createPlan_setupJobScanFailure_doesNotPropagateException() {
+        when(machineRepository.findById(1L)).thenReturn(Optional.of(stubMachine));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(stubProduct));
+        when(userRepository.findByUsername("planner01")).thenReturn(Optional.of(stubUser));
+        when(productionPlanRepository.findByMachineIdAndPlanDateAndProductId(any(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        ProductionPlan saved = new ProductionPlan();
+        saved.setId(8L);
+        when(productionPlanRepository.save(any())).thenReturn(saved);
+
+        // Setup job scan throws — createPlan must still return successfully
+        doThrow(new RuntimeException("scan error"))
+                .when(setupJobService).scanAndCreateSetupJobs(any(), any());
+
+        ProductionPlan result = service.createPlan(
+                LocalDate.of(2026, 6, 4), 1L, 1L, 1200,
+                null, null, null, "manual", null, "planner01");
+
+        assertThat(result.getId()).isEqualTo(8L);
+        verify(productionPlanRepository).save(any());   // plan was still saved
+    }
+
+    // ── updatePlan ────────────────────────────────────────────────────────────
 
     @Test
     void updatePlan_ownerCanUpdate() {
@@ -118,6 +171,7 @@ class ProductionPlanServiceTest {
         plan.setTargetQty(100);
         plan.setManpowerDRatio(new BigDecimal("0.50"));
         plan.setManpowerNRatio(new BigDecimal("0.50"));
+        // planDate intentionally left null → scan is skipped (null-guard in service)
 
         when(productionPlanRepository.findById(1L)).thenReturn(Optional.of(plan));
         when(userRepository.findByUsername("planner01")).thenReturn(Optional.of(stubUser));
@@ -127,6 +181,34 @@ class ProductionPlanServiceTest {
 
         verify(productionPlanRepository).save(any());
         verify(auditLogService).log(eq("UPDATE"), eq("ProductionPlan"), eq(1L), any(), any());
+        // planDate is null → scan is not called
+        verify(setupJobService, never()).scanAndCreateSetupJobs(any(), any());
+    }
+
+    @Test
+    void updatePlan_triggersSetupJobScan() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("planner01", null, "ROLE_Production Control",
+                        "ROLE_Operator"));
+
+        LocalDate planDate = LocalDate.of(2026, 6, 10);
+        ProductionPlan plan = new ProductionPlan();
+        plan.setId(2L);
+        plan.setPlanDate(planDate);
+        plan.setCreatedBy(stubUser);
+        plan.setStatus("draft");
+        plan.setTargetQty(500);
+        plan.setManpowerDRatio(new BigDecimal("0.50"));
+        plan.setManpowerNRatio(new BigDecimal("0.50"));
+
+        when(productionPlanRepository.findById(2L)).thenReturn(Optional.of(plan));
+        when(productionPlanRepository.save(any())).thenReturn(plan);
+
+        service.updatePlan(2L, 600, null, null, "active", "planner01");
+
+        verify(productionPlanRepository).save(any());
+        verify(setupJobService).scanAndCreateSetupJobs(
+                planDate.minusDays(1), planDate.plusDays(1));
     }
 
     @Test
@@ -160,7 +242,10 @@ class ProductionPlanServiceTest {
 
         verify(productionPlanRepository, never()).save(any());
         verify(auditLogService, never()).log(any(), any(), any(), any(), any());
+        verify(setupJobService, never()).scanAndCreateSetupJobs(any(), any());
     }
+
+    // ── splitTargetByShift ────────────────────────────────────────────────────
 
     @Test
     void splitTargetByShift_calculates50_50_correctly() {
