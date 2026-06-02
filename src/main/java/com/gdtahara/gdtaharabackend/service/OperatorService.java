@@ -85,7 +85,9 @@ public class OperatorService {
                 report.getEndDate(),
                 report.getMachine() != null ? report.getMachine().getMachineName() : "Unknown Machine",
                 report.getProduct() != null ? report.getProduct().getProductName() : "Unknown Product",
-                report.getMachine() != null ? String.valueOf(report.getMachine().getId()) : null
+                report.getMachine() != null ? String.valueOf(report.getMachine().getId()) : null,
+                report.getParentLotNumber(),
+                report.getShift()
         );
     }
 
@@ -137,16 +139,31 @@ public class OperatorService {
         return saved;
     }
 
+    @Transactional(readOnly = true)
+    public long countPackagingLogs(Long reportId) {
+        return packagingLogRepository.countByReportId(reportId);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> getPackagingLabelData(Long reportId) {
+        ProductionReport report = productionReportRepository.findById(reportId)
+                .orElseThrow(() -> new EntityNotFoundException("Production Report not found"));
+        var product = report.getProduct();
+        var machine = report.getMachine();
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("productName",     product != null ? product.getProductName()  : "");
+        data.put("productCode",     product != null ? product.getProductCode()  : "");
+        data.put("customerCode",    product != null && product.getCustomerCode() != null ? product.getCustomerCode() : "");
+        data.put("labelVariant",    product != null && product.getLabelVariant() != null ? product.getLabelVariant() : "");
+        data.put("qtyPerBox",       product != null && product.getQtyPerBox()   != null ? product.getQtyPerBox()  : "");
+        data.put("parentLotNumber", report.getParentLotNumber() != null ? report.getParentLotNumber() : "");
+        data.put("machineName",     machine != null ? machine.getMachineName() : "");
+        return data;
+    }
+
     public PackagingLog recordPackaging(Long reportId, PackagingLogRequestDto request, String username) {
         ProductionReport report = productionReportRepository.findById(reportId).orElseThrow(() -> new EntityNotFoundException("Production Report not found"));
         User operator = userRepository.findByUsername(username).orElseThrow(() -> new EntityNotFoundException("User not found: " + username));
-
-        LabelStock stock = labelStockRepository.findByProductId(report.getProduct().getId()).orElseThrow(() -> new EntityNotFoundException("ไม่พบสต็อกป้ายสำหรับผลิตภัณฑ์นี้"));
-        if (stock.getCurrentStock() <= 0) {
-            throw new IllegalStateException("ป้ายหมดสต็อก ไม่สามารถบันทึกได้");
-        }
-        stock.setCurrentStock(stock.getCurrentStock() - 1);
-        labelStockRepository.save(stock);
 
         PackagingLog packagingLog = new PackagingLog();
         packagingLog.setReport(report);

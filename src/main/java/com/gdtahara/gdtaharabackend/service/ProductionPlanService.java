@@ -1,5 +1,6 @@
 package com.gdtahara.gdtaharabackend.service;
 
+import com.gdtahara.gdtaharabackend.dto.ProductionPlanResponse;
 import com.gdtahara.gdtaharabackend.model.Machine;
 import com.gdtahara.gdtaharabackend.model.Product;
 import com.gdtahara.gdtaharabackend.model.ProductionPlan;
@@ -153,6 +154,13 @@ public class ProductionPlanService {
     @Transactional(readOnly = true)
     public List<ProductionPlan> getPlansForDate(LocalDate planDate) {
         return productionPlanRepository.findByPlanDateBetween(planDate, planDate);
+    }
+
+    // Maps inside the transaction so LAZY associations are resolved before session closes
+    @Transactional(readOnly = true)
+    public List<ProductionPlanResponse> getPlansForDateAsDto(LocalDate planDate) {
+        return productionPlanRepository.findByPlanDateBetween(planDate, planDate)
+                .stream().map(ProductionPlanResponse::from).toList();
     }
 
     @Transactional(readOnly = true)

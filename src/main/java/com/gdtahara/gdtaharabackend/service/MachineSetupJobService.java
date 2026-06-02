@@ -243,7 +243,21 @@ public class MachineSetupJobService {
 
     @Transactional(readOnly = true)
     public List<MachineSetupJob> getPendingJobsForTechnician(Long userId) {
-        return machineSetupJobRepository.findByAssignedToIdAndStatusIn(userId, List.of("PENDING", "IN_PROGRESS"));
+        // The two queries are mutually exclusive (NULL vs specific userId), so no dedup needed.
+        // Auto-created jobs start unassigned so any technician can see and claim them.
+        List<String> activeStatuses = List.of("PENDING", "IN_PROGRESS");
+        List<MachineSetupJob> result = new ArrayList<>();
+        result.addAll(machineSetupJobRepository.findByAssignedToIsNullAndStatusInOrderByPlanDateAsc(activeStatuses));
+        result.addAll(machineSetupJobRepository.findByAssignedToIdAndStatusIn(userId, activeStatuses));
+        result.sort(Comparator.comparing(MachineSetupJob::getPlanDate,
+                Comparator.nullsLast(Comparator.naturalOrder())));
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<MachineSetupJob> getAllPendingJobs() {
+        return machineSetupJobRepository.findByStatusInOrderByPlanDateAsc(
+                List.of("PENDING", "IN_PROGRESS"));
     }
 
     @Transactional(readOnly = true)

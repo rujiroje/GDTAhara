@@ -40,4 +40,23 @@ public class LabelPrintController {
                 "subLotId", id,
                 "target", req.getPrinterTarget()));
     }
+
+    // ── Packaging box label ───────────────────────────────────────────────────
+
+    @GetMapping(value = "/packaging/{id}/zpl", produces = MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> getPackagingZpl(@PathVariable Long id) {
+        return ResponseEntity.ok(labelPrintService.previewPackagingLabel(id));
+    }
+
+    @PostMapping("/packaging/{id}/print")
+    public ResponseEntity<Map<String, Object>> printPackaging(
+            @PathVariable Long id,
+            @Valid @RequestBody PrintLabelRequest req,
+            Principal principal) {
+        labelPrintService.printPackagingLabel(id, req.getPrinterTarget(), principal.getName());
+        return ResponseEntity.ok(Map.of(
+                "status", "printed",
+                "packagingLogId", id,
+                "target", req.getPrinterTarget()));
+    }
 }

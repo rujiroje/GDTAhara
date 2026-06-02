@@ -114,4 +114,15 @@ public class OperatorController {
         int nextBoxNo = operatorService.getNextBoxNumber(reportId, lotNumber);
         return ResponseEntity.ok(nextBoxNo);
     }
+
+    @GetMapping("/reports/{reportId}/label-data")
+    public ResponseEntity<Map<String, Object>> getLabelData(@PathVariable Long reportId) {
+        return ResponseEntity.ok(operatorService.getPackagingLabelData(reportId));
+    }
+
+    @GetMapping("/reports/{reportId}/packaging-count")
+    public ResponseEntity<Map<String, Object>> getPackagingCount(@PathVariable Long reportId) {
+        long count = operatorService.countPackagingLogs(reportId);
+        return ResponseEntity.ok(Map.of("count", count));
+    }
 }

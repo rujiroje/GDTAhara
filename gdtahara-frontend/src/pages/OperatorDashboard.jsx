@@ -3,12 +3,28 @@ import axiosInstance from '../api/axios';
 import {
     Typography, Paper, Button, Box, CircularProgress, Grid
 } from '@mui/material';
+
+const LINE_COLORS = [
+    { bg: '#FFCDD2', fg: '#C62828' },
+    { bg: '#FFCCBC', fg: '#BF360C' },
+    { bg: '#FFF9C4', fg: '#F57F17' },
+    { bg: '#DCEDC8', fg: '#33691E' },
+    { bg: '#C8E6C9', fg: '#1B5E20' },
+    { bg: '#B2EBF2', fg: '#006064' },
+    { bg: '#B3E5FC', fg: '#01579B' },
+    { bg: '#BBDEFB', fg: '#0D47A1' },
+    { bg: '#C5CAE9', fg: '#1A237E' },
+    { bg: '#D1C4E9', fg: '#4527A0' },
+    { bg: '#E1BEE7', fg: '#6A1B9A' },
+    { bg: '#F8BBD0', fg: '#880E4F' },
+    { bg: '#FCE4EC', fg: '#AD1457' },
+    { bg: '#E0F2F1', fg: '#00695C' },
+    { bg: '#F3E5F5', fg: '#6A1B9A' },
+];
 import RunCardV2 from '../components/operator/RunCardV2';
 import TrackOutPanel from '../components/operator/TrackOutPanel';
-
-// เราจะสร้าง Component สำหรับการบันทึกข้อมูลในขั้นตอนต่อไป
-// import NgRecording from '../components/NgRecording';
-// import PackagingRecording from '../components/PackagingRecording';
+import NgRecording from '../components/NgRecording';
+import PackagingRecording from '../components/PackagingRecording';
 
 const OperatorDashboard = () => {
     const [view, setView] = useState('select_report'); // 'select_report', 'select_task', 'ng_task', 'packaging_task'
@@ -96,20 +112,15 @@ const OperatorDashboard = () => {
     if (view === 'ng_task') {
         return (
             <Paper sx={{ p: 2 }}>
-                <Button variant="outlined" onClick={() => setView('select_task')}>
-                    &larr; กลับ
-                </Button>
-                <Box sx={{ textAlign: 'center', my: 3 }}>
+                <Box sx={{ textAlign: 'center', mb: 2 }}>
                     <Typography variant="h5">บันทึกของเสีย (NG)</Typography>
                     <Typography color="text.secondary">เครื่อง: {selectedReport?.machineName}</Typography>
                     <Typography color="text.secondary">ผลิตภัณฑ์: {selectedReport?.productName}</Typography>
                 </Box>
-                <Typography variant="h6" sx={{ mt: 2 }}>
-                    🚧 NG Recording Interface - Coming Soon
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    ระบบบันทึกของเสียจะพัฒนาในขั้นตอนต่อไป
-                </Typography>
+                <NgRecording
+                    report={selectedReport}
+                    onBack={() => setView('select_task')}
+                />
             </Paper>
         );
     }
@@ -118,132 +129,157 @@ const OperatorDashboard = () => {
     if (view === 'packaging_task') {
         return (
             <Paper sx={{ p: 2 }}>
-                <Button variant="outlined" onClick={() => setView('select_task')}>
-                    &larr; กลับ
-                </Button>
-                <Box sx={{ textAlign: 'center', my: 3 }}>
+                <Box sx={{ textAlign: 'center', mb: 2 }}>
                     <Typography variant="h5">บันทึกการบรรจุ (Packaging)</Typography>
                     <Typography color="text.secondary">เครื่อง: {selectedReport?.machineName}</Typography>
                     <Typography color="text.secondary">ผลิตภัณฑ์: {selectedReport?.productName}</Typography>
                 </Box>
-                <Typography variant="h6" sx={{ mt: 2 }}>
-                    📦 Packaging Recording Interface - Coming Soon
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    ระบบบันทึกการบรรจุจะพัฒนาในขั้นตอนต่อไป
-                </Typography>
+                <PackagingRecording
+                    report={selectedReport}
+                    onBack={() => setView('select_task')}
+                />
             </Paper>
         );
     }
 
     // View: เลือกงาน (บันทึก NG หรือ Packaging)
     if (view === 'select_task') {
+        const TASKS = [
+            { view: 'ng_task',       label: 'บันทึกของเสีย',    sub: 'NG Recording',     color: LINE_COLORS[0] },
+            { view: 'packaging_task',label: 'บันทึกการบรรจุ',   sub: 'Packaging',        color: LINE_COLORS[2] },
+            { view: 'run_card',      label: 'Run Card v2',      sub: 'ยืนยันกล่อง · Label', color: LINE_COLORS[6] },
+            { view: 'track_out',     label: 'Track-Out',        sub: 'สแกน Barcode',     color: LINE_COLORS[9] },
+        ];
         return (
-            <Paper sx={{ p: 2 }}>
-                <Button variant="outlined" onClick={() => setView('select_report')}>
-                    &larr; กลับไปเลือกใบสั่งผลิต
-                </Button>
-                <Box sx={{ textAlign: 'center', my: 3 }}>
-                    <Typography variant="h5">เครื่อง: {selectedReport.machineName}</Typography>
-                    <Typography color="text.secondary">ผลิตภัณฑ์: {selectedReport.productName}</Typography>
+            <Box sx={{ p: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                    <Button variant="outlined" size="small" onClick={() => setView('select_report')}>
+                        &larr; กลับ
+                    </Button>
+                    <Box>
+                        <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
+                            {selectedReport.machineName}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            {selectedReport.productName}
+                        </Typography>
+                    </Box>
                 </Box>
-                <Grid container spacing={3} justifyContent="center">
-                    <Grid item xs={12} md={5}>
-                        <Paper 
-                            variant="outlined" 
-                            sx={{ p: 4, textAlign: 'center', cursor: 'pointer', '&:hover': { borderColor: 'primary.main', backgroundColor: '#f5f5f5' } }}
-                            onClick={() => setView('ng_task')}
-                        >
-                            <Typography variant="h6">บันทึกของเสีย (NG)</Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                บันทึกจำนวนและประเภทของเสียที่เกิดขึ้น
-                            </Typography>
-                        </Paper>
-                    </Grid>
-                    <Grid item xs={12} md={5}>
-                        <Paper
-                            variant="outlined"
-                            sx={{ p: 4, textAlign: 'center', cursor: 'pointer', '&:hover': { borderColor: 'primary.main', backgroundColor: '#f5f5f5' } }}
-                            onClick={() => setView('packaging_task')}
-                        >
-                            <Typography variant="h6">บันทึกการบรรจุ (Packaging)</Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                บันทึกหมายเลขกล่องและ Lot Number
-                            </Typography>
-                        </Paper>
-                    </Grid>
-                    <Grid item xs={12} md={5}>
-                        <Paper
-                            variant="outlined"
-                            sx={{ p: 4, textAlign: 'center', cursor: 'pointer', '&:hover': { borderColor: 'success.main', backgroundColor: '#f0f9f0' } }}
-                            onClick={() => setView('run_card')}
-                        >
-                            <Typography variant="h6" color="success.main">Run Card v2</Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                ยืนยันกล่อง · ดู Barcode · พิมพ์ Label
-                            </Typography>
-                        </Paper>
-                    </Grid>
-                    <Grid item xs={12} md={5}>
-                        <Paper
-                            variant="outlined"
-                            sx={{ p: 4, textAlign: 'center', cursor: 'pointer', '&:hover': { borderColor: 'warning.main', backgroundColor: '#fffbf0' } }}
-                            onClick={() => setView('track_out')}
-                        >
-                            <Typography variant="h6" color="warning.dark">Track-Out</Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                สแกน Barcode · ตรวจสอบกล่อง · พิมพ์ / Mark Labeled
-                            </Typography>
-                        </Paper>
-                    </Grid>
-                </Grid>
-            </Paper>
+
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1.5 }}>
+                    {TASKS.map(task => {
+                        const { bg, fg } = task.color;
+                        return (
+                            <Box
+                                key={task.view}
+                                onClick={() => setView(task.view)}
+                                sx={{
+                                    minHeight: 110,
+                                    backgroundColor: bg,
+                                    border: `2px solid ${fg}33`,
+                                    borderRadius: 2,
+                                    p: 2.5,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    textAlign: 'center',
+                                    boxShadow: '0 1px 4px rgba(0,0,0,0.10)',
+                                    transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+                                    '&:hover': {
+                                        transform: 'translateY(-3px)',
+                                        boxShadow: `0 6px 16px ${fg}40`,
+                                        filter: 'brightness(0.95)',
+                                    },
+                                    '&:active': { transform: 'scale(0.97)' },
+                                }}
+                            >
+                                <Typography fontWeight={800} fontSize="1.05rem" color={fg} lineHeight={1.3}>
+                                    {task.label}
+                                </Typography>
+                                <Typography fontSize="0.78rem" color={fg} sx={{ mt: 0.5, opacity: 0.75 }}>
+                                    {task.sub}
+                                </Typography>
+                            </Box>
+                        );
+                    })}
+                </Box>
+            </Box>
         );
+
     }
 
-    // View เริ่มต้น: เลือกใบสั่งผลิต
+    // View เริ่มต้น: เลือกใบสั่งผลิต (Color Block)
     return (
-        <Paper sx={{ p: 2 }}>
+        <Box sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h5">เลือกใบสั่งผลิตเพื่อเริ่มทำงาน</Typography>
-                <Button variant="outlined" color="warning" onClick={() => setView('track_out')}>
-                    📦 Track-Out / สแกน Barcode
+                <Typography variant="h5" fontWeight={700}>เลือก Line การผลิต</Typography>
+                <Button variant="outlined" color="warning" size="small"
+                    onClick={() => setView('track_out')}>
+                    📦 Track-Out
                 </Button>
             </Box>
-            
-            {/* Debug Information Panel */}
-            <Paper variant="outlined" sx={{ p: 2, mb: 3, backgroundColor: '#f5f5f5' }}>
-                <Typography variant="h6" color="primary">Operator System Status</Typography>
-                <Typography>Backend Connection: {connectionStatus}</Typography>
-                <Typography>Active Reports: {activeReports.length}</Typography>
-                <Typography>Status: {error ? 'Error' : 'OK'}</Typography>
-                {error && <Typography color="error">Error: {error}</Typography>}
-                {activeReports.length > 0 && (
-                    <Typography>Latest Report: {activeReports[0].machineName} - {activeReports[0].productName}</Typography>
-                )}
-            </Paper>
-            
+
+            {error && (
+                <Typography color="error" sx={{ mb: 1 }}>{error}</Typography>
+            )}
+
             {activeReports.length === 0 && !loading && (
-                <Typography sx={{mt: 2}}>
-                    {error ? error : 'ไม่มีใบสั่งผลิตที่กำลังทำงานอยู่'}
+                <Typography color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+                    ไม่มีใบสั่งผลิตที่กำลังทำงานอยู่
                 </Typography>
             )}
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-                {activeReports.map(report => (
-                    <Grid item xs={12} sm={6} md={4} key={report.id}>
-                        <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-                            <Typography variant="h6">{report.machineName}</Typography>
-                            <Typography color="text.secondary">{report.productName}</Typography>
-                            <Typography variant="body2" sx={{mt: 1}}>Order: {report.orderNumber || 'N/A'}</Typography>
-                            <Box sx={{ flexGrow: 1 }} />
-                            <Button variant="contained" sx={{ mt: 2 }} onClick={() => handleSelectReport(report)}>
-                                เริ่มทำงาน
-                            </Button>
-                        </Paper>
-                    </Grid>
-                ))}
-            </Grid>
-        </Paper>
+
+            {/* Color Block grid — 4 per row, sorted by machine name */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1.5 }}>
+                {[...activeReports]
+                    .sort((a, b) => (a.machineName ?? '').localeCompare(b.machineName ?? '', undefined, { numeric: true }))
+                    .map((report, idx) => {
+                    const { bg, fg } = LINE_COLORS[idx % LINE_COLORS.length];
+                    return (
+                        <Box
+                            key={report.id}
+                            onClick={() => handleSelectReport(report)}
+                            sx={{
+                                minHeight: 90,
+                                backgroundColor: bg,
+                                border: `2px solid ${fg}33`,
+                                borderRadius: 2,
+                                p: 2,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'center',
+                                boxShadow: '0 1px 4px rgba(0,0,0,0.10)',
+                                transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+                                '&:hover': {
+                                    transform: 'translateY(-3px)',
+                                    boxShadow: `0 6px 16px ${fg}40`,
+                                    filter: 'brightness(0.95)',
+                                },
+                                '&:active': {
+                                    transform: 'scale(0.97)',
+                                },
+                            }}
+                        >
+                            <Typography fontWeight={800} fontSize="1.25rem" color={fg} lineHeight={1.2}>
+                                {report.machineName}
+                            </Typography>
+                            <Typography fontSize="0.82rem" color={fg} sx={{ mt: 0.5, opacity: 0.85 }}
+                                noWrap>
+                                {report.productName}
+                            </Typography>
+                            {report.orderNumber && (
+                                <Typography fontSize="0.75rem" color={fg} sx={{ mt: 0.3, opacity: 0.6 }}>
+                                    {report.orderNumber}
+                                </Typography>
+                            )}
+                        </Box>
+                    );
+                })}
+            </Box>
+        </Box>
     );
 };
 

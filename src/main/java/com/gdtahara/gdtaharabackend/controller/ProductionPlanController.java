@@ -47,9 +47,10 @@ public class ProductionPlanController {
     public ResponseEntity<ImportResult> importPlans(
             @RequestParam("file") MultipartFile file,
             @RequestParam(required = false) String factoryCode,
+            @RequestParam(defaultValue = "false") boolean dryRun,
             Principal principal) {
-        logger.info("Import plan file: {} by {}", file.getOriginalFilename(), principal.getName());
-        return ResponseEntity.ok(importService.importPlanWorkbook(file, factoryCode, principal.getName()));
+        logger.info("Import plan file: {} by {} dryRun={}", file.getOriginalFilename(), principal.getName(), dryRun);
+        return ResponseEntity.ok(importService.importPlanWorkbook(file, factoryCode, principal.getName(), dryRun));
     }
 
     @PostMapping("/")
@@ -77,8 +78,7 @@ public class ProductionPlanController {
     @PreAuthorize("hasAnyRole('Production Control','Shift Leader','Management','Operator','DataAdmin')")
     public ResponseEntity<List<ProductionPlanResponse>> byDate(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return ResponseEntity.ok(productionPlanService.getPlansForDate(date).stream()
-                .map(ProductionPlanResponse::from).toList());
+        return ResponseEntity.ok(productionPlanService.getPlansForDateAsDto(date));
     }
 
     @GetMapping("/machine/{machineId}")

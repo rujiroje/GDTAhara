@@ -1,4 +1,4 @@
-// =================================================================
+﻿// =================================================================
 // File: src/main/java/com/gdtahara/gdtaharabackend/repository/ProductionReportRepository.java
 // (ฉบับแก้ไข - ลบ imports ที่มีปัญหา)
 // =================================================================
@@ -53,13 +53,13 @@ public interface ProductionReportRepository extends JpaRepository<ProductionRepo
                           @Param("machineName") String machineName);
 
     // Fast, case-insensitive active reports query with left fetch joins to avoid N+1 and delays
-    // Returns reports whose date range spans TODAY and whose status is not terminal.
-    // Only shows what is actually active on the current day (startDate <= today <= endDate).
+    // Shows all non-terminal WOs that have already started (startDate <= today).
+    // endDate is intentionally NOT filtered: operators must see open WOs even if
+    // the planned end date has passed (common in manufacturing where plans shift).
     @Query("SELECT DISTINCT pr FROM ProductionReport pr " +
         "LEFT JOIN FETCH pr.machine m " +
         "LEFT JOIN FETCH pr.product p " +
         "WHERE pr.startDate <= :today " +
-        "  AND pr.endDate >= :today " +
         "  AND (pr.status IS NULL OR TRIM(UPPER(pr.status)) NOT IN :terminalStatuses) " +
         "ORDER BY pr.createdAt DESC")
     List<ProductionReport> findActiveReportsFast(@Param("activeStatuses") java.util.Collection<String> activeStatuses,
@@ -193,4 +193,11 @@ public interface ProductionReportRepository extends JpaRepository<ProductionRepo
                                                             @Param("machineName") String machineName,
                                                             @Param("productId") Long productId,
                                                             @Param("orderNumber") String orderNumber);
+
+    // WO import: find existing WO by machine+product+startDate (upsert key)
+    Optional<ProductionReport> findByMachineIdAndProductIdAndStartDate(Long machineId, Long productId, LocalDate startDate);
+
+    // WO import: find all order numbers matching a prefix pattern for sequence generation
+    @Query("SELECT pr.orderNumber FROM ProductionReport pr WHERE pr.orderNumber LIKE :pattern ORDER BY pr.orderNumber ASC")
+    List<String> findOrderNumbersLike(@Param("pattern") String pattern);
 }

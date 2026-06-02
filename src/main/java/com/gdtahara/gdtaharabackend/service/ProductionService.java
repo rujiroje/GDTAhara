@@ -7,6 +7,7 @@ import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,6 +54,10 @@ public class ProductionService {
 
     @Autowired
     private AuditLogService auditLogService;
+
+    // @Lazy breaks any potential circular dependency and defers proxy creation
+    @Autowired @Lazy
+    private WoExpansionService woExpansionService;
 
     @Transactional(readOnly = true)
     public List<ProductionReportDto> getAllProductionReports() {
@@ -179,6 +184,17 @@ public class ProductionService {
             auditLogService.log("CREATE", "ProductionReport", saved.getId(), null,
                     java.util.Map.of("id", saved.getId(), "orderNumber", String.valueOf(saved.getOrderNumber()),
                             "status", String.valueOf(saved.getStatus())));
+
+            // Expand WO into daily ProductionPlans (REQUIRES_NEW — never rolls back WO creation)
+            try {
+                WoExpansionService.ExpansionResult exp =
+                        woExpansionService.expandWoToDailyPlans(saved, username);
+                logger.info("WO daily-plan expansion: created={} skipPast={} skipExisting={}",
+                        exp.created(), exp.skipPast(), exp.skipExisting());
+            } catch (Exception ex) {
+                logger.warn("Daily-plan expansion failed for WO id={}: {}", saved.getId(), ex.getMessage());
+            }
+
             return convertToProductionReportDto(saved);
         } catch (IllegalArgumentException | EntityNotFoundException | IllegalStateException ex) {
             // surface clear message to controller (HTTP 400)
@@ -242,6 +258,17 @@ public class ProductionService {
                     java.util.Map.of("id", id, "orderNumber", String.valueOf(oldOrder), "status", String.valueOf(oldStatus)),
                     java.util.Map.of("id", savedReport.getId(), "orderNumber", String.valueOf(savedReport.getOrderNumber()),
                             "status", String.valueOf(savedReport.getStatus())));
+
+            // Re-expand WO into daily plans (skips existing, so safe to call on update)
+            try {
+                WoExpansionService.ExpansionResult exp =
+                        woExpansionService.expandWoToDailyPlans(savedReport, username);
+                logger.info("WO daily-plan re-expansion: created={} skipPast={} skipExisting={}",
+                        exp.created(), exp.skipPast(), exp.skipExisting());
+            } catch (Exception ex) {
+                logger.warn("Daily-plan expansion failed for WO id={}: {}", id, ex.getMessage());
+            }
+
             return convertToProductionReportDto(savedReport);
         } catch (Exception e) {
             logger.error("❌ Error updating production report: {}", e.getMessage(), e);

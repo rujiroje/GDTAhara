@@ -10,6 +10,10 @@ public record ImportResult(
         int rowsUpdated,
         int rowsSkippedPast,
         int rowsSkippedStarted,
+        int wosCreated,
+        int wosUpdated,
+        int plansCreated,
+        int setupJobsCreated,
         String status,
         String message,
         List<String> warnings

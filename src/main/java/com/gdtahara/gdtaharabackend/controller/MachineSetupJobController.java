@@ -82,6 +82,14 @@ public class MachineSetupJobController {
                 .map(SetupJobResponse::from).toList());
     }
 
+    /** All pending/in-progress setup jobs — for PC to review and assign. */
+    @GetMapping("/pending")
+    @PreAuthorize("hasAnyRole('Production Control','DataAdmin')")
+    public ResponseEntity<List<SetupJobResponse>> allPending() {
+        return ResponseEntity.ok(machineSetupJobService.getAllPendingJobs().stream()
+                .map(SetupJobResponse::from).toList());
+    }
+
     @GetMapping("/plan/{planId}")
     public ResponseEntity<SetupJobResponse> byPlan(@PathVariable Long planId) {
         MachineSetupJob job = machineSetupJobService.getJobForPlan(planId)

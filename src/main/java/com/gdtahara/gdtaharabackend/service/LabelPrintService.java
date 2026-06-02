@@ -1,8 +1,11 @@
 package com.gdtahara.gdtaharabackend.service;
 
+import com.gdtahara.gdtaharabackend.model.PackagingLog;
 import com.gdtahara.gdtaharabackend.model.SubLot;
 import com.gdtahara.gdtaharabackend.print.LabelPrinterClient;
+import com.gdtahara.gdtaharabackend.repository.PackagingLogRepository;
 import com.gdtahara.gdtaharabackend.util.ZplLabelBuilder;
+import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -17,16 +20,19 @@ public class LabelPrintService {
     private static final Logger logger = LoggerFactory.getLogger(LabelPrintService.class);
     private static final DateTimeFormatter REF_FMT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
-    private final SubLotService      subLotService;
-    private final ZplLabelBuilder    zplLabelBuilder;
-    private final LabelPrinterClient printerClient;
+    private final SubLotService           subLotService;
+    private final ZplLabelBuilder         zplLabelBuilder;
+    private final LabelPrinterClient      printerClient;
+    private final PackagingLogRepository  packagingLogRepository;
 
     public LabelPrintService(SubLotService subLotService,
                              ZplLabelBuilder zplLabelBuilder,
-                             LabelPrinterClient printerClient) {
-        this.subLotService   = subLotService;
-        this.zplLabelBuilder = zplLabelBuilder;
-        this.printerClient   = printerClient;
+                             LabelPrinterClient printerClient,
+                             PackagingLogRepository packagingLogRepository) {
+        this.subLotService          = subLotService;
+        this.zplLabelBuilder        = zplLabelBuilder;
+        this.printerClient          = printerClient;
+        this.packagingLogRepository = packagingLogRepository;
     }
 
     /**
@@ -56,5 +62,25 @@ public class LabelPrintService {
         String ref = printerTarget + "@" + LocalDateTime.now().format(REF_FMT);
         subLotService.markAsLabeled(subLotId, ref, username);
         logger.info("Sub-lot {} labeled via {}", subLotId, printerTarget);
+    }
+
+    // ── Packaging box label ───────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public String previewPackagingLabel(Long packagingLogId) {
+        PackagingLog pkg = packagingLogRepository.findById(packagingLogId)
+                .orElseThrow(() -> new EntityNotFoundException("PackagingLog not found: " + packagingLogId));
+        logger.debug("Preview packaging ZPL for log {}", packagingLogId);
+        return zplLabelBuilder.buildPackagingBoxLabel(pkg);
+    }
+
+    @Transactional(readOnly = true)
+    public void printPackagingLabel(Long packagingLogId, String printerTarget, String username) {
+        logger.info("Packaging print: logId={} target={} by={}", packagingLogId, printerTarget, username);
+        PackagingLog pkg = packagingLogRepository.findById(packagingLogId)
+                .orElseThrow(() -> new EntityNotFoundException("PackagingLog not found: " + packagingLogId));
+        String zpl = zplLabelBuilder.buildPackagingBoxLabel(pkg);
+        printerClient.print(zpl, printerTarget);
+        logger.info("Packaging log {} printed via {}", packagingLogId, printerTarget);
     }
 }

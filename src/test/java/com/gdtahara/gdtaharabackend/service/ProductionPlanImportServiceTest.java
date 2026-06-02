@@ -66,9 +66,14 @@ class ProductionPlanImportServiceTest {
         lenient().when(templateRepository.findByFactoryCode(any())).thenReturn(Optional.empty());
         lenient().when(planRepository.findByMachineIdAndPlanDateAndProductId(any(), any(), any()))
                  .thenReturn(Optional.empty());
-        lenient().when(reportRepository.existsForMachineOnDate(any(), any())).thenReturn(false);
+        // New WO-import stubs
+        lenient().when(reportRepository.findOrderNumbersLike(any())).thenReturn(List.of());
+        lenient().when(reportRepository.findByMachineIdAndProductIdAndStartDate(any(), any(), any()))
+                 .thenReturn(Optional.empty());
+        lenient().when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(importLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(planRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(setupJobService.scanAndCreateSetupJobs(any(), any())).thenReturn(List.of());
     }
 
     // ── Workbook builders ─────────────────────────────────────────────────────
@@ -189,6 +194,10 @@ class ProductionPlanImportServiceTest {
 
     // ── Original L3 (separate columns) tests ─────────────────────────────────
 
+    /**
+     * 3 future consecutive dates → 1 WO created + 3 daily plans.
+     * rowsAdded = wosCreated = 1; plansCreated = 3.
+     */
     @Test
     void import_futureDates_upsert() throws Exception {
         LocalDate d1 = LocalDate.now().plusDays(1);
@@ -200,13 +209,21 @@ class ProductionPlanImportServiceTest {
 
         ImportResult result = service.importPlanWorkbook(file, null, "pc01");
 
-        assertThat(result.rowsAdded()).isEqualTo(3);
-        assertThat(result.rowsSkippedPast()).isZero();
+        // New WO-centric: 3 consecutive days → 1 WO created
+        assertThat(result.wosCreated()).isEqualTo(1);
+        assertThat(result.rowsAdded()).isEqualTo(1);    // rowsAdded maps to wosCreated
+        assertThat(result.rowsSkippedPast()).isZero();  // no past-skipping in WO-centric
         assertThat(result.status()).isEqualTo("SUCCESS");
+        // 3 daily plans created
+        assertThat(result.plansCreated()).isEqualTo(3);
         verify(planRepository, times(3)).save(any(ProductionPlan.class));
-        verify(setupJobService).scanAndCreateSetupJobs(eq(d1), eq(d3));
+        // Scan range is extended ±1 day so adjacent-day product changes are detected.
+        verify(setupJobService).scanAndCreateSetupJobs(eq(d1.minusDays(1)), eq(d3.plusDays(1)));
     }
 
+    /**
+     * Past dates are no longer skipped in WO-centric mode — WOs are created regardless.
+     */
     @Test
     void import_pastDates_skipped() throws Exception {
         LocalDate d1 = LocalDate.now().minusDays(3);
@@ -218,28 +235,36 @@ class ProductionPlanImportServiceTest {
 
         ImportResult result = service.importPlanWorkbook(file, null, "pc01");
 
-        assertThat(result.rowsSkippedPast()).isEqualTo(3);
-        assertThat(result.rowsAdded()).isZero();
-        verify(planRepository, never()).save(any());
-        verify(setupJobService, never()).scanAndCreateSetupJobs(any(), any());
+        // WO-centric: past dates are imported (no skip policy on dates)
+        assertThat(result.rowsSkippedPast()).isZero();
+        assertThat(result.wosCreated()).isEqualTo(1);   // 1 WO for 3-day run
+        assertThat(result.plansCreated()).isEqualTo(3); // 3 daily plans
+        verify(planRepository, times(3)).save(any(ProductionPlan.class));
+        verify(setupJobService).scanAndCreateSetupJobs(any(), any());
     }
 
+    /**
+     * WO-centric mode does not check existsForMachineOnDate — today's date is imported normally.
+     */
     @Test
     void import_todayWithReport_skipped() throws Exception {
         LocalDate today = LocalDate.now();
         int[] qtys = {2400, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-        when(reportRepository.existsForMachineOnDate(1L, today)).thenReturn(true);
-
         MockMultipartFile file = buildWorkbook("upload.xlsx", new LocalDate[]{today}, qtys);
 
         ImportResult result = service.importPlanWorkbook(file, null, "pc01");
 
-        assertThat(result.rowsSkippedStarted()).isEqualTo(1);
-        assertThat(result.rowsAdded()).isZero();
-        verify(planRepository, never()).save(any());
+        // WO-centric: no date-based skip; today is imported as WO + plan
+        assertThat(result.rowsSkippedStarted()).isZero();
+        assertThat(result.wosCreated()).isEqualTo(1);
+        assertThat(result.plansCreated()).isEqualTo(1);
     }
 
+    /**
+     * Existing non-excel plan for a date → it gets updated with new qty.
+     * WO is new (not found) → wosCreated=1, wosUpdated=0; plansCreated=1.
+     */
     @Test
     void import_existingPlan_updates() throws Exception {
         LocalDate future = LocalDate.now().plusDays(5);
@@ -248,6 +273,7 @@ class ProductionPlanImportServiceTest {
         ProductionPlan existing = new ProductionPlan();
         existing.setId(99L);
         existing.setTargetQty(2400);
+        existing.setSource("manual");  // not "excel" → will be updated
         when(planRepository.findByMachineIdAndPlanDateAndProductId(1L, future, 1L))
                 .thenReturn(Optional.of(existing));
 
@@ -255,8 +281,10 @@ class ProductionPlanImportServiceTest {
 
         ImportResult result = service.importPlanWorkbook(file, null, "pc01");
 
-        assertThat(result.rowsUpdated()).isEqualTo(1);
-        assertThat(result.rowsAdded()).isZero();
+        // WO-centric: plan updated (counted in plansCreated), WO created
+        assertThat(result.wosCreated()).isEqualTo(1);
+        assertThat(result.wosUpdated()).isEqualTo(0);
+        assertThat(result.plansCreated()).isEqualTo(1);
         assertThat(existing.getTargetQty()).isEqualTo(3000);
     }
 
@@ -356,6 +384,7 @@ class ProductionPlanImportServiceTest {
     /**
      * Tests the full flow with a TAHARA-format workbook via L1 (factory code override)
      * and a template with machineColIndex=productColIndex=2 (both column B).
+     * 2 consecutive dates → 1 WO + 2 daily plans.
      */
     @Test
     void import_tahara_combinedColumn_futureDates_added() throws Exception {
@@ -372,10 +401,14 @@ class ProductionPlanImportServiceTest {
 
         ImportResult result = service.importPlanWorkbook(file, "TAHARA", "pc01");
 
-        assertThat(result.rowsAdded()).isEqualTo(2);
+        // 2 consecutive days → 1 WO; rowsAdded = wosCreated = 1
+        assertThat(result.wosCreated()).isEqualTo(1);
+        assertThat(result.rowsAdded()).isEqualTo(1);
         assertThat(result.rowsSkippedPast()).isZero();
         assertThat(result.status()).isEqualTo("SUCCESS");
         assertThat(result.factoryCode()).isEqualTo("TAHARA");
+        // 2 daily plans created
+        assertThat(result.plansCreated()).isEqualTo(2);
         verify(planRepository, times(2)).save(any(ProductionPlan.class));
     }
 
@@ -415,7 +448,8 @@ class ProductionPlanImportServiceTest {
 
         ImportResult result = service.importPlanWorkbook(file, null, "pc01");
 
-        // L3 should detect the combined column and parse the single data row
+        // L3 should detect the combined column and parse the single data row → 1 WO
+        assertThat(result.wosCreated()).isEqualTo(1);
         assertThat(result.rowsAdded()).isEqualTo(1);
         assertThat(result.status()).isEqualTo("SUCCESS");
     }

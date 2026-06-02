@@ -51,4 +51,10 @@ public class Product {
 
     private Integer qtyPerBag;
     private Integer qtyPerPallet;
+
+    @Column(name = "customer_code", length = 100)
+    private String customerCode;
+
+    @Column(name = "label_variant", length = 200)
+    private String labelVariant;
 }

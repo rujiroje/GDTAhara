@@ -19,7 +19,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -247,6 +246,58 @@ class MachineSetupJobServiceTest {
                 true, true, true, true, null, "tech01");
 
         verify(auditLogService).log(eq("UPDATE"), eq("MachineSetupJob"), eq(1L), any(), any());
+    }
+
+    // ---------------------------------------------------------------
+    // getPendingJobsForTechnician → includes unassigned jobs (CRITICAL fix)
+    // ---------------------------------------------------------------
+
+    @Test
+    void getPendingJobsForTechnician_includesUnassignedJobs() {
+        MachineSetupJob unassigned = new MachineSetupJob();
+        unassigned.setId(5L);
+        unassigned.setStatus("PENDING");
+        unassigned.setPlanDate(LocalDate.now().plusDays(1));
+
+        MachineSetupJob mine = new MachineSetupJob();
+        mine.setId(6L);
+        mine.setStatus("IN_PROGRESS");
+        mine.setPlanDate(LocalDate.now().plusDays(2));
+        User me = new User();
+        me.setId(99L);
+        mine.setAssignedTo(me);
+
+        when(machineSetupJobRepository.findByAssignedToIsNullAndStatusInOrderByPlanDateAsc(any()))
+                .thenReturn(List.of(unassigned));
+        when(machineSetupJobRepository.findByAssignedToIdAndStatusIn(eq(99L), any()))
+                .thenReturn(List.of(mine));
+
+        List<MachineSetupJob> result = service.getPendingJobsForTechnician(99L);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).containsExactlyInAnyOrder(unassigned, mine);
+    }
+
+    // ---------------------------------------------------------------
+    // getAllPendingJobs → returns all PENDING + IN_PROGRESS for PC view
+    // ---------------------------------------------------------------
+
+    @Test
+    void getAllPendingJobs_returnsAllActive() {
+        MachineSetupJob j1 = new MachineSetupJob();
+        j1.setId(1L);
+        j1.setStatus("PENDING");
+
+        MachineSetupJob j2 = new MachineSetupJob();
+        j2.setId(2L);
+        j2.setStatus("IN_PROGRESS");
+
+        when(machineSetupJobRepository.findByStatusInOrderByPlanDateAsc(any()))
+                .thenReturn(List.of(j1, j2));
+
+        List<MachineSetupJob> result = service.getAllPendingJobs();
+
+        assertThat(result).hasSize(2);
     }
 
     // ---------------------------------------------------------------

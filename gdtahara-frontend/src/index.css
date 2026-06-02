@@ -1,1 +1,112 @@
 
+/* ── Packaging label print styles ──────────────────────────────────────── */
+@media print {
+    body > * { display: none !important; }
+    #pkg-print-portal { display: block !important; }
+}
+
+#pkg-print-portal {
+    display: none;
+}
+
+.pkg-label {
+    font-family: 'Angsana New', 'TH SarabunPSK', Arial, sans-serif;
+    font-size: 14pt;
+    width: 14cm;
+    padding: 10mm;
+    border: 1px solid #333;
+    box-sizing: border-box;
+    color: #000;
+}
+
+.pkg-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.pkg-company {
+    font-size: 12pt;
+    font-weight: bold;
+}
+
+.pkg-capacity {
+    font-size: 40pt;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.pkg-hr {
+    border: none;
+    border-top: 1.5px solid #333;
+    margin: 4px 0;
+}
+
+.pkg-row {
+    display: flex;
+    gap: 8px;
+    margin: 2px 0;
+}
+
+.pkg-label-text {
+    font-size: 11pt;
+    color: #555;
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.pkg-value {
+    font-size: 12pt;
+    font-weight: 600;
+}
+
+.pkg-code {
+    font-family: monospace;
+    font-size: 11pt;
+}
+
+.pkg-box-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 4px 0;
+}
+
+.pkg-box-label {
+    font-size: 12pt;
+}
+
+.pkg-box-no {
+    font-size: 42pt;
+    font-weight: bold;
+    font-family: monospace;
+    line-height: 1;
+}
+
+.pkg-lots {
+    display: flex;
+    gap: 20px;
+    margin: 4px 0;
+}
+
+.pkg-lots > div {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.pkg-lot {
+    font-size: 14pt;
+    font-weight: bold;
+}
+
+.pkg-barcode-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 6px;
+}
+
+.pkg-barcode-wrap svg {
+    max-width: 100%;
+}

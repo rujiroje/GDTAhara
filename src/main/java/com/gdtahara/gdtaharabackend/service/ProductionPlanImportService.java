@@ -44,7 +44,6 @@ public class ProductionPlanImportService {
      * Combined "MACHINE_CODE   PRODUCT_CODE [variant]" in a single cell.
      * group(1) = machine code (RBL/RIL prefix + digits)
      * group(2) = product code (first non-whitespace token after machine code)
-     * Variant suffixes like " (2)" are dropped automatically by \S+ stopping at whitespace.
      */
     static final Pattern MACHINE_PRODUCT_PATTERN =
             Pattern.compile("^([A-Z]{2,4}\\d+)\\s+(\\S+)");
@@ -69,14 +68,14 @@ public class ProductionPlanImportService {
             ImportLogRepository importLogRepository,
             UserRepository userRepository,
             MachineSetupJobService setupJobService) {
-        this.templateRepository = templateRepository;
-        this.machineRepository  = machineRepository;
-        this.productRepository  = productRepository;
-        this.planRepository     = planRepository;
-        this.reportRepository   = reportRepository;
+        this.templateRepository  = templateRepository;
+        this.machineRepository   = machineRepository;
+        this.productRepository   = productRepository;
+        this.planRepository      = planRepository;
+        this.reportRepository    = reportRepository;
         this.importLogRepository = importLogRepository;
-        this.userRepository     = userRepository;
-        this.setupJobService    = setupJobService;
+        this.userRepository      = userRepository;
+        this.setupJobService     = setupJobService;
     }
 
     // ── Internal types ────────────────────────────────────────────────────────
@@ -84,20 +83,30 @@ public class ProductionPlanImportService {
     private record SheetConfig(
             XSSFSheet sheet,
             String    factoryCode,
-            int machineColIdx,      // 0-based
-            int productColIdx,      // 0-based; == machineColIdx when combined cell
-            int dateHeaderRowIdx,   // 0-based
-            int dataStartRowIdx,    // 0-based
+            int machineColIdx,
+            int productColIdx,
+            int dateHeaderRowIdx,
+            int dataStartRowIdx,
             Set<String> skipKeywords) {}
 
-    private record PlanRecord(
-            String machineCode,
-            String productCode,
-            LocalDate planDate,
-            int targetQty) {}
+    private static class WoPlan {
+        String machineCode, productCode, woNumber;
+        LocalDate startDate, endDate;
+        int totalQty;
+        final TreeMap<LocalDate, Integer> dailyQty = new TreeMap<>();
 
-    private static class Counts {
-        int added, updated, skippedPast, skippedStarted;
+        WoPlan(String mc, String pc, String wo, LocalDate s, LocalDate e, int t) {
+            machineCode = mc;
+            productCode = pc;
+            woNumber    = wo;
+            startDate   = s;
+            endDate     = e;
+            totalQty    = t;
+        }
+    }
+
+    private static class WoCounts {
+        int wosCreated, wosUpdated, plansCreated, plansSkipped, setupJobsCreated;
         final List<String> warnings = new ArrayList<>();
     }
 
@@ -106,21 +115,42 @@ public class ProductionPlanImportService {
     public ImportResult importPlanWorkbook(MultipartFile file,
                                            String factoryCodeOverride,
                                            String username) {
+        return importPlanWorkbook(file, factoryCodeOverride, username, false);
+    }
+
+    public ImportResult importPlanWorkbook(MultipartFile file,
+                                           String factoryCodeOverride,
+                                           String username,
+                                           boolean dryRun) {
         String filename = file.getOriginalFilename() != null
                 ? file.getOriginalFilename() : "upload.xlsx";
         try (XSSFWorkbook wb = new XSSFWorkbook(file.getInputStream())) {
-            SheetConfig config  = detectConfig(wb, filename, factoryCodeOverride);
-            List<PlanRecord> records = parseSheet(config, filename);
-            Counts counts = applyPolicy(records, filename, username);
-            writeLog(filename, config.factoryCode(), counts, username);
-            return new ImportResult(filename, config.factoryCode(),
-                    config.sheet().getSheetName(),
-                    counts.added, counts.updated,
-                    counts.skippedPast, counts.skippedStarted,
-                    "SUCCESS",
-                    String.format("+%d new  ~%d updated  %d past-skipped  %d started-skipped",
-                            counts.added, counts.updated, counts.skippedPast, counts.skippedStarted),
-                    List.copyOf(counts.warnings));
+            SheetConfig config = detectConfig(wb, filename, factoryCodeOverride);
+
+            // 1. Parse rows → WoPlan list
+            List<WoPlan> plans = parseIntoWoPlans(config, filename);
+
+            // 2. Determine YYMM from first date found in header
+            String yymm = extractYYMM(config);
+
+            // 3. Assign WO numbers to plans that don't have one from the file
+            assignWoNumbers(plans, yymm);
+
+            // 4. Apply policy (or preview for dryRun)
+            WoCounts c;
+            if (dryRun) {
+                c = new WoCounts();
+                c.wosCreated = plans.size();
+            } else {
+                User user = userRepository.findByUsername(username).orElse(null);
+                c = applyWoPolicy(plans, user, filename);
+            }
+
+            if (!dryRun) {
+                writeLog(filename, config.factoryCode(), c, username);
+            }
+
+            return buildResult(filename, config, c, dryRun);
         } catch (PlanParseException e) {
             throw e;
         } catch (IOException e) {
@@ -175,18 +205,13 @@ public class ProductionPlanImportService {
                     .collect(Collectors.toSet());
         }
         return new SheetConfig(sheet, factoryCode,
-                tpl.getMachineColIndex() - 1,   // 1-based → 0-based
-                tpl.getProductColIndex() - 1,   // 1-based → 0-based (== machineCol when combined)
+                tpl.getMachineColIndex() - 1,
+                tpl.getProductColIndex() - 1,
                 tpl.getDateHeaderRow()  - 1,
                 tpl.getDataStartRow()   - 1,
                 keywords);
     }
 
-    /**
-     * L3: scan the first 10 rows of every sheet; pick the sheet+row combination that
-     * has the most date cells (≥7 required).  Then auto-detect whether the machine
-     * column uses the combined "MACHINE PRODUCT_CODE" format.
-     */
     private SheetConfig detectByStructure(XSSFWorkbook wb, String factoryCode) {
         XSSFSheet bestSheet = null;
         int bestDateRow   = -1;
@@ -194,7 +219,6 @@ public class ProductionPlanImportService {
 
         for (int si = 0; si < wb.getNumberOfSheets(); si++) {
             XSSFSheet sheet = wb.getSheetAt(si);
-            // Scan first 10 rows (indices 0..9)
             for (int ri = 0; ri <= Math.min(9, sheet.getLastRowNum()); ri++) {
                 Row row = sheet.getRow(ri);
                 if (row == null) continue;
@@ -215,7 +239,6 @@ public class ProductionPlanImportService {
         }
 
         int machineColIdx = detectMachineCol(bestSheet, bestDateRow + 1);
-        // Check if this column uses combined "MACHINE PRODUCT_CODE" cells
         boolean combined = isCombinedColumn(bestSheet, bestDateRow + 1, machineColIdx);
         int productColIdx = combined ? machineColIdx : machineColIdx + 1;
 
@@ -229,11 +252,6 @@ public class ProductionPlanImportService {
                 Set.of("Remark", "Actual", "Plan", "Diff"));
     }
 
-    /**
-     * Returns the first column index (0-based) where ≥30 % of data rows contain a
-     * value that looks like a machine code — either standalone ("RBL101") or combined
-     * ("RBL101   PBCGAHBRB").
-     */
     private int detectMachineCol(XSSFSheet sheet, int dataStartRow) {
         Map<Integer, Integer> hits  = new HashMap<>();
         int totalRows = 0;
@@ -260,10 +278,6 @@ public class ProductionPlanImportService {
                 .orElse(0);
     }
 
-    /**
-     * Returns true if ≥25 % of non-blank cells in {@code colIdx} match the combined
-     * "MACHINE_CODE   PRODUCT_CODE" pattern — meaning both codes share one cell.
-     */
     private boolean isCombinedColumn(XSSFSheet sheet, int dataStartRow, int colIdx) {
         int combined = 0, total = 0;
         int limit = Math.min(sheet.getLastRowNum(), dataStartRow + 60);
@@ -278,25 +292,38 @@ public class ProductionPlanImportService {
         return total > 0 && (double) combined / total >= 0.25;
     }
 
-    // ── Parser ────────────────────────────────────────────────────────────────
+    // ── WO-centric parser ─────────────────────────────────────────────────────
 
-    private List<PlanRecord> parseSheet(SheetConfig cfg, String filename) {
-        List<PlanRecord> out = new ArrayList<>();
+    /**
+     * Parse the sheet into a list of WoPlan objects.
+     * Each consecutive run of non-zero quantity days for the same machine+product becomes one WoPlan.
+     */
+    List<WoPlan> parseIntoWoPlans(SheetConfig cfg, String filename) {
+        List<WoPlan> out = new ArrayList<>();
         XSSFSheet sheet = cfg.sheet();
 
-        // Build date map: colIdx → LocalDate (from header row)
-        Map<Integer, LocalDate> dateByCol = new LinkedHashMap<>();
+        // Build dateByCol: use first occurrence of each date (deduplicate right-block duplicate dates)
+        Map<LocalDate, Integer> firstColByDate = new LinkedHashMap<>();
         Row hdr = sheet.getRow(cfg.dateHeaderRowIdx());
         if (hdr != null) {
             for (Cell cell : hdr) {
                 LocalDate d = parseDateCell(cell);
-                if (d != null) dateByCol.put(cell.getColumnIndex(), d);
+                if (d != null) firstColByDate.putIfAbsent(d, cell.getColumnIndex());
             }
         }
-        if (dateByCol.isEmpty()) {
+        if (firstColByDate.isEmpty()) {
             logger.warn("No date columns found in {}", filename);
             return out;
         }
+
+        // Invert: colIdx → date
+        Map<Integer, LocalDate> dateByCol = new LinkedHashMap<>();
+        firstColByDate.forEach((date, col) -> dateByCol.put(col, date));
+
+        // Sorted list of dates
+        List<LocalDate> orderedDates = firstColByDate.keySet().stream()
+                .sorted()
+                .collect(Collectors.toList());
 
         boolean combinedCol = cfg.machineColIdx() == cfg.productColIdx();
         String currentMachine = null;
@@ -307,7 +334,6 @@ public class ProductionPlanImportService {
 
             String mc, prod;
             if (combinedCol) {
-                // ── Combined cell: "MACHINE_CODE   PRODUCT_CODE [variant]" ──────
                 String cellValue = getStringValue(row.getCell(cfg.machineColIdx()));
                 if (cellValue != null && !cellValue.isBlank()) {
                     Matcher split = MACHINE_PRODUCT_PATTERN.matcher(cellValue.trim());
@@ -315,20 +341,28 @@ public class ProductionPlanImportService {
                         currentMachine = split.group(1);
                         prod = split.group(2);
                     } else {
-                        prod = null; // doesn't match → no product on this row
+                        prod = null;
                     }
                 } else {
                     prod = null;
                 }
-                // Skip rows whose extracted product is a sub-row-type keyword
                 if (prod == null || cfg.skipKeywords().stream()
                         .anyMatch(kw -> kw.equalsIgnoreCase(prod))) {
                     continue;
                 }
                 if (currentMachine == null) continue;
                 mc = currentMachine;
+
+                // For TAHARA-style combined columns col B has "MACHINE PRODUCT" on EVERY
+                // sub-row (Plan/Actual/Diff).  The sub-row type sits in col C (machineColIdx+1).
+                // Skip any sub-row whose adjacent cell matches a skip keyword.
+                String subRowType = getStringValue(row.getCell(cfg.machineColIdx() + 1));
+                if (subRowType != null && !subRowType.isBlank()
+                        && cfg.skipKeywords().stream()
+                                .anyMatch(kw -> kw.equalsIgnoreCase(subRowType.trim()))) {
+                    continue;
+                }
             } else {
-                // ── Separate columns: machine in one cell, product in another ──
                 String mcRaw = getStringValue(row.getCell(cfg.machineColIdx()));
                 if (mcRaw != null && !mcRaw.isBlank()) currentMachine = mcRaw.trim();
                 if (currentMachine == null) continue;
@@ -339,102 +373,245 @@ public class ProductionPlanImportService {
                 if (cfg.skipKeywords().stream().anyMatch(kw -> kw.equalsIgnoreCase(prod))) continue;
             }
 
-            // ── Emit a PlanRecord for every date column with qty > 0 ─────────
+            // Read WO number from col M (POI index 12) — null if blank
+            String woNumFromFile = getStringValue(row.getCell(12));
+            if (woNumFromFile != null && woNumFromFile.isBlank()) woNumFromFile = null;
+
+            // Build daily qty map for this row
+            Map<LocalDate, Integer> rowQty = new LinkedHashMap<>();
             for (Map.Entry<Integer, LocalDate> entry : dateByCol.entrySet()) {
                 Integer qty = getIntValue(row.getCell(entry.getKey()));
                 if (qty != null && qty > 0) {
-                    out.add(new PlanRecord(mc, prod, entry.getValue(), qty));
+                    rowQty.put(entry.getValue(), qty);
                 }
             }
+
+            // Find consecutive runs and emit one WoPlan per run
+            LocalDate runStart = null;
+            LocalDate runEnd   = null;
+            int runTotal = 0;
+            TreeMap<LocalDate, Integer> runDailyQty = new TreeMap<>();
+
+            final String finalMc   = mc;
+            final String finalProd = prod;
+            final String finalWo   = woNumFromFile;
+
+            for (LocalDate date : orderedDates) {
+                Integer qty = rowQty.get(date);
+                if (qty != null && qty > 0) {
+                    if (runStart == null) runStart = date;
+                    runEnd = date;
+                    runTotal += qty;
+                    runDailyQty.put(date, qty);
+                } else {
+                    if (runStart != null) {
+                        // Flush the current run
+                        WoPlan wp = new WoPlan(finalMc, finalProd, finalWo, runStart, runEnd, runTotal);
+                        wp.dailyQty.putAll(runDailyQty);
+                        out.add(wp);
+                        runStart = null;
+                        runEnd   = null;
+                        runTotal = 0;
+                        runDailyQty = new TreeMap<>();
+                    }
+                }
+            }
+            // Flush last run
+            if (runStart != null) {
+                WoPlan wp = new WoPlan(finalMc, finalProd, finalWo, runStart, runEnd, runTotal);
+                wp.dailyQty.putAll(runDailyQty);
+                out.add(wp);
+            }
         }
-        logger.info("Parsed {} records from sheet '{}'", out.size(), sheet.getSheetName());
+
+        logger.info("Parsed {} WO plans from sheet '{}'", out.size(), sheet.getSheetName());
         return out;
     }
 
-    // ── Import policy ─────────────────────────────────────────────────────────
+    /**
+     * Scan date header row for first real date cell; extract year+month → "YYmm" format.
+     * E.g. 2026-06 → "2606". Fallback to current month.
+     */
+    String extractYYMM(SheetConfig cfg) {
+        Row hdr = cfg.sheet().getRow(cfg.dateHeaderRowIdx());
+        if (hdr != null) {
+            for (Cell cell : hdr) {
+                if (cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
+                    LocalDate d = cell.getDateCellValue()
+                            .toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    return String.format("%02d%02d", d.getYear() % 100, d.getMonthValue());
+                }
+            }
+        }
+        LocalDate now = LocalDate.now();
+        return String.format("%02d%02d", now.getYear() % 100, now.getMonthValue());
+    }
 
-    private Counts applyPolicy(List<PlanRecord> records, String filename, String username) {
-        Counts c    = new Counts();
-        LocalDate today = LocalDate.now();
-        TreeSet<LocalDate> upsertedDates = new TreeSet<>();
+    /**
+     * Assign WO numbers to plans that do not have one from the file.
+     * Format: {MACHINE_CODE}_{YYMM}_{NN} where NN is zero-padded 2-digit sequence.
+     */
+    void assignWoNumbers(List<WoPlan> plans, String yymm) {
+        // Group by machine code
+        Map<String, List<WoPlan>> byMachine = new LinkedHashMap<>();
+        for (WoPlan p : plans) {
+            byMachine.computeIfAbsent(p.machineCode, k -> new ArrayList<>()).add(p);
+        }
 
-        User user = userRepository.findByUsername(username).orElse(null);
+        for (Map.Entry<String, List<WoPlan>> entry : byMachine.entrySet()) {
+            String machine = entry.getKey();
+            List<WoPlan> machinePlans = entry.getValue();
 
-        for (PlanRecord rec : records) {
-            // Resolve machine by machine_name (the file uses the same value as machine_name)
-            Optional<Machine> machineOpt = machineRepository.findByMachineCode(rec.machineCode());
+            // Plans without WO number from file
+            List<WoPlan> toAssign = machinePlans.stream()
+                    .filter(p -> p.woNumber == null)
+                    .sorted(Comparator.comparing(p -> p.startDate))
+                    .collect(Collectors.toList());
+
+            if (toAssign.isEmpty()) continue;
+
+            // Load existing order numbers from DB for this machine+yymm
+            String pattern = machine + "_" + yymm + "_%";
+            List<String> existing = reportRepository.findOrderNumbersLike(pattern);
+
+            // Find max existing sequence number
+            int maxNN = 0;
+            String prefix = machine + "_" + yymm + "_";
+            for (String orderNum : existing) {
+                if (orderNum != null && orderNum.startsWith(prefix)) {
+                    String suffix = orderNum.substring(prefix.length());
+                    try {
+                        int nn = Integer.parseInt(suffix);
+                        if (nn > maxNN) maxNN = nn;
+                    } catch (NumberFormatException ignored) {
+                        // Not a numeric suffix — skip
+                    }
+                }
+            }
+
+            // Assign sequential numbers starting from maxNN + 1
+            int next = maxNN + 1;
+            for (WoPlan p : toAssign) {
+                p.woNumber = String.format("%s_%s_%02d", machine, yymm, next++);
+            }
+        }
+    }
+
+    /**
+     * Apply WO upsert policy: create or update WOs and daily plans.
+     */
+    WoCounts applyWoPolicy(List<WoPlan> plans, User user, String filename) {
+        WoCounts c = new WoCounts();
+        TreeSet<LocalDate> affectedDates = new TreeSet<>();
+
+        for (WoPlan plan : plans) {
+            // Resolve machine
+            Optional<Machine> machineOpt = machineRepository.findByMachineCode(plan.machineCode);
             if (machineOpt.isEmpty()) {
-                c.warnings.add("Machine not found: " + rec.machineCode());
+                c.warnings.add("Machine not found: " + plan.machineCode);
                 continue;
             }
             Machine machine = machineOpt.get();
 
             // Resolve product
-            Optional<Product> productOpt = productRepository.findByProductCode(rec.productCode());
+            Optional<Product> productOpt = productRepository.findByProductCode(plan.productCode);
             if (productOpt.isEmpty()) {
-                c.warnings.add(rec.machineCode() + ": product code '"
-                        + rec.productCode() + "' not found in DB");
+                c.warnings.add(plan.machineCode + ": product code '" + plan.productCode + "' not found in DB");
                 continue;
             }
             Product product = productOpt.get();
 
-            // ── Import policy ─────────────────────────────────────────────────
-            if (rec.planDate().isBefore(today)) {
-                c.skippedPast++;
-                continue;
-            }
-            if (rec.planDate().isEqual(today)) {
-                if (reportRepository.existsForMachineOnDate(machine.getId(), today)) {
-                    c.skippedStarted++;
-                    continue;
-                }
-            }
+            // Upsert WO (key: machineId + productId + startDate)
+            Optional<ProductionReport> existingWo = reportRepository
+                    .findByMachineIdAndProductIdAndStartDate(machine.getId(), product.getId(), plan.startDate);
 
-            // UPSERT
-            Optional<ProductionPlan> existing = planRepository
-                    .findByMachineIdAndPlanDateAndProductId(
-                            machine.getId(), rec.planDate(), product.getId());
-
-            if (existing.isPresent()) {
-                ProductionPlan plan = existing.get();
-                plan.setTargetQty(rec.targetQty());
-                plan.setExcelFileRef(filename);
-                planRepository.save(plan);
-                c.updated++;
+            ProductionReport wo;
+            if (existingWo.isPresent()) {
+                wo = existingWo.get();
+                wo.setTargetQty(plan.totalQty);
+                wo.setEndDate(plan.endDate);
+                reportRepository.save(wo);
+                c.wosUpdated++;
             } else {
-                ProductionPlan plan = new ProductionPlan();
-                plan.setMachine(machine);
-                plan.setProduct(product);
-                plan.setPlanDate(rec.planDate());
-                plan.setTargetQty(rec.targetQty());
-                plan.setSource("excel");
-                plan.setExcelFileRef(filename);
-                plan.setManpowerDRatio(new BigDecimal("0.50"));
-                plan.setManpowerNRatio(new BigDecimal("0.50"));
-                if (user != null) plan.setCreatedBy(user);
-                planRepository.save(plan);
-                c.added++;
+                wo = new ProductionReport();
+                wo.setOrderNumber(plan.woNumber);
+                wo.setMachine(machine);
+                wo.setProduct(product);
+                wo.setStartDate(plan.startDate);
+                wo.setEndDate(plan.endDate);
+                wo.setTargetQty(plan.totalQty);
+                wo.setStatus("PLANNED");
+                wo.setPc(user);
+                // Generate parentLotNumber to satisfy unique constraint
+                String lot = machine.getMachineCode()
+                        + "-" + plan.startDate.toString().replace("-", "")
+                        + "-" + plan.woNumber.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
+                if (lot.length() > 95) lot = lot.substring(0, 95);
+                wo.setParentLotNumber(lot);
+                reportRepository.save(wo);
+                c.wosCreated++;
             }
-            upsertedDates.add(rec.planDate());
+
+            // Upsert daily plans
+            String sourceWo = "WO:" + plan.woNumber;
+            if (sourceWo.length() > 20) sourceWo = sourceWo.substring(0, 20);
+
+            for (Map.Entry<LocalDate, Integer> entry : plan.dailyQty.entrySet()) {
+                LocalDate date = entry.getKey();
+                int qty = entry.getValue();
+                if (qty <= 0) continue;
+
+                Optional<ProductionPlan> existingPlan = planRepository
+                        .findByMachineIdAndPlanDateAndProductId(machine.getId(), date, product.getId());
+
+                if (existingPlan.isPresent()) {
+                    String existingSource = existingPlan.get().getSource();
+                    if (existingSource != null && existingSource.equalsIgnoreCase("excel")) {
+                        c.plansSkipped++;
+                        continue;
+                    }
+                    existingPlan.get().setTargetQty(qty);
+                    existingPlan.get().setSource(sourceWo);
+                    planRepository.save(existingPlan.get());
+                    c.plansCreated++;
+                } else {
+                    ProductionPlan p = new ProductionPlan();
+                    p.setMachine(machine);
+                    p.setProduct(product);
+                    p.setPlanDate(date);
+                    p.setTargetQty(qty);
+                    p.setSource(sourceWo);
+                    p.setStatus("draft");
+                    p.setManpowerDRatio(new BigDecimal("0.50"));
+                    p.setManpowerNRatio(new BigDecimal("0.50"));
+                    p.setCreatedBy(user);
+                    p.setExcelFileRef(filename);
+                    planRepository.save(p);
+                    c.plansCreated++;
+                }
+                affectedDates.add(date);
+            }
         }
 
         // Trigger setup job scan for affected date range
-        if (!upsertedDates.isEmpty()) {
-            LocalDate minDate = upsertedDates.first();
-            LocalDate maxDate = upsertedDates.last();
+        if (!affectedDates.isEmpty()) {
             try {
-                setupJobService.scanAndCreateSetupJobs(minDate, maxDate);
+                List<MachineSetupJob> jobs = setupJobService.scanAndCreateSetupJobs(
+                        affectedDates.first().minusDays(1),
+                        affectedDates.last().plusDays(1));
+                c.setupJobsCreated = jobs.size();
             } catch (Exception e) {
                 logger.warn("Setup job scan failed: {}", e.getMessage());
                 c.warnings.add("Setup job scan failed: " + e.getMessage());
             }
         }
+
         return c;
     }
 
     // ── Import log ────────────────────────────────────────────────────────────
 
-    private void writeLog(String filename, String factoryCode, Counts c, String username) {
+    private void writeLog(String filename, String factoryCode, WoCounts c, String username) {
         try {
             User user = userRepository.findByUsername(username).orElse(null);
             if (user == null) return;
@@ -442,10 +619,10 @@ public class ProductionPlanImportService {
             log.setFilename(filename);
             log.setFactoryCode(factoryCode);
             log.setImportedBy(user);
-            log.setRowsAdded(c.added);
-            log.setRowsUpdated(c.updated);
-            log.setRowsSkippedPast(c.skippedPast);
-            log.setRowsSkippedStarted(c.skippedStarted);
+            log.setRowsAdded(c.wosCreated);
+            log.setRowsUpdated(c.wosUpdated);
+            log.setRowsSkippedPast(0);
+            log.setRowsSkippedStarted(0);
             if (!c.warnings.isEmpty()) {
                 log.setErrorsJson(c.warnings.stream()
                         .map(w -> "\"" + w.replace("\"", "\\\"") + "\"")
@@ -455,6 +632,30 @@ public class ProductionPlanImportService {
         } catch (Exception e) {
             logger.warn("Failed to write import log: {}", e.getMessage());
         }
+    }
+
+    private ImportResult buildResult(String filename, SheetConfig config, WoCounts c, boolean dryRun) {
+        String status = dryRun ? "DRY_RUN" : "SUCCESS";
+        String message = dryRun
+                ? String.format("DRY RUN: %d WOs would be created", c.wosCreated)
+                : String.format("+%d WOs  ~%d updated  %d plans  %d setup jobs",
+                        c.wosCreated, c.wosUpdated, c.plansCreated, c.setupJobsCreated);
+        return new ImportResult(
+                filename,
+                config.factoryCode(),
+                config.sheet().getSheetName(),
+                c.wosCreated,   // rowsAdded = wosCreated (backward compat)
+                c.wosUpdated,   // rowsUpdated = wosUpdated
+                0,              // rowsSkippedPast
+                0,              // rowsSkippedStarted
+                c.wosCreated,
+                c.wosUpdated,
+                c.plansCreated,
+                c.setupJobsCreated,
+                status,
+                message,
+                List.copyOf(c.warnings)
+        );
     }
 
     // ── Cell helpers ──────────────────────────────────────────────────────────
@@ -477,7 +678,10 @@ public class ProductionPlanImportService {
 
     private LocalDate parseDateCell(Cell cell) {
         if (cell == null) return null;
-        if (cell.getCellType() == CellType.NUMERIC) {
+        // Resolve formula cells to their cached result type before branching.
+        CellType effective = (cell.getCellType() == CellType.FORMULA)
+                ? cell.getCachedFormulaResultType() : cell.getCellType();
+        if (effective == CellType.NUMERIC) {
             if (DateUtil.isCellDateFormatted(cell)) {
                 return cell.getDateCellValue()
                         .toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
@@ -487,7 +691,7 @@ public class ProductionPlanImportService {
                 return LocalDate.ofEpochDay((long) v - 25569);
             }
         }
-        if (cell.getCellType() == CellType.STRING) {
+        if (effective == CellType.STRING) {
             String s = cell.getStringCellValue().trim();
             try {
                 int day = Integer.parseInt(s);
@@ -497,9 +701,11 @@ public class ProductionPlanImportService {
         return null;
     }
 
-    private String getStringValue(Cell cell) {
+    String getStringValue(Cell cell) {
         if (cell == null) return null;
-        return switch (cell.getCellType()) {
+        CellType effective = (cell.getCellType() == CellType.FORMULA)
+                ? cell.getCachedFormulaResultType() : cell.getCellType();
+        return switch (effective) {
             case STRING  -> cell.getStringCellValue().trim();
             case NUMERIC -> {
                 double v = cell.getNumericCellValue();
@@ -510,15 +716,17 @@ public class ProductionPlanImportService {
         };
     }
 
-    private Integer getIntValue(Cell cell) {
+    Integer getIntValue(Cell cell) {
         if (cell == null) return null;
-        if (cell.getCellType() == CellType.ERROR) return null;
-        if (cell.getCellType() == CellType.BLANK)  return null;
-        if (cell.getCellType() == CellType.NUMERIC) {
+        // Resolve formula cells to their cached numeric/string result.
+        CellType effective = (cell.getCellType() == CellType.FORMULA)
+                ? cell.getCachedFormulaResultType() : cell.getCellType();
+        if (effective == CellType.ERROR || effective == CellType.BLANK) return null;
+        if (effective == CellType.NUMERIC) {
             double v = cell.getNumericCellValue();
             return (v > 0) ? (int) v : null;
         }
-        if (cell.getCellType() == CellType.STRING) {
+        if (effective == CellType.STRING) {
             try {
                 int v = Integer.parseInt(cell.getStringCellValue().trim());
                 return v > 0 ? v : null;

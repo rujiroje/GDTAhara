@@ -13,9 +13,9 @@ import SubLotTree from './SubLotTree';
 import {
   getPlansForDate,
   getShiftSplit,
-  countBoxes,
   confirmBox as apiConfirmBox,
 } from '../../api/phase1Api';
+import axiosInstance from '../../api/axios';
 
 // ── field helpers (handles both flat DTO and nested entity shapes) ────────────
 
@@ -118,11 +118,11 @@ const RunCardV2 = ({ activeReports = [], initialReport = null }) => {
       .catch(()  => setShiftSplit(null));
   }, [currentPlan?.id]);
 
-  // Load box count when report or SubLotTree refreshes
+  // Load box count from packaging_logs (actual boxes packed by operator)
   useEffect(() => {
     if (!productionReportId) { setBoxData(null); return; }
-    countBoxes(productionReportId)
-      .then(data => setBoxData(data))
+    axiosInstance.get(`/operator/reports/${productionReportId}/packaging-count`)
+      .then(res => setBoxData(res.data))
       .catch(()  => setBoxData(null));
   }, [productionReportId, refreshKey]);
 
