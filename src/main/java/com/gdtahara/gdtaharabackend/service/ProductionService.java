@@ -162,6 +162,18 @@ public class ProductionService {
             report.setProduct(product);
             report.setPc(pcUser);
 
+            // Auto-generate parentLotNumber to satisfy uk_pr_parent_lot_number.
+            // SQL Server UNIQUE allows only ONE NULL; subsequent inserts with NULL fail.
+            // Format: {machineCode}-{yyyyMMdd}-{sanitisedOrderNumber}  e.g. "RBL101-20260602-PO3520"
+            String machinePart = machine.getMachineCode() != null
+                    ? machine.getMachineCode() : String.valueOf(machine.getId());
+            String datePart    = request.getStartDate().toString().replace("-", "");
+            String orderPart   = request.getOrderNumber().trim()
+                    .replaceAll("[^A-Za-z0-9]", "").toUpperCase();
+            String lotNum = machinePart + "-" + datePart + "-" + orderPart;
+            if (lotNum.length() > 95) lotNum = lotNum.substring(0, 95);
+            report.setParentLotNumber(lotNum);
+
             ProductionReport saved = productionReportRepository.save(report);
             logger.info("✅ Production report created with ID: {} by PC: {}", saved.getId(), pcUser.getUsername());
             auditLogService.log("CREATE", "ProductionReport", saved.getId(), null,
