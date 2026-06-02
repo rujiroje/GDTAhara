@@ -92,6 +92,48 @@ export const getImportLogs = async (factoryCode) => {
   return response.data;
 };
 
+// ── Machine Setup Job ─────────────────────────────────────────────
+
+/** Pending setup jobs assigned (or unassigned) to a specific technician user. */
+export const getPendingSetupJobs = async (userId) => {
+  const response = await axiosInstance.get(`/setup-jobs/technician/${userId}/pending`);
+  return response.data;
+};
+
+/** Trigger a scan for setup jobs in a date range (PC / Admin only). */
+export const scanSetupJobs = async (from, to) => {
+  const response = await axiosInstance.post('/setup-jobs/scan', null, { params: { from, to } });
+  return response.data;
+};
+
+/** Assign a setup job to a technician. */
+export const assignSetupJob = async (id, technicianUserId) => {
+  const response = await axiosInstance.put(`/setup-jobs/${id}/assign`, { technicianUserId });
+  return response.data;
+};
+
+/** Mark a setup job as started (records startedAt + duration clock). */
+export const startSetup = async (id) => {
+  const response = await axiosInstance.put(`/setup-jobs/${id}/start`);
+  return response.data;
+};
+
+/**
+ * Mark a setup job as completed with checklist data.
+ * payload: { moldChanged, moldCodeFrom, moldCodeTo, tempAdjusted, cycleAdjusted, blowPinAligned, fpiPassed, notes }
+ * Backend auto-creates a DowntimeEvent for OEE calculation.
+ */
+export const completeSetup = async (id, payload) => {
+  const response = await axiosInstance.put(`/setup-jobs/${id}/complete`, payload);
+  return response.data;
+};
+
+/** Skip a setup job with a reason (creates a SKIPPED record instead). */
+export const skipSetup = async (id, skipReason) => {
+  const response = await axiosInstance.put(`/setup-jobs/${id}/skip`, { skipReason });
+  return response.data;
+};
+
 // ── Label Print ────────────────────────────────────────────────────
 
 export const getZpl = async (id) => {

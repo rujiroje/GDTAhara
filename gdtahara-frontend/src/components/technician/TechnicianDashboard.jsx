@@ -7,6 +7,7 @@ import _ from 'lodash';
 import ParameterChecklistForm from './ParameterChecklistForm';
 import PmSchedulePanel from './PmSchedulePanel';
 import RecipePanel from '../pc/RecipePanel';
+import SetupJobPanel from './SetupJobPanel';
 
 // --- API Service ---
 const API_URL = 'http://localhost:8080/api';
@@ -593,6 +594,7 @@ const TechnicianDashboard = () => {
     return (
         <div className="dashboard-card">
             <NotificationPanel />
+            <SetupJobPanel />
             <PmSchedulePanel />
             <RecipePanel />
             <h2 className="dashboard-title">เลือกใบสั่งผลิตเพื่อบันทึกข้อมูล</h2>

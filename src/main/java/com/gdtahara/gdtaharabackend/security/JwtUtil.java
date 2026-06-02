@@ -42,6 +42,10 @@ public class JwtUtil {
                 .map(auth -> auth.replace("ROLE_", ""))
                 .orElse("");
         claims.put("role", role);
+        // Include userId so the frontend can resolve the DB user ID without an extra API call
+        if (userDetails instanceof com.gdtahara.gdtaharabackend.model.User u && u.getId() != null) {
+            claims.put("userId", u.getId());
+        }
         return createToken(claims, userDetails.getUsername());
     }
 

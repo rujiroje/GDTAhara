@@ -21,7 +21,9 @@ export const AuthProvider = ({ children }) => {
             if (token) {
                 const decodedUser = jwtDecode(token);
                 if (decodedUser.exp * 1000 > Date.now()) {
-                    setUser({ username: decodedUser.sub, role: decodedUser.role });
+                    const userId = decodedUser.userId ?? null;
+                    setUser({ username: decodedUser.sub, role: decodedUser.role, userId });
+                    if (userId != null) localStorage.setItem('userId', String(userId));
                 } else { localStorage.removeItem('token'); }
             }
         } catch (error) {
@@ -36,7 +38,9 @@ export const AuthProvider = ({ children }) => {
         const { token } = response.data;
         localStorage.setItem('token', token);
         const decodedUser = jwtDecode(token);
-        setUser({ username: decodedUser.sub, role: decodedUser.role });
+        const userId = decodedUser.userId ?? null;
+        setUser({ username: decodedUser.sub, role: decodedUser.role, userId });
+        if (userId != null) localStorage.setItem('userId', String(userId));
     };
 
     const logout = () => {
