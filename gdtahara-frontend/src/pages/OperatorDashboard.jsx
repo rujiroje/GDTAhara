@@ -32,7 +32,7 @@ const OperatorDashboard = () => {
     const [selectedReport, setSelectedReport] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [connectionStatus, setConnectionStatus] = useState('testing');
+    const [ setConnectionStatus] = useState('testing');
 
     // Test backend connection when component mounts
     useEffect(() => {
