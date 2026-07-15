@@ -3,6 +3,7 @@
 // =================================================================
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import MachineSelectGrid from '../common/MachineSelectGrid';
 
 // --- API Service (จำลองการตั้งค่า) ---
 const API_URL = 'http://localhost:8080/api';
@@ -307,22 +308,12 @@ const QaDashboard = () => {
 
     return (
         <div className="dashboard-card">
-            <h2 className="dashboard-title">เลือกใบสั่งผลิตเพื่อตรวจสอบคุณภาพ</h2>
             {error && <p className="error-message">{error}</p>}
-            {activeReports.length === 0 && !error && <p>ไม่มีใบสั่งผลิตที่กำลังทำงานอยู่</p>}
-            <div className="report-selection-container">
-                {activeReports.map(report => (
-                    <div key={report.id} className="report-card">
-                        <h3>{report.machineName}</h3>
-                        <p>{report.productName}</p>
-                        {report.orderNumber && <p>Order No.: {report.orderNumber}</p>}
-                        <p>วันที่: {report.startDate} – {report.endDate}</p>
-                        <button className="select-button" onClick={() => setSelectedReport(report)}>
-                            เลือก
-                        </button>
-                    </div>
-                ))}
-            </div>
+            <MachineSelectGrid
+                reports={activeReports}
+                onSelect={report => setSelectedReport(report)}
+                title="เลือกใบสั่งผลิตเพื่อตรวจสอบคุณภาพ"
+            />
         </div>
     );
 };

@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect } from 'react';
 import axiosInstance from '../api/axios';
 import {
     Box, Button, TextField, Paper,
@@ -8,17 +7,7 @@ import {
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import PackagingLabelPrint from './PackagingLabelPrint';
-
-// Portal div reused across renders — created once, never removed
-function getPrintPortal() {
-    let el = document.getElementById('pkg-print-portal');
-    if (!el) {
-        el = document.createElement('div');
-        el.id = 'pkg-print-portal';
-        document.body.appendChild(el);
-    }
-    return el;
-}
+import { printPackagingLabel } from '../utils/printPackagingLabel';
 
 const PackagingRecording = ({ report, onBack }) => {
     const [lotNumber, setLotNumber]     = useState('');
@@ -28,7 +17,6 @@ const PackagingRecording = ({ report, onBack }) => {
     const [labelData, setLabelData]     = useState(null);
     const [printOpen, setPrintOpen]     = useState(false);
     const [feedback, setFeedback]       = useState({ open: false, message: '', severity: 'success' });
-    const portalEl                      = useRef(getPrintPortal());
 
     // Pre-fill lot number with today's date in yymmdd format (e.g. 260602)
     useEffect(() => {
@@ -102,20 +90,10 @@ const PackagingRecording = ({ report, onBack }) => {
         }
     };
 
-    const handlePrint = () => {
-        // Sync label into the print portal, then print
-        // The portal is shown via @media print in index.css
-        window.print();
-    };
+    const handlePrint = () => printPackagingLabel();
 
     return (
         <Box>
-            {/* Print portal — only visible during window.print() */}
-            {labelData && createPortal(
-                <PackagingLabelPrint labelData={labelData} />,
-                portalEl.current
-            )}
-
             <Button variant="outlined" onClick={onBack} sx={{ mb: 2 }}>
                 &larr; กลับไปเลือกงาน
             </Button>
@@ -156,12 +134,16 @@ const PackagingRecording = ({ report, onBack }) => {
             </Box>
 
             {/* Print preview dialog */}
-            <Dialog open={printOpen} onClose={() => setPrintOpen(false)} maxWidth="sm" fullWidth>
+            <Dialog open={printOpen} onClose={() => setPrintOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>
                     Preview Label — กล่องที่ {String(labelData?.boxNo ?? 0).padStart(3, '0')}
                 </DialogTitle>
-                <DialogContent dividers sx={{ p: 3 }}>
-                    {labelData && <PackagingLabelPrint labelData={labelData} />}
+                <DialogContent sx={{ overflow: 'hidden' }}>
+                    {labelData && (
+                        <div className="pkg-label-preview-wrap">
+                            <PackagingLabelPrint labelData={labelData} />
+                        </div>
+                    )}
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setPrintOpen(false)}>ปิด</Button>

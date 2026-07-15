@@ -3,6 +3,7 @@
 // =================================================================
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import MachineSelectGrid from '../common/MachineSelectGrid';
 
 // --- API Service ---
 const API_URL = 'http://localhost:8080/api';
@@ -120,20 +121,12 @@ const CmOperatorDashboard = () => {
     if (!selectedReport) {
         return (
             <div className="dashboard-card">
-                <h2 className="dashboard-title">ขั้นตอนที่ 1: เลือกใบสั่งผลิตเพื่อบันทึกการใช้วัตถุดิบ</h2>
                 {error && <p className="error-message">{error}</p>}
-                {(!activeReports || activeReports.length === 0) && !error && <p>ไม่มีใบสั่งผลิตที่กำลังทำงานอยู่</p>}
-                <div className="report-selection-container">
-                    {activeReports && Array.isArray(activeReports) && activeReports.map(report => (
-                        <div key={report.id} className="report-card">
-                            <h3>{report.machineName}</h3>
-                            <p>{report.productName}</p>
-                            {report.orderNumber && <p>Order No.: {report.orderNumber}</p>}
-                            <p>วันที่: {report.startDate} – {report.endDate}</p>
-                            <button className="select-button" onClick={() => handleSelectReport(report)}>เลือก</button>
-                        </div>
-                    ))}
-                </div>
+                <MachineSelectGrid
+                    reports={activeReports ?? []}
+                    onSelect={report => handleSelectReport(report)}
+                    title="เลือกใบสั่งผลิตเพื่อบันทึกการใช้วัตถุดิบ"
+                />
             </div>
         );
     }

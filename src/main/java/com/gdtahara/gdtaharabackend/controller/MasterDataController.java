@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
@@ -26,7 +27,11 @@ public class MasterDataController {
     private MasterDataService masterDataService;
 
     @GetMapping("/ng-types")
-    public ResponseEntity<List<NgType>> getAllNgTypes() {
+    public ResponseEntity<List<NgType>> getAllNgTypes(
+            @RequestParam(required = false) String machineType) {
+        if (machineType != null && !machineType.isBlank()) {
+            return ResponseEntity.ok(masterDataService.getNgTypesByMachineType(machineType));
+        }
         return ResponseEntity.ok(masterDataService.getAllNgTypes());
     }
 

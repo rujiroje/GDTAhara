@@ -16,4 +16,5 @@ public class Material {
     private String materialName;
     private String materialType;
     private String unit;
+    private String plantCode;
 }

@@ -43,6 +43,9 @@ public class MasterDataService {
 
     // NG Type methods
     public List<NgType> getAllNgTypes() { return ngTypeRepository.findAll(); }
+    public List<NgType> getNgTypesByMachineType(String machineType) {
+        return ngTypeRepository.findByMachineTypeAndNgType(machineType, "Operator");
+    }
     public NgType saveNgType(NgType ngType) { return ngTypeRepository.save(ngType); }
     public void deleteNgType(Long id) { ngTypeRepository.deleteById(id); }
     

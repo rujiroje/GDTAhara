@@ -200,4 +200,6 @@ public interface ProductionReportRepository extends JpaRepository<ProductionRepo
     // WO import: find all order numbers matching a prefix pattern for sequence generation
     @Query("SELECT pr.orderNumber FROM ProductionReport pr WHERE pr.orderNumber LIKE :pattern ORDER BY pr.orderNumber ASC")
     List<String> findOrderNumbersLike(@Param("pattern") String pattern);
+
+    List<ProductionReport> findByStartDateBetween(LocalDate from, LocalDate to);
 }

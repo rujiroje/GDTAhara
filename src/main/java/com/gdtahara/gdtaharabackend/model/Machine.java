@@ -20,4 +20,7 @@ public class Machine {
 
     @Column(name = "machine_name")
     private String machineName;
+
+    @Column(name = "machine_type")
+    private String machineType;
 }

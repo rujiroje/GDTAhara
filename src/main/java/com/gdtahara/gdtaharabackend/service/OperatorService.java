@@ -5,6 +5,7 @@ package com.gdtahara.gdtaharabackend.service;
 
 import com.gdtahara.gdtaharabackend.dto.NgLogRequestDto;
 import com.gdtahara.gdtaharabackend.dto.PackagingLogRequestDto;
+import com.gdtahara.gdtaharabackend.dto.PackagingLogViewDto;
 import com.gdtahara.gdtaharabackend.dto.ProblemAlertRequestDto;
 import com.gdtahara.gdtaharabackend.dto.ProductionReportSimpleViewDto;
 import com.gdtahara.gdtaharabackend.model.*;
@@ -86,6 +87,7 @@ public class OperatorService {
                 report.getMachine() != null ? report.getMachine().getMachineName() : "Unknown Machine",
                 report.getProduct() != null ? report.getProduct().getProductName() : "Unknown Product",
                 report.getMachine() != null ? String.valueOf(report.getMachine().getId()) : null,
+                report.getMachine() != null ? report.getMachine().getMachineType() : null,
                 report.getParentLotNumber(),
                 report.getShift()
         );
@@ -130,6 +132,7 @@ public class OperatorService {
         ngLog.setNgType(ngType);
         ngLog.setQuantity(request.getQuantity());
         ngLog.setSource(request.getSource());
+        ngLog.setNote(request.getNote());
         NgLog saved = ngLogRepository.save(ngLog);
         auditLogService.log("CREATE", "NgLog", saved.getId(), null,
                 Map.of("id", saved.getId(), "reportId", String.valueOf(reportId),
@@ -142,6 +145,18 @@ public class OperatorService {
     @Transactional(readOnly = true)
     public long countPackagingLogs(Long reportId) {
         return packagingLogRepository.countByReportId(reportId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PackagingLogViewDto> listPackagingLogs(Long reportId) {
+        return packagingLogRepository.findByReportIdOrderByLotNumberAscBoxNoAsc(reportId)
+                .stream()
+                .map(log -> new PackagingLogViewDto(
+                        log.getTimestamp(),
+                        log.getLotNumber(),
+                        log.getBoxNo(),
+                        log.getOperator() != null ? log.getOperator().getUsername() : ""))
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Transactional(readOnly = true)

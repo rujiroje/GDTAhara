@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Alert,
   Box,
@@ -25,12 +25,19 @@ import BuildIcon from '@mui/icons-material/Build';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { useAuth } from '../../App';
 import {
   completeSetup,
   getPendingSetupJobs,
   skipSetup,
   startSetup,
+  getSetupTemplates,
+  getJobSteps,
+  saveStepResults,
+  uploadStepPhoto,
+  getStepPhotoUrl,
 } from '../../api/phase1Api';
 
 const STATUS_COLOR = {
@@ -40,22 +47,21 @@ const STATUS_COLOR = {
   SKIPPED: 'default',
 };
 
-const BLANK_CHECKLIST = {
-  moldChanged: false,
-  moldCodeFrom: '',
-  moldCodeTo: '',
-  tempAdjusted: false,
-  cycleAdjusted: false,
-  blowPinAligned: false,
-  fpiPassed: false,
-  notes: '',
+// Map template label → legacy boolean key on the job record
+const toLegacyKey = (label) => {
+  const l = (label || '').toLowerCase();
+  if (l.includes('mold')) return 'moldChanged';
+  if (l.includes('อุณหภูม') || l.includes('temp')) return 'tempAdjusted';
+  if (l.includes('cycle')) return 'cycleAdjusted';
+  if (l.includes('blow pin') || l.includes('blowpin')) return 'blowPinAligned';
+  if (l.includes('fpi')) return 'fpiPassed';
+  return null;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SetupJobPanel = () => {
   const { user } = useAuth();
-  // Prefer userId from auth context; fall back to localStorage for sessions without new JWT
   const _rawId = user?.userId != null ? user.userId : Number(localStorage.getItem('userId') || '0');
   const userId = _rawId > 0 ? _rawId : null;
 
@@ -63,20 +69,26 @@ const SetupJobPanel = () => {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
 
-  // Complete dialog state
+  // Complete dialog
   const [completeJob, setCompleteJob] = useState(null);
-  const [checklist, setChecklist] = useState(BLANK_CHECKLIST);
+  const [templates, setTemplates] = useState([]);
+  const [stepResults, setStepResults] = useState({}); // { [templateId]: { done, notes, photoFile, photoPreview, existingPhoto } }
+  const [moldCodes, setMoldCodes] = useState({ from: '', to: '' });
+  const [jobNotes, setJobNotes] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [completing, setCompleting] = useState(false);
 
-  // Skip dialog state
+  // Skip dialog
   const [skipJob, setSkipJob] = useState(null);
   const [skipReason, setSkipReason] = useState('');
   const [skipping, setSkipping] = useState(false);
 
-  // Snackbar
   const [snack, setSnack] = useState({ open: false, message: '', severity: 'success' });
   const showSnack = (message, severity = 'success') =>
     setSnack({ open: true, message, severity });
+
+  // File input refs keyed by templateId
+  const fileInputRefs = useRef({});
 
   const loadJobs = useCallback(async () => {
     if (!userId) return;
@@ -94,27 +106,121 @@ const SetupJobPanel = () => {
 
   useEffect(() => { loadJobs(); }, [loadJobs]);
 
-  // ── Start → immediately open complete dialog ────────────────────────────────
+  // ── Open complete dialog ───────────────────────────────────────────────────
+  const openComplete = useCallback(async (job) => {
+    setCompleteJob(job);
+    setMoldCodes({ from: job.moldCodeFrom || '', to: job.moldCodeTo || '' });
+    setJobNotes(job.notes || '');
+    setStepResults({});
+    setTemplates([]);
+    setLoadingTemplates(true);
+    try {
+      const [tpls, existingSteps] = await Promise.all([
+        getSetupTemplates(job.machineType || ''),
+        getJobSteps(job.id),
+      ]);
+      setTemplates(tpls);
+
+      // Build initial stepResults from existing DB data
+      const init = {};
+      tpls.forEach((t) => {
+        const existing = existingSteps.find((s) => s.template?.id === t.id);
+        init[t.id] = {
+          done: existing?.done ?? false,
+          notes: existing?.notes ?? '',
+          photoFile: null,
+          photoPreview: null,
+          existingPhoto: existing?.photoFilename ?? null,
+        };
+      });
+      setStepResults(init);
+    } catch (err) {
+      showSnack('โหลด Checklist ไม่สำเร็จ', 'error');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }, []);
+
   const handleStart = async (job) => {
     try {
       await startSetup(job.id);
-      setChecklist(BLANK_CHECKLIST);
-      setCompleteJob({ ...job, status: 'IN_PROGRESS' });
+      await openComplete({ ...job, status: 'IN_PROGRESS' });
     } catch (err) {
       showSnack(`เริ่ม Setup ไม่สำเร็จ: ${err?.response?.data?.message || err.message}`, 'error');
     }
   };
 
-  const openComplete = (job) => {
-    setChecklist(BLANK_CHECKLIST);
-    setCompleteJob(job);
+  // ── Step helpers ──────────────────────────────────────────────────────────
+  const setStepDone = (templateId, checked) =>
+    setStepResults((prev) => ({
+      ...prev,
+      [templateId]: { ...prev[templateId], done: checked },
+    }));
+
+  const setStepNotes = (templateId, val) =>
+    setStepResults((prev) => ({
+      ...prev,
+      [templateId]: { ...prev[templateId], notes: val },
+    }));
+
+  const handlePhotoSelect = (templateId, file) => {
+    if (!file) return;
+    const preview = URL.createObjectURL(file);
+    setStepResults((prev) => ({
+      ...prev,
+      [templateId]: { ...prev[templateId], photoFile: file, photoPreview: preview, existingPhoto: null },
+    }));
   };
 
+  const clearPhoto = (templateId) => {
+    const sr = stepResults[templateId];
+    if (sr?.photoPreview) URL.revokeObjectURL(sr.photoPreview);
+    setStepResults((prev) => ({
+      ...prev,
+      [templateId]: { ...prev[templateId], photoFile: null, photoPreview: null, existingPhoto: null },
+    }));
+  };
+
+  // ── Submit complete ───────────────────────────────────────────────────────
   const handleComplete = async () => {
     if (!completeJob) return;
     setCompleting(true);
     try {
-      await completeSetup(completeJob.id, checklist);
+      // 1. Upload pending photos
+      for (const tpl of templates) {
+        const sr = stepResults[tpl.id];
+        if (sr?.photoFile) {
+          await uploadStepPhoto(completeJob.id, tpl.id, sr.photoFile);
+        }
+      }
+
+      // 2. Save step results
+      const stepPayload = templates.map((tpl) => ({
+        templateId: tpl.id,
+        done: stepResults[tpl.id]?.done ?? false,
+        notes: stepResults[tpl.id]?.notes ?? '',
+      }));
+      await saveStepResults(completeJob.id, stepPayload);
+
+      // 3. Build legacy checklist from step results
+      const legacy = {
+        moldChanged: false,
+        moldCodeFrom: moldCodes.from,
+        moldCodeTo: moldCodes.to,
+        tempAdjusted: false,
+        cycleAdjusted: false,
+        blowPinAligned: false,
+        fpiPassed: false,
+        notes: jobNotes,
+      };
+      templates.forEach((tpl) => {
+        const key = toLegacyKey(tpl.label);
+        if (key) legacy[key] = stepResults[tpl.id]?.done ?? false;
+      });
+
+      // 4. Complete the job
+      await completeSetup(completeJob.id, legacy);
+
       showSnack('Setup เสร็จสิ้น — ระบบบันทึก Downtime Event เพื่อคำนวณ OEE แล้ว');
       setCompleteJob(null);
       loadJobs();
@@ -145,16 +251,12 @@ const SetupJobPanel = () => {
     }
   };
 
-  const setCheck = (key) => (e) =>
-    setChecklist((prev) => ({ ...prev, [key]: e.target.checked }));
-  const setVal = (key) => (e) =>
-    setChecklist((prev) => ({ ...prev, [key]: e.target.value }));
+  const isMoldStep = (label) => (label || '').toLowerCase().includes('mold');
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <Box sx={{ mb: 3 }}>
 
-      {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
         <BuildIcon color="warning" />
         <Typography variant="h6" fontWeight={700}>งาน Setup เครื่องจักร</Typography>
@@ -176,7 +278,6 @@ const SetupJobPanel = () => {
         <Alert severity="info" sx={{ mb: 1 }}>ไม่มีงาน Setup ที่รอดำเนินการ</Alert>
       )}
 
-      {/* Job cards */}
       {jobs.map((job) => (
         <Card
           key={job.id}
@@ -188,6 +289,9 @@ const SetupJobPanel = () => {
               <Box>
                 <Typography variant="subtitle1" fontWeight={700}>
                   {job.machineName || job.machineCode || `Machine ${job.machineId}`}
+                  {job.machineType && (
+                    <Chip label={job.machineType} size="small" sx={{ ml: 1, fontSize: '0.7rem' }} />
+                  )}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   วันที่: {job.planDate}
@@ -257,80 +361,132 @@ const SetupJobPanel = () => {
         <DialogTitle sx={{ pb: 0.5 }}>
           ✅ บันทึกผล Setup
           <Typography variant="body2" color="text.secondary">
-            {completeJob?.machineName} &nbsp;|&nbsp;
+            {completeJob?.machineName}
+            {completeJob?.machineType && ` (${completeJob.machineType})`}
+            &nbsp;|&nbsp;
             {completeJob?.fromProductCode || '—'} → {completeJob?.toProductCode || '—'}
           </Typography>
         </DialogTitle>
 
         <DialogContent dividers>
-          <Stack spacing={1.5}>
+          {loadingTemplates ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <Stack spacing={2}>
+              {templates.map((tpl) => {
+                const sr = stepResults[tpl.id] || {};
+                const photoSrc = sr.photoPreview || (sr.existingPhoto ? getStepPhotoUrl(sr.existingPhoto) : null);
 
-            {/* Mold */}
-            <FormControlLabel
-              control={
-                <Checkbox checked={checklist.moldChanged} onChange={setCheck('moldChanged')} />
-              }
-              label="เปลี่ยน Mold"
-            />
-            {checklist.moldChanged && (
-              <Stack direction="row" spacing={1}>
-                <TextField
-                  size="small"
-                  label="Mold Code เดิม"
-                  value={checklist.moldCodeFrom}
-                  onChange={setVal('moldCodeFrom')}
-                  sx={{ flex: 1 }}
-                />
-                <TextField
-                  size="small"
-                  label="Mold Code ใหม่"
-                  value={checklist.moldCodeTo}
-                  onChange={setVal('moldCodeTo')}
-                  sx={{ flex: 1 }}
-                />
-              </Stack>
-            )}
+                return (
+                  <Box key={tpl.id} sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 1.5 }}>
+                    {/* Checkbox row */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={sr.done ?? false}
+                            onChange={(e) => setStepDone(tpl.id, e.target.checked)}
+                          />
+                        }
+                        label={
+                          <Typography variant="body2">
+                            {tpl.label}
+                            {tpl.required && (
+                              <Typography component="span" color="error" sx={{ ml: 0.5 }}>*</Typography>
+                            )}
+                          </Typography>
+                        }
+                      />
 
-            {/* Adjustments */}
-            <FormControlLabel
-              control={
-                <Checkbox checked={checklist.tempAdjusted} onChange={setCheck('tempAdjusted')} />
-              }
-              label="ปรับอุณหภูมิ (Temperature)"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox checked={checklist.cycleAdjusted} onChange={setCheck('cycleAdjusted')} />
-              }
-              label="ปรับ Cycle Time"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={checklist.blowPinAligned}
-                  onChange={setCheck('blowPinAligned')}
-                />
-              }
-              label="จัดตำแหน่ง Blow Pin"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox checked={checklist.fpiPassed} onChange={setCheck('fpiPassed')} />
-              }
-              label="First Piece Inspection (FPI) ผ่าน ✓"
-            />
+                      {/* Camera button */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        {photoSrc && (
+                          <IconButton size="small" color="error" onClick={() => clearPhoto(tpl.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                        <Tooltip title="แนบรูปถ่าย">
+                          <IconButton
+                            size="small"
+                            color={photoSrc ? 'success' : 'default'}
+                            onClick={() => fileInputRefs.current[tpl.id]?.click()}
+                          >
+                            <CameraAltIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          style={{ display: 'none' }}
+                          ref={(el) => { fileInputRefs.current[tpl.id] = el; }}
+                          onChange={(e) => handlePhotoSelect(tpl.id, e.target.files?.[0])}
+                        />
+                      </Box>
+                    </Box>
 
-            {/* Notes */}
-            <TextField
-              multiline
-              rows={2}
-              size="small"
-              label="หมายเหตุ"
-              fullWidth
-              value={checklist.notes}
-              onChange={setVal('notes')}
-            />
-          </Stack>
+                    {/* Photo thumbnail */}
+                    {photoSrc && (
+                      <Box sx={{ mt: 0.5, ml: 4 }}>
+                        <img
+                          src={photoSrc}
+                          alt="step photo"
+                          style={{ maxHeight: 120, maxWidth: '100%', borderRadius: 4, objectFit: 'cover' }}
+                        />
+                      </Box>
+                    )}
+
+                    {/* Mold code fields — only on Mold step when checked */}
+                    {isMoldStep(tpl.label) && sr.done && (
+                      <Stack direction="row" spacing={1} sx={{ mt: 1, ml: 4 }}>
+                        <TextField
+                          size="small"
+                          label="Mold Code เดิม"
+                          value={moldCodes.from}
+                          onChange={(e) => setMoldCodes((m) => ({ ...m, from: e.target.value }))}
+                          sx={{ flex: 1 }}
+                        />
+                        <TextField
+                          size="small"
+                          label="Mold Code ใหม่"
+                          value={moldCodes.to}
+                          onChange={(e) => setMoldCodes((m) => ({ ...m, to: e.target.value }))}
+                          sx={{ flex: 1 }}
+                        />
+                      </Stack>
+                    )}
+
+                    {/* Per-step notes */}
+                    <TextField
+                      size="small"
+                      placeholder="หมายเหตุขั้นตอนนี้ (ถ้ามี)"
+                      fullWidth
+                      value={sr.notes ?? ''}
+                      onChange={(e) => setStepNotes(tpl.id, e.target.value)}
+                      sx={{ mt: 1, ml: 0 }}
+                    />
+                  </Box>
+                );
+              })}
+
+              {templates.length === 0 && (
+                <Alert severity="warning">ยังไม่มีขั้นตอน Setup — กรุณาให้ Admin เพิ่มขั้นตอนก่อน</Alert>
+              )}
+
+              {/* Overall job notes */}
+              <TextField
+                multiline
+                rows={2}
+                size="small"
+                label="หมายเหตุรวม"
+                fullWidth
+                value={jobNotes}
+                onChange={(e) => setJobNotes(e.target.value)}
+              />
+            </Stack>
+          )}
         </DialogContent>
 
         <DialogActions>
@@ -341,7 +497,7 @@ const SetupJobPanel = () => {
             variant="contained"
             color="success"
             onClick={handleComplete}
-            disabled={completing}
+            disabled={completing || loadingTemplates}
             startIcon={completing ? <CircularProgress size={16} color="inherit" /> : null}
           >
             {completing ? 'กำลังบันทึก…' : 'เสร็จสิ้น'}

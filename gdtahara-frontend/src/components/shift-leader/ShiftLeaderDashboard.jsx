@@ -3,6 +3,9 @@
 // =================================================================
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import MachineSelectGrid from '../common/MachineSelectGrid';
+import MaterialRequirementDashboard from '../pc/MaterialRequirementDashboard';
+import MaterialStockManager from '../common/MaterialStockManager';
 
 // --- API Service ---
 const API_URL = 'http://localhost:8080/api';
@@ -57,146 +60,6 @@ const LabelStockManager = ({ onBack }) => {
     return ( <div className="dashboard-card"> <div className="sl-header"> <h2 className="dashboard-title">จัดการสต็อกป้าย (Label Stock)</h2> <button onClick={onBack} className="back-button-sl">กลับไปเมนูหลัก</button> </div> <div className="data-table-container"> <table className="data-table"> <thead><tr><th>รหัสผลิตภัณฑ์</th><th>ชื่อผลิตภัณฑ์</th><th>สต็อกปัจจุบัน</th><th>Actions</th></tr></thead> <tbody> {stocks.map(stock => ( <tr key={stock.productId}> <td>{stock.productCode}</td><td>{stock.productName}</td><td>{stock.currentStock?.toLocaleString() || 0}</td> <td className="actions-cell"> <button className="add-button" onClick={() => handleAddStockClick(stock)}>เพิ่มสต็อก</button> </td> </tr> ))} </tbody> </table> </div> <Modal isOpen={isModalOpen} onClose={handleCloseStockModal} title={`เพิ่มสต็อกสำหรับ: ${selectedProduct?.productName}`}> <form onSubmit={handleAddStock}><div className="form-group"><label className="form-label">จำนวนที่ต้องการเพิ่ม</label><input type="number" value={quantityToAdd} onChange={(e) => setQuantityToAdd(e.target.value)} className="form-input" required min="1"/></div><div className="form-actions"><button type="button" onClick={handleCloseStockModal} className="cancel-button">ยกเลิก</button><button type="submit" className="save-button">ยืนยัน</button></div></form> </Modal> </div> );
 };
 
-const MaterialStockManager = ({ onBack }) => {
-    const [stockCards, setStockCards] = useState([]);
-    const [materials, setMaterials] = useState([]);
-    const [selectedStockCard, setSelectedStockCard] = useState(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingTransaction, setEditingTransaction] = useState(null);
-    const initialFormData = { materialId: '', quantity: '', lotNumber: '' };
-    const [formData, setFormData] = useState(initialFormData);
-    const [loading, setLoading] = useState(true);
-
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const [materialsRes, stockCardsRes] = await Promise.all([
-                api.get('/master-data/materials'),
-                api.get('/shift-leader/material-stocks')
-            ]);
-            setMaterials(materialsRes.data);
-            setStockCards(stockCardsRes.data);
-        } catch (error) {
-            console.error("Failed to fetch material data", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => { fetchData(); }, []);
-
-    const handleFormChange = (e) => { const { name, value } = e.target; setFormData(prev => ({ ...prev, [name]: value })); };
-    
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        const apiCall = editingTransaction
-            ? api.put(`/shift-leader/stock-transactions/${editingTransaction.id}`, formData)
-            : api.post('/shift-leader/stock-transactions', { ...formData, transactionType: 'IN' });
-        try {
-            await apiCall;
-            alert(editingTransaction ? 'แก้ไขข้อมูลสำเร็จ!' : 'บันทึกรับของเข้าสำเร็จ!');
-            handleCloseModal();
-            fetchData();
-        } catch (error) { alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล'); }
-    };
-
-    const handleOpenCreateModal = () => {
-        setEditingTransaction(null);
-        setFormData(initialFormData);
-        setIsModalOpen(true);
-    };
-
-    const handleOpenEditModal = (transaction) => {
-        const material = materials.find(m => m.materialCode === selectedStockCard.materialCode);
-        setEditingTransaction(transaction);
-        setFormData({
-            materialId: material ? material.id : '',
-            quantity: transaction.quantity,
-            lotNumber: transaction.lotNumber
-        });
-        setIsModalOpen(true);
-    };
-    
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setEditingTransaction(null);
-    };
-
-    if (loading) return <div className="loading-container"><h2>กำลังโหลดข้อมูล...</h2></div>;
-    
-    const renderContent = () => {
-        if (selectedStockCard) {
-            return (
-                <div>
-                    <button onClick={() => setSelectedStockCard(null)} className="back-button-sl">&larr; กลับไปหน้ารวม</button>
-                    <h2 className="dashboard-title">Stock Card: {selectedStockCard.materialName} ({selectedStockCard.materialCode})</h2>
-                    <h3>ยอดคงเหลือปัจจุบัน: {selectedStockCard.currentStock} {materials.find(m => m.id === selectedStockCard.materialId)?.unit || ''}</h3>
-                    <div className="data-table-container">
-                        <table className="data-table">
-                            <thead><tr><th>วันที่/เวลา</th><th>ประเภท</th><th>จำนวน</th><th>Lot Number</th><th>ข้อมูลการผลิต</th><th>ผู้บันทึก</th><th>Actions</th></tr></thead>
-                            <tbody>
-                                {selectedStockCard.history.map(tx => (
-                                    <tr key={tx.id}>
-                                        <td>{tx.timestamp}</td>
-                                        <td><span className={tx.transactionType === 'IN' ? 'status-in-progress' : 'status-finalized'}>{tx.transactionType}</span></td>
-                                        <td>{tx.quantity}</td>
-                                        <td>{tx.lotNumber}</td>
-                                        <td>{tx.productionInfo}</td>
-                                        <td>{tx.userName}</td>
-                                        <td className="actions-cell">
-                                            {tx.transactionType === 'IN' && <button className="edit-button" onClick={() => handleOpenEditModal(tx)}>แก้ไข</button>}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            );
-        }
-        
-        return (
-            <div>
-                <div className="table-header">
-                    <h2 className="dashboard-title">จัดการสต็อกวัตถุดิบ</h2>
-                    <button className="add-button" onClick={handleOpenCreateModal}>รับของเข้า (Stock-In)</button>
-                </div>
-                <div className="data-table-container">
-                    <table className="data-table">
-                        <thead><tr><th>รหัสวัตถุดิบ</th><th>ชื่อวัตถุดิบ</th><th>ยอดคงเหลือ</th><th>Actions</th></tr></thead>
-                        <tbody>
-                            {stockCards.map(card => (
-                                <tr key={card.materialId}>
-                                    <td>{card.materialCode}</td>
-                                    <td>{card.materialName}</td>
-                                    <td>{card.currentStock}</td>
-                                    <td className="actions-cell">
-                                        <button className="add-button" onClick={() => setSelectedStockCard(card)}>ดูประวัติ</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        );
-    };
-
-    return (
-        <div className="dashboard-card">
-            {selectedStockCard ? null : <button onClick={onBack} className="back-button-sl">&larr; กลับไปเมนูหลัก</button>}
-            {renderContent()}
-            <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingTransaction ? "แก้ไขรายการรับเข้า" : "บันทึกรับวัตถุดิบเข้าสต็อก"}>
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group"> <label className="form-label">วัตถุดิบ</label> <select name="materialId" value={formData.materialId} onChange={handleFormChange} className="form-input" required> <option value="" disabled>-- เลือกวัตถุดิบ --</option> {materials.map(mat => ( <option key={mat.id} value={mat.id}>{mat.materialName} ({mat.materialCode})</option> ))} </select> </div>
-                    <div className="form-group"> <label className="form-label">Lot Number</label> <input type="text" name="lotNumber" value={formData.lotNumber} onChange={handleFormChange} className="form-input" required /> </div>
-                    <div className="form-group"> <label className="form-label">จำนวน (หน่วย: Kg.)</label> <input type="number" step="0.01" name="quantity" value={formData.quantity} onChange={handleFormChange} className="form-input" required /> </div>
-                    <div className="form-actions"> <button type="button" onClick={handleCloseModal} className="cancel-button">ยกเลิก</button> <button type="submit" className="save-button">บันทึก</button> </div>
-                </form>
-            </Modal>
-        </div>
-    );
-};
 
 
 const NgRecording = ({ onBack, activeReports }) => {
@@ -289,7 +152,16 @@ const NgRecording = ({ onBack, activeReports }) => {
     };
 
     if (!selectedReport) {
-        return ( <div className="dashboard-card"> <button onClick={onBack} className="back-button-sl">&larr; กลับไปเมนูหลัก</button> <h2 className="dashboard-title">บันทึกของเสีย: เลือกใบสั่งผลิต</h2> <div className="report-selection-container"> {activeReports.map(report => ( <div key={report.id} className="report-card"> <h3>{report.machineName}</h3><p>{report.productName}</p>{report.orderNumber && <p>Order No.: {report.orderNumber}</p>}<p>วันที่: {report.startDate} – {report.endDate}</p><button className="select-button" onClick={() => handleSelectReport(report)}>เลือก</button> </div> ))} </div> </div> );
+        return (
+            <div className="dashboard-card">
+                <button onClick={onBack} className="back-button-sl">&larr; กลับไปเมนูหลัก</button>
+                <MachineSelectGrid
+                    reports={activeReports}
+                    onSelect={report => handleSelectReport(report)}
+                    title="บันทึกของเสีย: เลือกใบสั่งผลิต"
+                />
+            </div>
+        );
     }
 
     return (
@@ -398,13 +270,28 @@ const ShiftLeaderDashboard = () => {
         return ( <div className="dashboard-card-sl"> <NotificationPanel /> <div className="sl-header"> <div> <h2 className="sl-title">รายละเอียด: {dashboardData.machineName}</h2> <p className="sl-subtitle">ผลิตภัณฑ์: {dashboardData.productName} | วันที่ผลิต: {dashboardData.productionDate}</p> </div> <div> <button onClick={() => handleNavigate('dashboard')} className="back-button-sl">กลับไปหน้ารวม</button> </div> </div> <ShiftDataDisplay title="กะกลางวัน (03:00 - 15:00)" data={dashboardData.dayShiftData} /> <ShiftDataDisplay title="กะกลางคืน (15:00 - 03:00)" data={dashboardData.nightShiftData} /> </div> );
     }
     if (view === 'dashboard') {
-        return ( <div className="dashboard-card"> <NotificationPanel /> <div className="sl-header"> <h2 className="dashboard-title">เลือกเครื่องจักรเพื่อดู Dashboard</h2> <button onClick={() => handleNavigate('main')} className="back-button-sl">กลับไปเมนูหลัก</button> </div> {activeReports.length === 0 ? <p>ไม่มีใบสั่งผลิตที่กำลังทำงานในวันนี้</p> : <div className="report-selection-container"> {activeReports.map(report => ( <div key={report.id} className="report-card"> <h3>{report.machineName}</h3><p>{report.productName}</p>{report.orderNumber && <p>Order No.: {report.orderNumber}</p>}<p>วันที่: {report.startDate} – {report.endDate}</p><button className="select-button" onClick={() => handleSelectReport(report.id)}>ดู Dashboard</button> </div> ))} </div>} </div> );
-    }
-    if (view === 'stock') {
-        return <LabelStockManager onBack={() => handleNavigate('main')} />;
+        return (
+            <div className="dashboard-card">
+                <NotificationPanel />
+                <div className="sl-header">
+                    <button onClick={() => handleNavigate('main')} className="back-button-sl">
+                        &larr; กลับไปเมนูหลัก
+                    </button>
+                </div>
+                <MachineSelectGrid
+                    reports={activeReports}
+                    onSelect={report => handleSelectReport(report.id)}
+                    title="เลือกเครื่องจักรเพื่อดู Dashboard"
+                    emptyText="ไม่มีใบสั่งผลิตที่กำลังทำงานในวันนี้"
+                />
+            </div>
+        );
     }
     if (view === 'material') {
         return <MaterialStockManager onBack={() => handleNavigate('main')} />;
+    }
+    if (view === 'matreq') {
+        return <MaterialRequirementDashboard onBack={() => handleNavigate('main')} />;
     }
     if (view === 'ng') {
         return <NgRecording onBack={() => handleNavigate('main')} activeReports={activeReports} />;
@@ -420,7 +307,7 @@ const ShiftLeaderDashboard = () => {
             <div className="task-choice-container">
                 <button className="task-choice-button" onClick={() => handleNavigate('dashboard')}>ดู Dashboard การผลิต</button>
                 <button className="task-choice-button" style={{backgroundColor: '#e0f2fe', borderColor: '#38bdf8', color: '#0369a1'}} onClick={() => handleNavigate('material')}>จัดการสต็อกวัตถุดิบ</button>
-                <button className="task-choice-button" style={{backgroundColor: '#eef2ff', borderColor: '#818cf8', color: '#4338ca'}} onClick={() => handleNavigate('stock')}>จัดการสต็อกป้าย</button>
+                <button className="task-choice-button" style={{backgroundColor: '#fef3c7', borderColor: '#fbbf24', color: '#92400e'}} onClick={() => handleNavigate('matreq')}>ความต้องการวัตถุดิบ</button>
                 <button className="task-choice-button" style={{backgroundColor: '#fef2f2', borderColor: '#f87171', color: '#991b1b'}} onClick={() => handleNavigate('ng')}>บันทึกของเสีย</button>
             </div>
         </div>

@@ -29,6 +29,8 @@ const NG_COLORS = [
     { bg: '#F3E5F5', fg: '#6A1B9A' }, // Pastel Lavender
 ];
 
+const isOtherType = (ng) => ng.ngDescriptionTh?.trim() === 'ปัญหาอื่นๆ';
+
 // Split items into rows of sizes [7, 6, 6, 6, ...]
 const buildRows = (items) => {
     if (!items.length) return [];
@@ -48,13 +50,30 @@ const NgRecording = ({ report, onBack }) => {
     const [alertReason, setAlertReason]       = useState('');
     const [feedback, setFeedback]             = useState({ open: false, message: '', severity: 'success' });
 
-    // Fetch NG types
+    // "ปัญหาอื่นๆ" dialog state
+    const [otherNg, setOtherNg]       = useState(null);
+    const [otherDetail, setOtherDetail] = useState('');
+    const [otherQty, setOtherQty]     = useState(1);
+    const [otherSaving, setOtherSaving] = useState(false);
+
+    // Fetch NG types — filter by machine type if known, otherwise fall back to all Operator types
     useEffect(() => {
-        axiosInstance.get('/master-data/ng-types')
-            .then(res => setNgTypes(res.data.filter(ng => ng.ngType === 'Operator')))
+        const machineType = report?.machineType;
+        const params = machineType ? { machineType } : {};
+        axiosInstance.get('/master-data/ng-types', { params })
+            .then(res => {
+                const data = res.data;
+                const filtered = machineType ? data : data.filter(ng => ng.ngType === 'Operator');
+                // Sort: "อื่นๆ" always last
+                const sorted = [
+                    ...filtered.filter(ng => !isOtherType(ng)),
+                    ...filtered.filter(ng => isOtherType(ng)),
+                ];
+                setNgTypes(sorted);
+            })
             .catch(err => console.error('Could not fetch NG types', err))
             .finally(() => setLoading(false));
-    }, []);
+    }, [report?.machineType]);
 
     // Fetch current-hour summary + set up hourly reset timer
     useEffect(() => {
@@ -89,21 +108,43 @@ const NgRecording = ({ report, onBack }) => {
         return () => { clearTimeout(timeoutId); clearInterval(intervalId); };
     }, [report]);
 
-    const handleRecordNg = async (ngTypeId, ngDescriptionTh) => {
+    const handleRecordNg = async (ngTypeId, ngDescriptionTh, quantity = 1, note = undefined) => {
         try {
             await axiosInstance.post(`/operator/reports/${report.id}/ng-logs`, {
                 ngTypeId,
-                quantity: 1,
+                quantity,
                 source: 'Operator_Run',
+                ...(note ? { note } : {}),
             });
             // Update local hourly count immediately
             setHourlyNgCount(prev => ({
                 ...prev,
-                [ngDescriptionTh]: (prev[ngDescriptionTh] || 0) + 1,
+                [ngDescriptionTh]: (prev[ngDescriptionTh] || 0) + quantity,
             }));
-            setFeedback({ open: true, message: `บันทึก "${ngDescriptionTh}" สำเร็จ`, severity: 'success' });
+            setFeedback({ open: true, message: `บันทึก "${ngDescriptionTh}" ${quantity} ชิ้น สำเร็จ`, severity: 'success' });
         } catch {
             setFeedback({ open: true, message: 'เกิดข้อผิดพลาดในการบันทึก NG', severity: 'error' });
+        }
+    };
+
+    const handleNgButtonClick = (ng) => {
+        if (isOtherType(ng)) {
+            setOtherNg(ng);
+            setOtherDetail('');
+            setOtherQty(1);
+        } else {
+            handleRecordNg(ng.id, ng.ngDescriptionTh);
+        }
+    };
+
+    const handleOtherSubmit = async () => {
+        if (!otherNg || !otherDetail.trim() || otherQty < 1) return;
+        setOtherSaving(true);
+        try {
+            await handleRecordNg(otherNg.id, otherNg.ngDescriptionTh, otherQty, otherDetail.trim());
+            setOtherNg(null);
+        } finally {
+            setOtherSaving(false);
         }
     };
 
@@ -143,11 +184,12 @@ const NgRecording = ({ report, onBack }) => {
                             const colorIdx = rowOffsets[rowIdx] + colIdx;
                             const { bg, fg } = NG_COLORS[colorIdx % NG_COLORS.length];
                             const count = hourlyNgCount[ng.ngDescriptionTh] || 0;
+                            const isOther = isOtherType(ng);
                             return (
                                 <Box key={ng.id} sx={{ flex: 1, position: 'relative', minWidth: 0 }}>
                                     <Button
                                         fullWidth
-                                        onClick={() => handleRecordNg(ng.id, ng.ngDescriptionTh)}
+                                        onClick={() => handleNgButtonClick(ng)}
                                         sx={{
                                             height: 90,
                                             fontSize: '0.82rem',
@@ -159,7 +201,7 @@ const NgRecording = ({ report, onBack }) => {
                                             borderRadius: 2,
                                             color: fg,
                                             backgroundColor: bg,
-                                            border: `1.5px solid ${fg}33`,
+                                            border: isOther ? `2px dashed ${fg}88` : `1.5px solid ${fg}33`,
                                             boxShadow: '0 1px 4px rgba(0,0,0,0.10)',
                                             '&:hover': {
                                                 backgroundColor: bg,
@@ -266,6 +308,42 @@ const NgRecording = ({ report, onBack }) => {
                     🚨 แจ้งเครื่องจักรหยุด
                 </Button>
             </Box>
+
+            {/* "ปัญหาอื่นๆ" detail dialog */}
+            <Dialog open={!!otherNg} onClose={() => setOtherNg(null)} fullWidth maxWidth="xs">
+                <DialogTitle>บันทึกของเสีย — {otherNg?.ngDescriptionTh}</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        fullWidth
+                        multiline
+                        rows={3}
+                        label="รายละเอียดปัญหา *"
+                        placeholder="ระบุรายละเอียดของปัญหาที่พบ"
+                        value={otherDetail}
+                        onChange={e => setOtherDetail(e.target.value)}
+                        sx={{ mt: 1, mb: 2 }}
+                    />
+                    <TextField
+                        fullWidth
+                        type="number"
+                        label="จำนวนของเสีย (ชิ้น) *"
+                        inputProps={{ min: 1 }}
+                        value={otherQty}
+                        onChange={e => setOtherQty(Math.max(1, Number(e.target.value)))}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOtherNg(null)} disabled={otherSaving}>ยกเลิก</Button>
+                    <Button
+                        variant="contained"
+                        disabled={!otherDetail.trim() || otherQty < 1 || otherSaving}
+                        onClick={handleOtherSubmit}
+                    >
+                        {otherSaving ? 'กำลังบันทึก...' : 'บันทึก'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* Alert dialog */}
             <Dialog open={isAlertModalOpen} onClose={() => setIsAlertModalOpen(false)} fullWidth maxWidth="sm">

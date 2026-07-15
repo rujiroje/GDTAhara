@@ -48,6 +48,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/error", "/error/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/setup-checklist/photos/**").permitAll()
                 .requestMatchers("/test-api.html", "/favicon.ico", "/static/**").permitAll()
                 .requestMatchers("/health", "/").permitAll()
                 // Swagger UI — must be open so JWT filter does not block the browser UI

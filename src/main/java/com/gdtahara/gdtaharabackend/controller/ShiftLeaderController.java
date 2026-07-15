@@ -37,11 +37,13 @@ public class ShiftLeaderController {
     public ResponseEntity<ShiftLeaderDashboardDto> getDashboardData(@PathVariable Long reportId) { return ResponseEntity.ok(shiftLeaderService.getDashboardData(reportId)); }
 
     @PostMapping("/stock-transactions")
+    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
     public ResponseEntity<MaterialStockTransaction> createStockTransaction(@Valid @RequestBody StockTransactionRequestDto request, Principal principal) {
         return ResponseEntity.ok(shiftLeaderService.recordStockTransaction(request, principal.getName()));
     }
-    
+
     @PutMapping("/stock-transactions/{id}")
+    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
     public ResponseEntity<MaterialStockTransaction> updateStockTransaction(@PathVariable Long id, @Valid @RequestBody StockTransactionRequestDto request, Principal principal) {
         return ResponseEntity.ok(shiftLeaderService.updateStockTransaction(id, request, principal.getName()));
     }
@@ -71,6 +73,7 @@ public class ShiftLeaderController {
 
     // **[เพิ่มใหม่]** Endpoints สำหรับการจัดการ Material Stock
     @GetMapping("/material-stocks")
+    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
     public ResponseEntity<List<MaterialStockCardDto>> getMaterialStocks() {
         return ResponseEntity.ok(shiftLeaderService.getMaterialStocks());
     }

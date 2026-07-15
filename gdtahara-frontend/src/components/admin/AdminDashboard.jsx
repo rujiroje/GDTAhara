@@ -73,6 +73,14 @@ const DataForm = ({ item, type, onSave, onCancel }) => {
                 return <>
                     <div className="form-group"><label className="form-label">Machine Code</label><input name="machineCode" value={formData.machineCode || ''} onChange={handleChange} className="form-input" required /></div>
                     <div className="form-group"><label className="form-label">Machine Name</label><input name="machineName" value={formData.machineName || ''} onChange={handleChange} className="form-input" /></div>
+                    <div className="form-group">
+                        <label className="form-label">Machine Type</label>
+                        <select name="machineType" value={formData.machineType || ''} onChange={handleChange} className="form-input">
+                            <option value="">-- ไม่ระบุ --</option>
+                            <option value="TAHARA">TAHARA</option>
+                            <option value="ASB">ASB</option>
+                        </select>
+                    </div>
                 </>;
             case 'ng-types': {
                  const ngCategories = ['Operator', 'Technician', 'QA', 'Shift Leader'];
@@ -86,6 +94,14 @@ const DataForm = ({ item, type, onSave, onCancel }) => {
                             {ngCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                         </select>
                     </div>
+                    <div className="form-group">
+                        <label className="form-label">Machine Type</label>
+                        <select name="machineType" value={formData.machineType || ''} onChange={handleChange} className="form-input">
+                            <option value="">-- ทุกเครื่อง (ไม่ระบุ) --</option>
+                            <option value="TAHARA">TAHARA</option>
+                            <option value="ASB">ASB</option>
+                        </select>
+                    </div>
                 </>; }
              case 'parameter-checklists':
                 return <>
@@ -94,6 +110,29 @@ const DataForm = ({ item, type, onSave, onCancel }) => {
                         <div className="form-group"><label className="form-label">Item Name</label><input name="itemName" value={formData.itemName || ''} onChange={handleChange} className="form-input" required /></div>
                         <div className="form-group"><label className="form-label">Standard Value</label><input name="standardValue" value={formData.standardValue || ''} onChange={handleChange} className="form-input" /></div>
                         <div className="form-group"><label className="form-label">Unit</label><input name="unit" value={formData.unit || ''} onChange={handleChange} className="form-input" /></div>
+                    </div>
+                </>;
+            case 'templates':
+                return <>
+                    <div className="form-group"><label className="form-label">ลำดับ (Step Order)</label><input name="stepOrder" type="number" min="1" value={formData.stepOrder || ''} onChange={handleChange} className="form-input" required /></div>
+                    <div className="form-group"><label className="form-label">ชื่อขั้นตอน (Label)</label><input name="label" value={formData.label || ''} onChange={handleChange} className="form-input" required /></div>
+                    <div className="form-group">
+                        <label className="form-label">Machine Type</label>
+                        <select name="machineType" value={formData.machineType || ''} onChange={handleChange} className="form-input">
+                            <option value="">-- ทุกเครื่อง (ไม่ระบุ) --</option>
+                            <option value="TAHARA">TAHARA</option>
+                            <option value="ASB">ASB</option>
+                        </select>
+                    </div>
+                    <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input type="checkbox" id="tpl-required" checked={!!formData.required}
+                            onChange={(e) => setFormData(prev => ({ ...prev, required: e.target.checked }))} />
+                        <label htmlFor="tpl-required" className="form-label" style={{ margin: 0 }}>บังคับทำ (Required)</label>
+                    </div>
+                    <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input type="checkbox" id="tpl-active" checked={formData.active !== false}
+                            onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))} />
+                        <label htmlFor="tpl-active" className="form-label" style={{ margin: 0 }}>ใช้งาน (Active)</label>
                     </div>
                 </>;
             default: { // users
@@ -150,6 +189,9 @@ const CrudTable = ({ title, columns, endpoint }) => {
     const [isResetPasswordModalOpen, setResetPasswordModalOpen] = useState(false);
     const [currentItemId, setCurrentItemId] = useState(null);
 
+    // Strip query params for mutation endpoints (PUT/POST/DELETE don't need them)
+    const mutationBase = endpoint.split('?')[0];
+
     const fetchData = async () => {
         try {
             setError('');
@@ -167,8 +209,8 @@ const CrudTable = ({ title, columns, endpoint }) => {
 
     const handleSave = async (formData) => {
         try {
-            if (formData.id) { await api.put(`${endpoint}/${formData.id}`, formData); }
-            else { await api.post(endpoint, formData); }
+            if (formData.id) { await api.put(`${mutationBase}/${formData.id}`, formData); }
+            else { await api.post(mutationBase, formData); }
             fetchData();
             handleCloseModal();
         } catch (err) { alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล'); }
@@ -176,14 +218,14 @@ const CrudTable = ({ title, columns, endpoint }) => {
 
     const handleDelete = async (id) => {
         if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลนี้?')) {
-            try { await api.delete(`${endpoint}/${id}`); fetchData(); }
+            try { await api.delete(`${mutationBase}/${id}`); fetchData(); }
             catch (err) { alert('เกิดข้อผิดพลาดในการลบข้อมูล'); }
         }
     };
     
     const handleResetPassword = async (userId, newPassword) => {
         try {
-            await api.post(`${endpoint}/${userId}/reset-password`, { newPassword });
+            await api.post(`${mutationBase}/${userId}/reset-password`, { newPassword });
             handleCloseResetPasswordModal();
             alert('รีเซ็ตรหัสผ่านสำเร็จ!');
         } catch (err) { alert('เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน'); }
@@ -214,7 +256,7 @@ const CrudTable = ({ title, columns, endpoint }) => {
                 </table>
             </div>
             <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingItem ? `แก้ไข ${title}` : `เพิ่ม ${title}`}>
-                <DataForm item={editingItem} type={endpoint.split('/').pop()} onSave={handleSave} onCancel={handleCloseModal} />
+                <DataForm item={editingItem} type={mutationBase.split('/').pop()} onSave={handleSave} onCancel={handleCloseModal} />
             </Modal>
             <Modal isOpen={isResetPasswordModalOpen} onClose={handleCloseResetPasswordModal} title="รีเซ็ตรหัสผ่าน">
                 <ResetPasswordForm userId={currentItemId} onSave={handleResetPassword} onCancel={handleCloseResetPasswordModal} />
@@ -296,9 +338,10 @@ const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('users');
     const userColumns = [{ key: 'id', label: 'ID' }, { key: 'username', label: 'Username' }, { key: 'role', label: 'Role' }];
     const productColumns = [{ key: 'id', label: 'ID' }, { key: 'productCode', label: 'Product Code' }, { key: 'productName', label: 'Product Name' }];
-    const machineColumns = [{ key: 'id', label: 'ID' }, { key: 'machineCode', label: 'Machine Code' }, { key: 'machineName', label: 'Machine Name' }];
-    const ngTypeColumns = [{ key: 'id', label: 'ID' }, { key: 'ngCode', label: 'NG Code' }, { key: 'ngDescriptionTh', label: 'Description' }, { key: 'ngType', label: 'Category' }];
+    const machineColumns = [{ key: 'id', label: 'ID' }, { key: 'machineCode', label: 'Machine Code' }, { key: 'machineName', label: 'Machine Name' }, { key: 'machineType', label: 'Type' }];
+    const ngTypeColumns = [{ key: 'id', label: 'ID' }, { key: 'ngCode', label: 'NG Code' }, { key: 'ngDescriptionTh', label: 'Description' }, { key: 'ngType', label: 'Category' }, { key: 'machineType', label: 'Machine Type' }];
     const materialColumns = [ { key: 'id', label: 'ID' }, { key: 'materialCode', label: 'Material Code' }, { key: 'materialName', label: 'Material Name' }, { key: 'materialType', label: 'Type' }, { key: 'unit', label: 'Unit' } ];
+    const setupTemplateColumns = [ { key: 'id', label: 'ID' }, { key: 'stepOrder', label: 'ลำดับ' }, { key: 'label', label: 'ชื่อขั้นตอน' }, { key: 'machineType', label: 'Machine Type' }, { key: 'required', label: 'บังคับ' }, { key: 'active', label: 'Active' } ];
 
 
     return (
@@ -310,6 +353,7 @@ const AdminDashboard = () => {
                 <button onClick={() => setActiveTab('machines')} className={activeTab === 'machines' ? 'active' : ''}>เครื่องจักร</button>
                 <button onClick={() => setActiveTab('materials')} className={activeTab === 'materials' ? 'active' : ''}>วัตถุดิบ</button>
                 <button onClick={() => setActiveTab('ngTypes')} className={activeTab === 'ngTypes' ? 'active' : ''}>ประเภทของเสีย</button>
+                <button onClick={() => setActiveTab('setupTemplates')} className={activeTab === 'setupTemplates' ? 'active' : ''}>ขั้นตอน Setup</button>
                 <button onClick={() => setActiveTab('import')} className={activeTab === 'import' ? 'active' : ''}>นำเข้าข้อมูล</button>
             </div>
             <div className="tab-content">
@@ -318,6 +362,7 @@ const AdminDashboard = () => {
                 {activeTab === 'machines' && <CrudTable title="เครื่องจักร" columns={machineColumns} endpoint="/admin/machines" />}
                 {activeTab === 'materials' && <CrudTable title="วัตถุดิบ" columns={materialColumns} endpoint="/admin/materials" />}
                 {activeTab === 'ngTypes' && <CrudTable title="ประเภทของเสีย" columns={ngTypeColumns} endpoint="/admin/ng-types" />}
+                {activeTab === 'setupTemplates' && <CrudTable title="ขั้นตอน Setup Checklist" columns={setupTemplateColumns} endpoint="/setup-checklist/templates?includeInactive=true" />}
                 {activeTab === 'import' && <ImportData />}
             </div>
         </div>

@@ -4,6 +4,10 @@ import axios from 'axios';
 import { t, getLang } from '../../i18n/t';
 import { useAuth } from '../../App';
 import PlanImportPanel from './PlanImportPanel';
+import BomUploadPage from './BomUploadPage';
+import BomViewerPage from './BomViewerPage';
+import MaterialRequirementDashboard from './MaterialRequirementDashboard';
+import VarianceReportPage from './VarianceReportPage';
 
 // --- API Service ---
 const API_URL = 'http://localhost:8080/api';
@@ -2454,6 +2458,49 @@ const HistoricalReportsSection = () => {
     );
 };
 
+// --- Dropdown Menu Group ---
+const MenuGroup = ({ label, color, isOpen, onToggle, items }) => (
+    <div style={{ position: 'relative' }}>
+        <button
+            onClick={onToggle}
+            style={{
+                background: color, color: '#fff', border: 'none', borderRadius: 6,
+                padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem',
+                display: 'flex', alignItems: 'center', gap: 6,
+                boxShadow: isOpen ? `0 0 0 3px ${color}40` : 'none',
+            }}
+        >
+            {label}
+            <span style={{ fontSize: '0.65rem', opacity: 0.85 }}>{isOpen ? '▲' : '▼'}</span>
+        </button>
+        {isOpen && (
+            <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200,
+                background: '#fff', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.14)',
+                minWidth: 210, overflow: 'hidden', border: '1px solid #e5e7eb',
+            }}>
+                {items.map((item, i) => (
+                    <button
+                        key={i}
+                        onClick={item.onClick}
+                        style={{
+                            display: 'block', width: '100%', textAlign: 'left',
+                            padding: '10px 16px', background: 'none', border: 'none',
+                            cursor: 'pointer', fontSize: '0.875rem', color: '#374151',
+                            borderBottom: i < items.length - 1 ? '1px solid #f3f4f6' : 'none',
+                            transition: 'background 0.1s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#111'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#374151'; }}
+                    >
+                        {item.label}
+                    </button>
+                ))}
+            </div>
+        )}
+    </div>
+);
+
 // --- Main PC Dashboard Component ---
 const ProductionControlDashboard = () => {
     const { user } = useAuth();
@@ -2470,6 +2517,7 @@ const ProductionControlDashboard = () => {
     const [products, setProducts] = useState([]);
     const [allReports, setAllReports] = useState([]);
     const [dashboardData, setDashboardData] = useState([]);
+    const [openMenu, setOpenMenu] = useState(null);
 
     const fetchData = async () => {
         console.log('🔄 fetchData called, loading state:', loading);
@@ -2748,26 +2796,59 @@ const ProductionControlDashboard = () => {
         return <MachineScheduleCalendar onBack={() => changeView('dashboard')} allReports={allReports} machines={machines} />;
     } else if (view === 'import') {
         return <PlanImportPanel onBack={() => changeView('dashboard')} />;
+    } else if (view === 'bomUpload') {
+        return <BomUploadPage onBack={() => changeView('dashboard')} />;
+    } else if (view === 'bomViewer') {
+        return <BomViewerPage onBack={() => changeView('dashboard')} />;
+    } else if (view === 'materialRequirement') {
+        return <MaterialRequirementDashboard onBack={() => changeView('dashboard')} />;
+    } else if (view === 'variance') {
+        return <VarianceReportPage onBack={() => changeView('dashboard')} />;
     }
 
     // Default view: 'dashboard'
     return (
-        <div className="pc-dashboard-container">
+        <div className="pc-dashboard-container" onClick={() => openMenu && setOpenMenu(null)}>
+            {/* Backdrop to close dropdown when clicking outside */}
+            {openMenu && (
+                <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 100 }}
+                    onClick={e => { e.stopPropagation(); setOpenMenu(null); }}
+                />
+            )}
             <div className="pc-dashboard-header">
                 <h2 className="pc-dashboard-title">{t('productionOverviewTitle')}</h2>
-                <div>
-                    <button className="manage-reports-button" onClick={() => changeView('history')} style={{ marginRight: '1rem' }}>{t('viewHistoricalReports')}</button>
-                    <button className="manage-reports-button" onClick={() => changeView('machineSchedule')} style={{ marginRight: '1rem', backgroundColor: '#6f42c1' }}>
-                      {getLang() === 'en' ? '📅 Machine Schedule' : '📅 ตารางแผนการผลิต'}
-                    </button>
-                                        {canManage && (
-                      <>
-                        <button className="manage-reports-button" onClick={() => changeView('import')} style={{ marginRight: '1rem', backgroundColor: '#0d6efd' }}>
-                          📥 นำเข้าแผน Excel
-                        </button>
-                        <button className="manage-reports-button" onClick={() => changeView('manage')}>{t('manageProductionOrders')}</button>
-                      </>
-                    )}
+                <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap', alignItems: 'center', position: 'relative', zIndex: 101 }}>
+                    {/* แผนการผลิต group */}
+                    <MenuGroup
+                        label="📋 แผนการผลิต"
+                        color="#6f42c1"
+                        isOpen={openMenu === 'plan'}
+                        onToggle={e => { e.stopPropagation(); setOpenMenu(openMenu === 'plan' ? null : 'plan'); }}
+                        items={[
+                            { label: '📊 ดูรายงานย้อนหลัง', onClick: () => { changeView('history'); setOpenMenu(null); } },
+                            { label: '📅 ตารางแผนการผลิต', onClick: () => { changeView('machineSchedule'); setOpenMenu(null); } },
+                            ...(canManage ? [
+                                { label: '📥 นำเข้าแผน Excel', onClick: () => { changeView('import'); setOpenMenu(null); } },
+                                { label: '⚙️ จัดการใบสั่งผลิต', onClick: () => { changeView('manage'); setOpenMenu(null); } },
+                            ] : []),
+                        ]}
+                    />
+                    {/* BOM group */}
+                    <MenuGroup
+                        label="🗂️ BOM"
+                        color="#0891b2"
+                        isOpen={openMenu === 'bom'}
+                        onToggle={e => { e.stopPropagation(); setOpenMenu(openMenu === 'bom' ? null : 'bom'); }}
+                        items={[
+                            { label: '🔍 ดู BOM (สูตรผลิต)', onClick: () => { changeView('bomViewer'); setOpenMenu(null); } },
+                            { label: '📦 ความต้องการ RM', onClick: () => { changeView('materialRequirement'); setOpenMenu(null); } },
+                            { label: '📊 รายงาน Variance', onClick: () => { changeView('variance'); setOpenMenu(null); } },
+                            ...(canManage ? [
+                                { label: '📤 นำเข้า BOM', onClick: () => { changeView('bomUpload'); setOpenMenu(null); } },
+                            ] : []),
+                        ]}
+                    />
                 </div>
             </div>
             {error && <p className="error-message">{error}</p>}
@@ -2926,16 +3007,27 @@ const MachineScheduleCalendar = ({ onBack, allReports, machines }) => {
                                             backgroundColor: isToday(d) ? '#fff9e6' : 'transparent'
                                         }}>
                                             {cellReports.map(r => (
-                                                <div key={r.id} title={`${r.orderNumber}\n${r.startDate} – ${r.endDate}\n${statusLabel(r.status)}`}
+                                                <div key={r.id}
+                                                     title={`${r.orderNumber}\n${r.productName || ''}\nQty: ${r.targetQty != null ? r.targetQty.toLocaleString() : '-'}\n${r.startDate} – ${r.endDate}\n${statusLabel(r.status)}`}
                                                      style={{
                                                          backgroundColor: statusColor(r.status),
                                                          color: '#fff', borderRadius: '3px',
-                                                         padding: '1px 3px', fontSize: '0.65rem',
+                                                         padding: '2px 3px', fontSize: '0.62rem',
                                                          marginBottom: '1px', cursor: 'default',
-                                                         whiteSpace: 'nowrap', overflow: 'hidden',
-                                                         maxWidth: '100%', textOverflow: 'ellipsis'
+                                                         overflow: 'hidden', maxWidth: '100%',
+                                                         lineHeight: 1.3,
                                                      }}>
-                                                    {r.orderNumber}
+                                                    <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.orderNumber}</div>
+                                                    {r.productName && (
+                                                        <div style={{ opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.58rem' }}>
+                                                            {r.productName}
+                                                        </div>
+                                                    )}
+                                                    {r.targetQty != null && (
+                                                        <div style={{ opacity: 0.85, fontSize: '0.58rem', whiteSpace: 'nowrap' }}>
+                                                            {r.targetQty.toLocaleString()}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </td>
@@ -2960,8 +3052,8 @@ const MachineScheduleCalendar = ({ onBack, allReports, machines }) => {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                     <thead>
                         <tr style={{ backgroundColor: '#e9ecef' }}>
-                            {['เลขที่คำสั่ง','เครื่องจักร','ผลิตภัณฑ์','วันเริ่ม','วันสิ้นสุด','สถานะ'].map(h => (
-                                <th key={h} style={{ padding: '8px 10px', textAlign: 'left', border: '1px solid #dee2e6' }}>{h}</th>
+                            {['เลขที่คำสั่ง','เครื่องจักร','ผลิตภัณฑ์','เป้าผลิต (Qty)','วันเริ่ม','วันสิ้นสุด','สถานะ'].map(h => (
+                                <th key={h} style={{ padding: '8px 10px', textAlign: h === 'เป้าผลิต (Qty)' ? 'right' : 'left', border: '1px solid #dee2e6' }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
@@ -2979,6 +3071,9 @@ const MachineScheduleCalendar = ({ onBack, allReports, machines }) => {
                                 <td style={{ padding: '6px 10px', fontWeight: 600 }}>{r.orderNumber}</td>
                                 <td style={{ padding: '6px 10px' }}>{r.machineName}</td>
                                 <td style={{ padding: '6px 10px' }}>{r.productName}</td>
+                                <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: '#374151' }}>
+                                    {r.targetQty != null ? r.targetQty.toLocaleString() : '-'}
+                                </td>
                                 <td style={{ padding: '6px 10px' }}>{r.startDate}</td>
                                 <td style={{ padding: '6px 10px' }}>{r.endDate}</td>
                                 <td style={{ padding: '6px 10px' }}>

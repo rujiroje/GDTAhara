@@ -6,6 +6,7 @@ package com.gdtahara.gdtaharabackend.controller;
 
 import com.gdtahara.gdtaharabackend.dto.NgLogRequestDto;
 import com.gdtahara.gdtaharabackend.dto.PackagingLogRequestDto;
+import com.gdtahara.gdtaharabackend.dto.PackagingLogViewDto;
 import com.gdtahara.gdtaharabackend.dto.ProblemAlertRequestDto;
 import com.gdtahara.gdtaharabackend.dto.ProductionReportSimpleViewDto;
 import com.gdtahara.gdtaharabackend.model.NgLog;
@@ -124,5 +125,10 @@ public class OperatorController {
     public ResponseEntity<Map<String, Object>> getPackagingCount(@PathVariable Long reportId) {
         long count = operatorService.countPackagingLogs(reportId);
         return ResponseEntity.ok(Map.of("count", count));
+    }
+
+    @GetMapping("/reports/{reportId}/packaging-logs")
+    public ResponseEntity<List<PackagingLogViewDto>> getPackagingLogs(@PathVariable Long reportId) {
+        return ResponseEntity.ok(operatorService.listPackagingLogs(reportId));
     }
 }

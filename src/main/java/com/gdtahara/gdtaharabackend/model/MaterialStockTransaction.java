@@ -29,6 +29,10 @@ public class MaterialStockTransaction {
     @Column(nullable = false)
     private LocalDateTime timestamp;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "bom_item_id", nullable = true)
+    private BomItem bomItem;
+
     @PrePersist
     protected void onCreate() {
         this.timestamp = LocalDateTime.now();

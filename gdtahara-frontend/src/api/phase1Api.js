@@ -145,3 +145,35 @@ export const printLabel = async (id, printerTarget) => {
   const response = await axiosInstance.post(`/labels/sub-lots/${id}/print`, { printerTarget });
   return response.data;
 };
+
+// ── Setup Checklist ────────────────────────────────────────────────
+
+export const getSetupTemplates = async (machineType) => {
+  const params = machineType ? { machineType } : {};
+  const response = await axiosInstance.get('/setup-checklist/templates', { params });
+  return response.data;
+};
+
+export const getJobSteps = async (jobId) => {
+  const response = await axiosInstance.get(`/setup-checklist/jobs/${jobId}/steps`);
+  return response.data;
+};
+
+export const saveStepResults = async (jobId, steps) => {
+  const response = await axiosInstance.post(`/setup-checklist/jobs/${jobId}/steps`, steps);
+  return response.data;
+};
+
+export const uploadStepPhoto = async (jobId, templateId, file) => {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await axiosInstance.post(
+    `/setup-checklist/jobs/${jobId}/steps/${templateId}/photo`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data; // { filename }
+};
+
+export const getStepPhotoUrl = (filename) =>
+  `${axiosInstance.defaults.baseURL}/setup-checklist/photos/${encodeURIComponent(filename)}`;

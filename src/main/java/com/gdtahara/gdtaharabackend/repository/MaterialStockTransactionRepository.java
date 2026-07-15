@@ -25,4 +25,12 @@ public interface MaterialStockTransactionRepository extends JpaRepository<Materi
     // **[ใหม่]** เพิ่มเมธอดสำหรับค้นหา Lot Number ที่ไม่ซ้ำกัน
     @Query("SELECT DISTINCT m.lotNumber FROM MaterialStockTransaction m WHERE m.material.id = :materialId AND m.transactionType = :type")
     List<String> findDistinctLotNumbersByMaterialIdAndTransactionType(@Param("materialId") Long materialId, @Param("type") String transactionType);
+
+    @Query("""
+        SELECT m.material.materialCode, SUM(m.quantity)
+        FROM MaterialStockTransaction m
+        WHERE m.productionReport.id = :reportId AND m.transactionType = 'OUT'
+        GROUP BY m.material.materialCode
+        """)
+    List<Object[]> sumActualOutByReportId(@Param("reportId") Long reportId);
 }

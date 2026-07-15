@@ -57,4 +57,16 @@ public class Product {
 
     @Column(name = "label_variant", length = 200)
     private String labelVariant;
+
+    @Column(name = "material_group", length = 50)
+    private String materialGroup;
+
+    @Column(name = "alternative_number")
+    private Integer alternativeNumber;
+
+    @Column(name = "sap_material_type", length = 10)
+    private String sapMaterialType;
+
+    @Column(name = "plant_code", length = 20)
+    private String plantCode;
 }

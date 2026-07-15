@@ -20,6 +20,7 @@ public class ProductionReportSimpleViewDto {
     private String machineName;
     private String productName;
     private String machineId;
+    private String machineType;
     private String parentLotNumber;
     private String shift;
 
@@ -52,5 +53,12 @@ public class ProductionReportSimpleViewDto {
         this(id, orderNumber, startDate, endDate, machineName, productName, machineId);
         this.parentLotNumber = parentLotNumber;
         this.shift = shift;
+    }
+
+    public ProductionReportSimpleViewDto(Long id, String orderNumber, LocalDate startDate, LocalDate endDate,
+                                          String machineName, String productName, String machineId,
+                                          String machineType, String parentLotNumber, String shift) {
+        this(id, orderNumber, startDate, endDate, machineName, productName, machineId, parentLotNumber, shift);
+        this.machineType = machineType;
     }
 }

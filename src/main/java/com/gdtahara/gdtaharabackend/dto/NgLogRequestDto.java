@@ -17,4 +17,5 @@ public class NgLogRequestDto {
     private Integer quantity;
 
     private String source;
+    private String note;
 }

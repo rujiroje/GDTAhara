@@ -8,6 +8,7 @@ import ParameterChecklistForm from './ParameterChecklistForm';
 import PmSchedulePanel from './PmSchedulePanel';
 import RecipePanel from '../pc/RecipePanel';
 import SetupJobPanel from './SetupJobPanel';
+import MachineSelectGrid from '../common/MachineSelectGrid';
 
 // --- API Service ---
 const API_URL = 'http://localhost:8080/api';
@@ -597,22 +598,12 @@ const TechnicianDashboard = () => {
             <SetupJobPanel />
             <PmSchedulePanel />
             <RecipePanel />
-            <h2 className="dashboard-title">เลือกใบสั่งผลิตเพื่อบันทึกข้อมูล</h2>
             {error && <p className="error-message">{error}</p>}
-            {(!activeReports || activeReports.length === 0) && !error && <p>ไม่มีใบสั่งผลิตที่กำลังทำงานอยู่</p>}
-            <div className="report-selection-container">
-                {activeReports && Array.isArray(activeReports) && activeReports.map(report => (
-                    <div key={report.id} className="report-card">
-                        <h3>{report.machineName}</h3>
-                        <p>{report.productName}</p>
-                        {report.orderNumber && <p>Order No.: {report.orderNumber}</p>}
-                        <p>วันที่: {report.startDate} – {report.endDate}</p>
-                        <button className="select-button" onClick={() => setSelectedReport(report)}>
-                            เลือก
-                        </button>
-                    </div>
-                ))}
-            </div>
+            <MachineSelectGrid
+                reports={activeReports ?? []}
+                onSelect={report => setSelectedReport(report)}
+                title="เลือกใบสั่งผลิตเพื่อบันทึกข้อมูล"
+            />
         </div>
     );
 };

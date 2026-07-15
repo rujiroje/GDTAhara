@@ -26,4 +26,7 @@ public class NgType {
 
     @Column(name = "ng_type")
     private String ngType;
+
+    @Column(name = "machine_type")
+    private String machineType;
 }

@@ -18,6 +18,8 @@ public interface PackagingLogRepository extends JpaRepository<PackagingLog, Long
     // เมธอดสำหรับนับจำนวน (ใช้ใน Dashboard และการตรวจสอบสิทธิ์)
     long countByReportId(Long reportId);
 
+    List<PackagingLog> findByReportIdOrderByLotNumberAscBoxNoAsc(Long reportId);
+
     // เมธอดสำหรับหา Box No. ล่าสุด
     PackagingLog findTopByReportIdAndLotNumberOrderByBoxNoDesc(Long reportId, String lotNumber);
 

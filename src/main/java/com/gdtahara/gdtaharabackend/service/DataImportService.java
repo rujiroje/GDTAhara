@@ -59,9 +59,10 @@ public class DataImportService {
                 
                 String machineCode = line[0].trim();
                 String machineName = line.length > 1 ? line[1].trim() : "";
-                
-                logger.debug("Machine data - Code: '{}', Name: '{}'", machineCode, machineName);
-                
+                String machineType = line.length > 2 ? line[2].trim() : "";
+
+                logger.debug("Machine data - Code: '{}', Name: '{}', Type: '{}'", machineCode, machineName, machineType);
+
                 // **[แก้ไข]** ตรวจสอบว่าเคยเจอ Code นี้ในไฟล์หรือยัง และมีใน DB หรือยัง
                 if (!machineCode.isEmpty() && !processedCodes.contains(machineCode)) {
                     // Check if already exists in database
@@ -70,14 +71,16 @@ public class DataImportService {
                         logger.info("Machine code '{}' already exists in database, skipping", machineCode);
                         continue;
                     }
-                    
+
                     Machine machine = new Machine();
                     machine.setMachineCode(machineCode);
                     machine.setMachineName(machineName);
-                    // Removed setMachineType since it's not in the database schema
+                    if (!machineType.isEmpty()) {
+                        machine.setMachineType(machineType.toUpperCase());
+                    }
                     machinesToSave.add(machine);
                     processedCodes.add(machineCode);
-                    logger.debug("Added machine to save list: Code='{}', Name='{}'", machineCode, machineName);
+                    logger.debug("Added machine to save list: Code='{}', Name='{}', Type='{}'", machineCode, machineName, machineType);
                 } else {
                     logger.warn("Skipping machine - Code: '{}' (empty={}, duplicate={})", 
                                machineCode, machineCode.isEmpty(), processedCodes.contains(machineCode));

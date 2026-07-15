@@ -21,8 +21,8 @@ const LINE_COLORS = [
     { bg: '#E0F2F1', fg: '#00695C' },
     { bg: '#F3E5F5', fg: '#6A1B9A' },
 ];
-import RunCardV2 from '../components/operator/RunCardV2';
 import TrackOutPanel from '../components/operator/TrackOutPanel';
+import ReprintBarcode from '../components/operator/ReprintBarcode';
 import NgRecording from '../components/NgRecording';
 import PackagingRecording from '../components/PackagingRecording';
 
@@ -90,19 +90,18 @@ const OperatorDashboard = () => {
         return <TrackOutPanel onBack={() => setView('select_report')} />;
     }
 
-    // View: Run Card v2
-    if (view === 'run_card') {
+    // View: Reprint Barcode
+    if (view === 'reprint_task') {
         return (
             <Paper sx={{ p: 2 }}>
-                <Button variant="outlined" onClick={() => setView('select_task')} sx={{ mb: 1 }}>
-                    &larr; กลับ
-                </Button>
-                <Typography variant="h6" gutterBottom>
-                    Run Card v2 — {selectedReport?.machineName}
-                </Typography>
-                <RunCardV2
-                    activeReports={activeReports}
-                    initialReport={selectedReport}
+                <Box sx={{ textAlign: 'center', mb: 2 }}>
+                    <Typography variant="h5">พิมพ์ซ้ำ Label</Typography>
+                    <Typography color="text.secondary">เครื่อง: {selectedReport?.machineName}</Typography>
+                    <Typography color="text.secondary">ผลิตภัณฑ์: {selectedReport?.productName}</Typography>
+                </Box>
+                <ReprintBarcode
+                    report={selectedReport}
+                    onBack={() => setView('select_task')}
                 />
             </Paper>
         );
@@ -147,7 +146,7 @@ const OperatorDashboard = () => {
         const TASKS = [
             { view: 'ng_task',       label: 'บันทึกของเสีย',    sub: 'NG Recording',     color: LINE_COLORS[0] },
             { view: 'packaging_task',label: 'บันทึกการบรรจุ',   sub: 'Packaging',        color: LINE_COLORS[2] },
-            { view: 'run_card',      label: 'Run Card v2',      sub: 'ยืนยันกล่อง · Label', color: LINE_COLORS[6] },
+            { view: 'reprint_task',  label: 'พิมพ์ซ้ำ Label',   sub: 'Reprint Barcode',  color: LINE_COLORS[6] },
             { view: 'track_out',     label: 'Track-Out',        sub: 'สแกน Barcode',     color: LINE_COLORS[9] },
         ];
         return (

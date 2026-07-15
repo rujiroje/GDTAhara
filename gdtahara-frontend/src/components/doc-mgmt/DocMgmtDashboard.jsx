@@ -4,6 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import Chart from 'react-apexcharts';
 import axios from 'axios';
+import MaterialRequirementDashboard from '../pc/MaterialRequirementDashboard';
+import MaterialStockManager from '../common/MaterialStockManager';
 
 // --- API Service ---
 const API_URL = 'http://localhost:8080/api';
@@ -413,6 +415,12 @@ const DocMgmtDashboard = () => {
     if (view === 'dailyShiftDetail') {
         return <DailyShiftReportView date={selectedDate} onBack={() => changeView('history')} />;
     }
+    if (view === 'matreq') {
+        return <MaterialRequirementDashboard onBack={() => changeView('dashboard')} />;
+    }
+    if (view === 'material') {
+        return <MaterialStockManager onBack={() => changeView('dashboard')} />;
+    }
 
     // Default view: 'dashboard'
     return (
@@ -421,7 +429,8 @@ const DocMgmtDashboard = () => {
                 <h2 className="pc-dashboard-title">ภาพรวมการผลิต (Production Overview)</h2>
                 <div>
                     <button className="manage-reports-button" onClick={() => changeView('history')}>ดูรายงานย้อนหลัง</button>
-                    {/* "Manage Production Orders" button is removed for this role */}
+                    <button className="manage-reports-button" onClick={() => changeView('matreq')} style={{marginLeft: '0.5rem', background: '#fef3c7', color: '#92400e', borderColor: '#fbbf24'}}>📦 ความต้องการวัตถุดิบ</button>
+                    <button className="manage-reports-button" onClick={() => changeView('material')} style={{marginLeft: '0.5rem', background: '#e0f2fe', color: '#0369a1', borderColor: '#38bdf8'}}>🗄️ จัดการสต็อกวัตถุดิบ</button>
                 </div>
             </div>
             {error && <p className="error-message">{error}</p>}
