@@ -173,6 +173,7 @@ public class OperatorService {
         data.put("qtyPerBox",       product != null && product.getQtyPerBox()   != null ? product.getQtyPerBox()  : "");
         data.put("parentLotNumber", report.getParentLotNumber() != null ? report.getParentLotNumber() : "");
         data.put("machineName",     machine != null ? machine.getMachineName() : "");
+        data.put("shift",           report.getShift() != null ? report.getShift() : "");
         return data;
     }
 

@@ -22,4 +22,7 @@ public class StockOutRequestDto {
     @NotNull(message = "Quantity is required")
     @DecimalMin(value = "0.0", inclusive = false, message = "Quantity must be greater than zero")
     private BigDecimal quantity;
+
+    /** true = HIBE/VERP auto-deduct; skip stock-balance check */
+    private boolean autoDeduct;
 }

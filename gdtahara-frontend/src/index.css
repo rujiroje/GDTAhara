@@ -40,7 +40,7 @@
     margin: 1.5px 0;
 }
 
-/* ── Body: มอก. left | data right ───────────────────────────────────── */
+/* ── Body: data+barcode left | compliance right ──────────────────── */
 .pkg-body {
     display: flex;
     gap: 2mm;
@@ -49,19 +49,27 @@
 }
 
 .pkg-col-makok {
-    flex: 0 0 39mm;
-    overflow: hidden;
-    position: relative;     /* anchor สำหรับ absolute fill */
+    flex: 0 0 20mm;
+    display: flex;
+    flex-direction: column;
+    /* stretch to match data table height */
 }
 
-.pkg-makok-full {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    object-position: top center;
+/* มอก. circle image — fills column width, auto height */
+.pkg-makok-icon-solo {
     display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+/* Empty bordered rectangle — fills remaining height to align with data table bottom */
+.pkg-makok-empty-box {
+    flex: 1;
+    min-height: 0;
+    border: 1px solid #555;
+    box-sizing: border-box;
 }
 
 .pkg-col-data {
@@ -86,9 +94,27 @@
     font-size: 6pt;
     color: #444;
     white-space: nowrap;
-    width: 42%;
+    width: 40%;
     border-right: 0.5px solid #bbb;
     padding: 0.6mm 1mm;
+    vertical-align: middle;
+}
+
+/* Large/bold label variant for important fields */
+.pkg-fl-big {
+    font-size: 8pt;
+    font-weight: 700;
+    color: #000;
+}
+
+/* Compact shift label (4-cell date+shift row) */
+.pkg-fl-sm {
+    font-size: 6pt;
+    color: #444;
+    white-space: nowrap;
+    border-left: 0.5px solid #bbb;
+    border-right: 0.5px solid #bbb;
+    padding: 0.6mm 0.8mm;
     vertical-align: middle;
 }
 
@@ -116,8 +142,9 @@
 }
 
 .pkg-barcode-wrap svg {
-    max-width: 100%;
-    height: auto;
+    width: 100%;
+    height: 14mm;
+    display: block;
 }
 
 /* ── Dialog preview wrapper ──────────────────────────────────────────── */

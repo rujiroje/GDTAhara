@@ -202,4 +202,14 @@ public interface ProductionReportRepository extends JpaRepository<ProductionRepo
     List<String> findOrderNumbersLike(@Param("pattern") String pattern);
 
     List<ProductionReport> findByStartDateBetween(LocalDate from, LocalDate to);
+
+    /** Fallback for getActiveReportsRobust(): avoids full-table scan by querying recent rows with JOIN FETCH. */
+    @Query("SELECT DISTINCT pr FROM ProductionReport pr " +
+           "LEFT JOIN FETCH pr.machine m " +
+           "LEFT JOIN FETCH pr.product p " +
+           "WHERE pr.startDate >= :lookback " +
+           "  AND (pr.status IS NULL OR TRIM(UPPER(pr.status)) NOT IN :terminalStatuses) " +
+           "ORDER BY pr.startDate DESC")
+    List<ProductionReport> findRecentNonTerminalWithFetch(@Param("lookback") LocalDate lookback,
+                                                          @Param("terminalStatuses") java.util.Collection<String> terminalStatuses);
 }

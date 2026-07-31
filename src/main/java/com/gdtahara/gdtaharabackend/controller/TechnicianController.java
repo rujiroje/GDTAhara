@@ -38,7 +38,7 @@ public class TechnicianController {
     }
 
     @PostMapping("/reports/{reportId}/scrap-weight")
-    @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
+    @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin','CM Operator')")
     public ResponseEntity<?> recordScrapWeight(@PathVariable Long reportId, @Valid @RequestBody ScrapWeightLogRequestDto requestDto, Principal principal) {
         String username = (principal != null) ? principal.getName() : "system";
         logger.info("API: recordScrapWeight reportId={} by {}", reportId, username);

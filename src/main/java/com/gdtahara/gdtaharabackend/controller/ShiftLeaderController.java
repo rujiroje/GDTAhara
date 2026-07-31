@@ -7,6 +7,7 @@ package com.gdtahara.gdtaharabackend.controller;
 import com.gdtahara.gdtaharabackend.dto.*;
 import com.gdtahara.gdtaharabackend.model.MaterialStockTransaction;
 import com.gdtahara.gdtaharabackend.model.NgLog;
+import com.gdtahara.gdtaharabackend.dto.StockSummaryDto;
 import com.gdtahara.gdtaharabackend.service.ShiftLeaderService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -76,6 +77,20 @@ public class ShiftLeaderController {
     @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
     public ResponseEntity<List<MaterialStockCardDto>> getMaterialStocks() {
         return ResponseEntity.ok(shiftLeaderService.getMaterialStocks());
+    }
+
+    /** Lightweight: 2 SQL queries, no history payload — ใช้โหลดหน้าแรก */
+    @GetMapping("/stock-summary")
+    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
+    public ResponseEntity<List<StockSummaryDto>> getStockSummaries() {
+        return ResponseEntity.ok(shiftLeaderService.getStockSummaries());
+    }
+
+    /** On-demand history for ONE material — เรียกเมื่อกด "ดูประวัติ" */
+    @GetMapping("/stock-history/{materialId}")
+    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
+    public ResponseEntity<MaterialStockCardDto> getStockHistory(@PathVariable Long materialId) {
+        return ResponseEntity.ok(shiftLeaderService.getStockCardForMaterial(materialId));
     }
 
     // --- Centralized error handling for clearer client responses ---

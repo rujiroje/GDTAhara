@@ -6,7 +6,6 @@ import axios from 'axios';
 import _ from 'lodash';
 import ParameterChecklistForm from './ParameterChecklistForm';
 import PmSchedulePanel from './PmSchedulePanel';
-import RecipePanel from '../pc/RecipePanel';
 import SetupJobPanel from './SetupJobPanel';
 import MachineSelectGrid from '../common/MachineSelectGrid';
 
@@ -597,7 +596,6 @@ const TechnicianDashboard = () => {
             <NotificationPanel />
             <SetupJobPanel />
             <PmSchedulePanel />
-            <RecipePanel />
             {error && <p className="error-message">{error}</p>}
             <MachineSelectGrid
                 reports={activeReports ?? []}

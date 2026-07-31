@@ -23,8 +23,12 @@ public interface PackagingLogRepository extends JpaRepository<PackagingLog, Long
     // เมธอดสำหรับหา Box No. ล่าสุด
     PackagingLog findTopByReportIdAndLotNumberOrderByBoxNoDesc(Long reportId, String lotNumber);
 
-    // เมธอดสำหรับดึงข้อมูลตามช่วงเวลา (ใช้ใน Shift Leader Dashboard)
     List<PackagingLog> findByReportIdAndTimestampBetween(Long reportId, LocalDateTime start, LocalDateTime end);
+
+    @Query("SELECT COUNT(pl) FROM PackagingLog pl WHERE pl.report.id = :reportId AND pl.timestamp BETWEEN :start AND :end")
+    long countByReportIdAndTimestampBetween(@Param("reportId") Long reportId,
+                                            @Param("start") LocalDateTime start,
+                                            @Param("end") LocalDateTime end);
 
     // Added for historical report
     List<PackagingLog> findByReportIdIn(List<Long> reportIds);

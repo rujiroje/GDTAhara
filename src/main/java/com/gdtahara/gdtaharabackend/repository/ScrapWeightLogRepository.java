@@ -17,8 +17,9 @@ import java.util.List;
 @Repository
 public interface ScrapWeightLogRepository extends JpaRepository<ScrapWeightLog, Long> {
 
-    // Added for single report scrap weight logs
     List<ScrapWeightLog> findByReportId(Long reportId);
+
+    List<ScrapWeightLog> findByReportIdAndTimestampBetween(Long reportId, LocalDateTime start, LocalDateTime end);
 
     // Added for historical report
     List<ScrapWeightLog> findByReportIdIn(List<Long> reportIds);

@@ -65,9 +65,20 @@ public class ProductionService {
             logger.info("🔍 ProductionService.getAllProductionReports() called");
             List<ProductionReport> reports = productionReportRepository.findAllWithFetch();
             logger.info("📊 Found {} production reports", reports.size());
-            
+
+            // Pre-load has-data flags in bulk (2 queries instead of 2N)
+            List<Long> ids = reports.stream().map(ProductionReport::getId).collect(Collectors.toList());
+            java.util.Set<Long> withBoxes = new java.util.HashSet<>();
+            java.util.Set<Long> withNg    = new java.util.HashSet<>();
+            if (!ids.isEmpty()) {
+                packagingLogRepository.countBoxesByReportIds(ids)
+                        .stream().filter(r -> ((Long) r[1]) > 0).forEach(r -> withBoxes.add((Long) r[0]));
+                ngLogRepository.countNgQuantityByReportIds(ids)
+                        .stream().filter(r -> ((Long) r[1]) > 0).forEach(r -> withNg.add((Long) r[0]));
+            }
+
             return reports.stream()
-                    .map(this::convertToProductionReportDto)
+                    .map(report -> convertToProductionReportDtoBulk(report, withBoxes, withNg))
                     .collect(Collectors.toList());
         } catch (Exception e) {
             logger.error("❌ Error in getAllProductionReports(): {}", e.getMessage(), e);
@@ -350,6 +361,17 @@ public class ProductionService {
                     report.getStatus());
             });
             
+            // Pre-load counts in bulk (2 queries total regardless of N active reports)
+            List<Long> activeIds = activeReports.stream().map(ProductionReport::getId).collect(java.util.stream.Collectors.toList());
+            Map<Long, Long> boxCountMap = new HashMap<>();
+            Map<Long, Long> ngCountMap  = new HashMap<>();
+            if (!activeIds.isEmpty()) {
+                packagingLogRepository.countBoxesByReportIds(activeIds)
+                        .forEach(row -> boxCountMap.put((Long) row[0], (Long) row[1]));
+                ngLogRepository.countNgQuantityByReportIds(activeIds)
+                        .forEach(row -> ngCountMap.put((Long) row[0], (Long) row[1]));
+            }
+
             List<PcDashboardSummaryDto> results = activeReports.stream()
                     .map(report -> {
                         Long reportId = report.getId();
@@ -357,46 +379,15 @@ public class ProductionService {
                         String productName = report.getProduct() != null ? report.getProduct().getProductName() : "ไม่ระบุ";
                         Integer targetQty = report.getTargetQty() != null ? report.getTargetQty() : 0;
 
-                        // Calculate good quantity = number of packaging logs (boxes) * qtyPerBox (fallback 0 if null)
-                        long boxCount = 0L;
-                        try {
-                            Long counted = packagingLogRepository.countPackagesByReportId(reportId);
-                            boxCount = counted != null ? counted : 0L;
-                            logger.debug("📦 Report {}: box count = {}", reportId, boxCount);
-                        } catch (Exception ex) {
-                            logger.warn("⚠️ Cannot count packaging logs for report {}: {}", reportId, ex.getMessage());
-                        }
-                        
-                        int qtyPerBox = 1; // Default to 1 if null
-                        if (report.getProduct() != null && report.getProduct().getQtyPerBox() != null) {
-                            qtyPerBox = report.getProduct().getQtyPerBox();
-                        }
+                        long boxCount = boxCountMap.getOrDefault(reportId, 0L);
+                        int qtyPerBox = (report.getProduct() != null && report.getProduct().getQtyPerBox() != null)
+                                ? report.getProduct().getQtyPerBox() : 1;
                         long goodQty = boxCount * qtyPerBox;
+                        long ngQty   = ngCountMap.getOrDefault(reportId, 0L);
 
-                        // Calculate NG quantity (sum of ng logs)
-                        long ngQty = 0L;
-                        try {
-                            Long summed = ngLogRepository.sumQuantityByReportId(reportId);
-                            ngQty = summed != null ? summed : 0L;
-                            logger.debug("🔥 Report {}: ng quantity = {}", reportId, ngQty);
-                        } catch (Exception ex) {
-                            logger.warn("⚠️ Cannot sum NG logs for report {}: {}", reportId, ex.getMessage());
-                        }
-
-            PcDashboardSummaryDto dto = new PcDashboardSummaryDto(
-                reportId,
-                machineName,
-                productName,
-                targetQty,
-                goodQty,
-                ngQty
-            );
-            // ใส่เลขที่คำสั่งผลิต
-            dto.setOrderNumber(report.getOrderNumber());
-            // ใส่สถานะตามนโยบายแสดงผล (IN_PROGRESS/ACTIVE/INACTIVE)
-            dto.setStatus(deriveDisplayStatus(report));
-                        
-                        logger.info("✅ Created dashboard summary DTO: {}", dto);
+                        PcDashboardSummaryDto dto = new PcDashboardSummaryDto(reportId, machineName, productName, targetQty, goodQty, ngQty);
+                        dto.setOrderNumber(report.getOrderNumber());
+                        dto.setStatus(deriveDisplayStatus(report));
                         return dto;
                     })
                     .sorted((dto1, dto2) -> {
@@ -693,6 +684,31 @@ public class ProductionService {
         return dto;
     }
 
+    /** Bulk-friendly variant — caller pre-loads has-data sets to avoid 2N individual queries. */
+    private ProductionReportDto convertToProductionReportDtoBulk(
+            ProductionReport report,
+            java.util.Set<Long> withBoxes,
+            java.util.Set<Long> withNg) {
+        ProductionReportDto dto = new ProductionReportDto();
+        dto.setId(report.getId());
+        dto.setOrderNumber(report.getOrderNumber());
+        dto.setStartDate(report.getStartDate());
+        dto.setEndDate(report.getEndDate());
+        dto.setMachineName(report.getMachine() != null ? report.getMachine().getMachineName() : "ไม่ระบุ");
+        dto.setMachineId(report.getMachine() != null ? String.valueOf(report.getMachine().getId()) : null);
+        dto.setProductName(report.getProduct() != null ? report.getProduct().getProductName() : "ไม่ระบุ");
+        dto.setTargetQty(report.getTargetQty());
+        String statusCode = deriveDisplayStatus(report);
+        dto.setStatus(statusCode);
+        boolean hasProductionData = withBoxes.contains(report.getId()) || withNg.contains(report.getId());
+        boolean isInProgress = "IN_PROGRESS".equalsIgnoreCase(statusCode);
+        boolean isActive     = "ACTIVE".equalsIgnoreCase(statusCode);
+        dto.setFinalizable(isInProgress || isActive);
+        dto.setEditable(isInProgress && !hasProductionData);
+        dto.setDeletable(!hasProductionData);
+        return dto;
+    }
+
     // --- New status helpers implementing business rules ---
     private boolean isTerminalStatus(String status) {
         if (status == null) return false;
@@ -792,23 +808,17 @@ public class ProductionService {
             logger.warn("⚠️ Fast active detection failed: {} — falling back", ex.getMessage());
         }
 
-        // Fallback: filter all reports in-memory by date range AND status
-        logger.info("🔍 Fallback: querying ALL reports and filtering by today={}", today);
+        // Fallback: query last 90 days (never a full-table scan)
+        logger.info("🔍 Fallback: querying last 90 days non-terminal reports for today={}", today);
         java.util.List<ProductionReport> result = new java.util.ArrayList<>();
-        java.util.Set<Long> seen = new java.util.HashSet<>();
         try {
-            List<ProductionReport> allReports = productionReportRepository.findAll();
-            for (ProductionReport report : allReports) {
-                if (report == null || report.getId() == null) continue;
-                // Date range must span today
+            java.time.LocalDate lookback = today.minusDays(90);
+            List<ProductionReport> recent = productionReportRepository
+                    .findRecentNonTerminalWithFetch(lookback, terminalStatuses);
+            for (ProductionReport report : recent) {
                 if (report.getStartDate() == null || report.getEndDate() == null) continue;
                 if (report.getStartDate().isAfter(today) || report.getEndDate().isBefore(today)) continue;
-                // Status must not be terminal
-                String upperStatus = report.getStatus() != null ? report.getStatus().trim().toUpperCase() : "";
-                if (terminalStatuses.contains(upperStatus)) continue;
-                if (seen.add(report.getId())) {
-                    result.add(report);
-                }
+                result.add(report);
             }
         } catch (Exception e) {
             logger.error("❌ Fallback failed: {}", e.getMessage(), e);
@@ -936,69 +946,53 @@ public class ProductionService {
             
             logger.info("📊 Found {} production reports in date range", reports.size());
             
+            // Pre-load all counts in bulk — 3 queries regardless of how many reports
+            List<Long> reportIds = reports.stream().map(ProductionReport::getId).collect(java.util.stream.Collectors.toList());
+            Map<Long, Long> boxCountMap   = new HashMap<>();
+            Map<Long, Long> ngCountMap    = new HashMap<>();
+            Map<Long, java.math.BigDecimal> scrapMap = new HashMap<>();
+            if (!reportIds.isEmpty()) {
+                packagingLogRepository.countBoxesByReportIds(reportIds)
+                        .forEach(row -> boxCountMap.put((Long) row[0], (Long) row[1]));
+                ngLogRepository.countNgQuantityByReportIds(reportIds)
+                        .forEach(row -> ngCountMap.put((Long) row[0], (Long) row[1]));
+                scrapWeightLogRepository.sumScrapWeightByReportIds(reportIds)
+                        .forEach(row -> scrapMap.put((Long) row[0], (java.math.BigDecimal) row[1]));
+            }
+
             List<HistoricalReportSummaryDto> summaries = new ArrayList<>();
-            
             for (ProductionReport report : reports) {
                 try {
+                    Long id = report.getId();
+                    long totalBoxes = boxCountMap.getOrDefault(id, 0L);
+                    long ngQty      = ngCountMap.getOrDefault(id, 0L);
+                    int  qtyPerBox  = (report.getProduct() != null && report.getProduct().getQtyPerBox() != null)
+                                        ? report.getProduct().getQtyPerBox() : 0;
+                    long goodQty    = totalBoxes * qtyPerBox;
+                    java.math.BigDecimal totalScrapWeight = scrapMap.getOrDefault(id, java.math.BigDecimal.ZERO);
+
+                    String yield = "0.00%";
+                    Integer targetQty = report.getTargetQty() != null ? report.getTargetQty() : 0;
+                    if (targetQty > 0 && goodQty > 0) {
+                        double yieldPercent = (Math.max(goodQty - ngQty, 0) / (double) targetQty) * 100.0;
+                        yield = String.format("%.2f%%", yieldPercent);
+                    }
+
                     HistoricalReportSummaryDto dto = new HistoricalReportSummaryDto();
-                    dto.setId(report.getId());
+                    dto.setId(id);
                     dto.setOrderNumber(report.getOrderNumber());
                     dto.setStartDate(report.getStartDate());
                     dto.setEndDate(report.getEndDate());
                     dto.setMachineName(report.getMachine() != null ? report.getMachine().getMachineName() : "-");
                     dto.setProductName(report.getProduct() != null ? report.getProduct().getProductName() : "-");
-                    
-                    // Calculate good quantity from packaging logs
-                    Long goodQty = 0L;
-                    Long totalBoxes = 0L;
-                    try {
-                        Long packageCount = packagingLogRepository.countPackagesByReportId(report.getId());
-                        if (packageCount != null && packageCount > 0) {
-                            totalBoxes = packageCount;
-                            Integer qtyPerBox = (report.getProduct() != null && report.getProduct().getQtyPerBox() != null) 
-                                              ? report.getProduct().getQtyPerBox() : 0;
-                            goodQty = packageCount * qtyPerBox;
-                        }
-                    } catch (Exception ex) {
-                        logger.warn("Cannot calculate good quantity for report {}: {}", report.getId(), ex.getMessage());
-                    }
-                    
-                    // Calculate NG quantity
-                    Long ngQty = 0L;
-                    try {
-                        Long ngSum = ngLogRepository.sumQuantityByReportId(report.getId());
-                        ngQty = ngSum != null ? ngSum : 0L;
-                    } catch (Exception ex) {
-                        logger.warn("Cannot calculate NG quantity for report {}: {}", report.getId(), ex.getMessage());
-                    }
-                    
-                    // Calculate yield
-                    String yield = "0.00%";
-                    Integer targetQty = report.getTargetQty() != null ? report.getTargetQty() : 0;
-                    if (targetQty > 0 && goodQty > 0) {
-                        double actualGoodQty = Math.max(goodQty - ngQty, 0);
-                        double yieldPercent = (actualGoodQty / targetQty) * 100.0;
-                        yield = String.format("%.2f%%", yieldPercent);
-                    }
-                    
-                    // Calculate total scrap weight
-                    java.math.BigDecimal totalScrapWeight = java.math.BigDecimal.ZERO;
-                    try {
-                        java.math.BigDecimal scrapWeight = scrapWeightLogRepository.sumWeightByReportId(report.getId());
-                        totalScrapWeight = scrapWeight != null ? scrapWeight : java.math.BigDecimal.ZERO;
-                    } catch (Exception ex) {
-                        logger.warn("Cannot calculate scrap weight for report {}: {}", report.getId(), ex.getMessage());
-                    }
-                    
                     dto.setGoodQty(goodQty);
                     dto.setNgQty(ngQty);
                     dto.setYield(yield);
                     dto.setTotalBoxes(totalBoxes);
                     dto.setTotalScrapWeight(totalScrapWeight);
                     dto.setStatus(report.getStatus() != null ? report.getStatus() : "Unknown");
-                    
                     summaries.add(dto);
-                    
+
                 } catch (Exception ex) {
                     logger.error("Error processing report {}: {}", report.getId(), ex.getMessage(), ex);
                 }

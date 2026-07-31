@@ -12,6 +12,9 @@ const errMsg = (err, fallback) => {
 const todayStr = () => new Date().toISOString().split('T')[0];
 const plus7Str = () => new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
 
+const fmt = (n, dp = 3) =>
+    Number(n).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+
 const MaterialRequirementDashboard = ({ onBack }) => {
     const [mode, setMode] = useState('range'); // 'range' | 'machine'
     const [from, setFrom] = useState(todayStr());
@@ -274,17 +277,17 @@ const MaterialRequirementDashboard = ({ onBack }) => {
                                             <td style={tdStyle}>{r.rmName}</td>
                                             <td style={tdStyle}><span style={matTypeBadgeStyle}>{r.materialType}</span></td>
                                             <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>
-                                                {r.total.toFixed(3)}
+                                                {fmt(r.total)}
                                             </td>
                                             <td style={{ ...tdStyle, textAlign: 'right', color: stockUnknown ? '#9ca3af' : (hasShortfall ? '#dc2626' : '#16a34a'), fontWeight: 600 }}>
-                                                {stockUnknown ? '—' : Number.parseFloat(r.currentStock).toFixed(3)}
+                                                {stockUnknown ? '—' : fmt(r.currentStock)}
                                             </td>
                                             <td style={{ ...tdStyle, textAlign: 'right' }}>
                                                 {stockUnknown ? (
                                                     <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>ไม่ทราบ</span>
                                                 ) : hasShortfall ? (
                                                     <span style={{ color: '#dc2626', fontWeight: 700 }}>
-                                                        🔴 {r.shortfall.toFixed(3)}
+                                                        🔴 {fmt(r.shortfall)}
                                                     </span>
                                                 ) : (
                                                     <span style={{ color: '#16a34a', fontWeight: 600 }}>✓ เพียงพอ</span>
@@ -334,15 +337,15 @@ const MaterialRequirementDashboard = ({ onBack }) => {
                                         <td style={{ ...tdStyle, fontFamily: 'monospace' }}>{r.fgCode}</td>
                                         <td style={{ ...tdStyle, fontWeight: 600, fontFamily: 'monospace' }}>{r.rmCode}</td>
                                         <td style={tdStyle}>{r.rmName}</td>
-                                        <td style={{ ...tdStyle, textAlign: 'right' }}>{r.targetQty}</td>
+                                        <td style={{ ...tdStyle, textAlign: 'right' }}>{Number(r.targetQty).toLocaleString('en-US')}</td>
                                         <td style={{ ...tdStyle, textAlign: 'right' }}>
-                                            {Number.parseFloat(r.quantityPer || 0).toFixed(4)}
+                                            {fmt(r.quantityPer || 0, 4)}
                                         </td>
                                         <td style={{ ...tdStyle, textAlign: 'right' }}>
                                             {Number.parseFloat(r.lossPercent || 0) > 0 ? `${r.lossPercent}%` : '-'}
                                         </td>
                                         <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>
-                                            {Number.parseFloat(r.totalRequired || 0).toFixed(4)}
+                                            {fmt(r.totalRequired || 0, 4)}
                                         </td>
                                         <td style={tdStyle}>{r.unit}</td>
                                     </tr>

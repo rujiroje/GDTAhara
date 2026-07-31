@@ -16,8 +16,9 @@ body { margin:0; padding:0; font-family:'Angsana New','TH SarabunPSK',Arial,sans
 
 .pkg-body { display:flex; gap:2mm; align-items:stretch; margin-top:1.5mm; }
 
-.pkg-col-makok { flex:0 0 39mm; overflow:hidden; position:relative; }
-.pkg-makok-full { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; object-position:top center; display:block; }
+.pkg-col-makok { flex:0 0 20mm; display:flex; flex-direction:column; }
+.pkg-makok-icon-solo { display:block; width:100%; height:auto; object-fit:contain; flex-shrink:0; }
+.pkg-makok-empty-box { flex:1; min-height:0; border:1px solid #555; box-sizing:border-box; }
 
 .pkg-col-data { flex:1 1 0; min-width:0; display:flex; flex-direction:column; }
 
@@ -26,8 +27,14 @@ body { margin:0; padding:0; font-family:'Angsana New','TH SarabunPSK',Arial,sans
 
 .pkg-fl {
     font-size:6pt; color:#444; white-space:nowrap;
-    width:42%; border-right:0.5px solid #bbb;
+    width:40%; border-right:0.5px solid #bbb;
     padding:0.6mm 1mm; vertical-align:middle;
+}
+.pkg-fl-big { font-size:8pt; font-weight:700; color:#000; }
+.pkg-fl-sm {
+    font-size:6pt; color:#444; white-space:nowrap;
+    border-left:0.5px solid #bbb; border-right:0.5px solid #bbb;
+    padding:0.6mm 0.8mm; vertical-align:middle;
 }
 .pkg-fv {
     font-size:7.5pt; padding:0.6mm 1mm;
@@ -43,7 +50,7 @@ body { margin:0; padding:0; font-family:'Angsana New','TH SarabunPSK',Arial,sans
     width:100%; display:flex; justify-content:center; align-items:center;
     padding:0.5mm 0;
 }
-.pkg-barcode-wrap svg { max-width:100%; height:auto; }
+.pkg-barcode-wrap svg { width:100%; height:14mm; display:block; }
 `;
 
 /**

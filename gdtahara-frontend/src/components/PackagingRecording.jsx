@@ -67,6 +67,7 @@ const PackagingRecording = ({ report, onBack }) => {
                 boxNo:           parseInt(boxNo, 10),
                 machineName:     ld.machineName     ?? report.machineName ?? '',
                 operatorName:    saveRes.data?.operator?.username ?? '',
+                shift:           ld.shift           ?? report.shift ?? '',
             };
             setLabelData(built);
             setIsLotLocked(true);

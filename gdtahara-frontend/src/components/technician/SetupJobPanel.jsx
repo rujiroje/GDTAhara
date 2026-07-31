@@ -27,6 +27,8 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useAuth } from '../../App';
 import {
   completeSetup,
@@ -58,6 +60,8 @@ const toLegacyKey = (label) => {
   return null;
 };
 
+const isMoldStep = (label) => (label || '').toLowerCase().includes('mold');
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SetupJobPanel = () => {
@@ -69,10 +73,14 @@ const SetupJobPanel = () => {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
 
+  // Expand/collapse for zones
+  const [showAllToday, setShowAllToday] = useState(false);
+  const [showDone, setShowDone] = useState(false);
+
   // Complete dialog
   const [completeJob, setCompleteJob] = useState(null);
   const [templates, setTemplates] = useState([]);
-  const [stepResults, setStepResults] = useState({}); // { [templateId]: { done, notes, photoFile, photoPreview, existingPhoto } }
+  const [stepResults, setStepResults] = useState({});
   const [moldCodes, setMoldCodes] = useState({ from: '', to: '' });
   const [jobNotes, setJobNotes] = useState('');
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -87,7 +95,6 @@ const SetupJobPanel = () => {
   const showSnack = (message, severity = 'success') =>
     setSnack({ open: true, message, severity });
 
-  // File input refs keyed by templateId
   const fileInputRefs = useRef({});
 
   const loadJobs = useCallback(async () => {
@@ -121,7 +128,6 @@ const SetupJobPanel = () => {
       ]);
       setTemplates(tpls);
 
-      // Build initial stepResults from existing DB data
       const init = {};
       tpls.forEach((t) => {
         const existing = existingSteps.find((s) => s.template?.id === t.id);
@@ -152,16 +158,10 @@ const SetupJobPanel = () => {
 
   // ── Step helpers ──────────────────────────────────────────────────────────
   const setStepDone = (templateId, checked) =>
-    setStepResults((prev) => ({
-      ...prev,
-      [templateId]: { ...prev[templateId], done: checked },
-    }));
+    setStepResults((prev) => ({ ...prev, [templateId]: { ...prev[templateId], done: checked } }));
 
   const setStepNotes = (templateId, val) =>
-    setStepResults((prev) => ({
-      ...prev,
-      [templateId]: { ...prev[templateId], notes: val },
-    }));
+    setStepResults((prev) => ({ ...prev, [templateId]: { ...prev[templateId], notes: val } }));
 
   const handlePhotoSelect = (templateId, file) => {
     if (!file) return;
@@ -186,15 +186,11 @@ const SetupJobPanel = () => {
     if (!completeJob) return;
     setCompleting(true);
     try {
-      // 1. Upload pending photos
       for (const tpl of templates) {
         const sr = stepResults[tpl.id];
-        if (sr?.photoFile) {
-          await uploadStepPhoto(completeJob.id, tpl.id, sr.photoFile);
-        }
+        if (sr?.photoFile) await uploadStepPhoto(completeJob.id, tpl.id, sr.photoFile);
       }
 
-      // 2. Save step results
       const stepPayload = templates.map((tpl) => ({
         templateId: tpl.id,
         done: stepResults[tpl.id]?.done ?? false,
@@ -202,7 +198,6 @@ const SetupJobPanel = () => {
       }));
       await saveStepResults(completeJob.id, stepPayload);
 
-      // 3. Build legacy checklist from step results
       const legacy = {
         moldChanged: false,
         moldCodeFrom: moldCodes.from,
@@ -218,9 +213,7 @@ const SetupJobPanel = () => {
         if (key) legacy[key] = stepResults[tpl.id]?.done ?? false;
       });
 
-      // 4. Complete the job
       await completeSetup(completeJob.id, legacy);
-
       showSnack('Setup เสร็จสิ้น — ระบบบันทึก Downtime Event เพื่อคำนวณ OEE แล้ว');
       setCompleteJob(null);
       loadJobs();
@@ -233,10 +226,7 @@ const SetupJobPanel = () => {
 
   const handleSkip = async () => {
     if (!skipJob) return;
-    if (!skipReason.trim()) {
-      showSnack('กรุณาระบุเหตุผลที่ข้าม', 'warning');
-      return;
-    }
+    if (!skipReason.trim()) { showSnack('กรุณาระบุเหตุผลที่ข้าม', 'warning'); return; }
     setSkipping(true);
     try {
       await skipSetup(skipJob.id, skipReason.trim());
@@ -251,12 +241,112 @@ const SetupJobPanel = () => {
     }
   };
 
-  const isMoldStep = (label) => (label || '').toLowerCase().includes('mold');
+  // ── Partition jobs into priority zones ────────────────────────────────────
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local tz
+
+  const byRequiredBefore = (a, b) =>
+    (a.requiredBefore || '99:99').localeCompare(b.requiredBefore || '99:99');
+
+  const inProgress  = jobs.filter(j => j.status === 'IN_PROGRESS');
+  const overdue     = jobs.filter(j => j.status === 'PENDING' && j.planDate < todayStr).sort(byRequiredBefore);
+  const todayJobs   = jobs.filter(j => j.status === 'PENDING' && j.planDate >= todayStr).sort(byRequiredBefore);
+  const done        = jobs.filter(j => j.status === 'COMPLETED' || j.status === 'SKIPPED');
+
+  const TODAY_LIMIT   = 5;
+  const visibleToday  = showAllToday ? todayJobs : todayJobs.slice(0, TODAY_LIMIT);
+  const activeCount   = inProgress.length + overdue.length + todayJobs.length;
+
+  // ── Job card renderer ─────────────────────────────────────────────────────
+  const renderJobCard = (job, borderColor, isOverdue = false) => (
+    <Card
+      key={job.id}
+      variant="outlined"
+      sx={{ mb: 1.5, borderLeft: '4px solid', borderColor }}
+    >
+      <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={700}>
+              {job.machineName || job.machineCode || `Machine ${job.machineId}`}
+              {job.machineType && (
+                <Chip label={job.machineType} size="small" sx={{ ml: 1, fontSize: '0.7rem' }} />
+              )}
+              {isOverdue && (
+                <Chip label="เลยกำหนด" color="error" size="small" sx={{ ml: 1, fontSize: '0.7rem' }} />
+              )}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              วันที่: {job.planDate}
+              &nbsp;&nbsp;|&nbsp;&nbsp;
+              <strong>{job.fromProductCode || '—'}</strong>
+              {' → '}
+              <strong>{job.toProductCode || '—'}</strong>
+            </Typography>
+            {job.requiredBefore && (
+              <Typography variant="caption" color={isOverdue ? 'error.main' : 'text.secondary'}>
+                ต้องเสร็จก่อน {job.requiredBefore}
+              </Typography>
+            )}
+          </Box>
+          <Chip
+            label={job.status}
+            color={STATUS_COLOR[job.status] || 'default'}
+            size="small"
+          />
+        </Box>
+
+        <Divider sx={{ mb: 1 }} />
+
+        <Stack direction="row" spacing={1}>
+          {job.status === 'PENDING' && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<BuildIcon />}
+              onClick={() => handleStart(job)}
+            >
+              เริ่ม Setup
+            </Button>
+          )}
+          {job.status === 'IN_PROGRESS' && (
+            <Button
+              variant="contained"
+              color="success"
+              size="small"
+              startIcon={<CheckCircleOutlineIcon />}
+              onClick={() => openComplete(job)}
+            >
+              เสร็จสิ้น
+            </Button>
+          )}
+          {(job.status === 'PENDING' || job.status === 'IN_PROGRESS') && (
+            <Button
+              variant="outlined"
+              size="small"
+              color="inherit"
+              startIcon={<SkipNextIcon />}
+              onClick={() => { setSkipJob(job); setSkipReason(''); }}
+            >
+              ข้าม
+            </Button>
+          )}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+
+  const ZoneHeader = ({ label, count, color, sx }) => (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, ...sx }}>
+      <Chip label={label} color={color} size="small" />
+      <Typography variant="caption" color="text.secondary">{count} งาน</Typography>
+    </Box>
+  );
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <Box sx={{ mb: 3 }}>
 
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
         <BuildIcon color="warning" />
         <Typography variant="h6" fontWeight={700}>งาน Setup เครื่องจักร</Typography>
@@ -267,8 +357,8 @@ const SetupJobPanel = () => {
             </IconButton>
           </span>
         </Tooltip>
-        {jobs.length > 0 && (
-          <Chip label={`${jobs.length} งาน`} color="warning" size="small" />
+        {activeCount > 0 && (
+          <Chip label={`${activeCount} งานที่รอ`} color="warning" size="small" />
         )}
       </Box>
 
@@ -278,78 +368,71 @@ const SetupJobPanel = () => {
         <Alert severity="info" sx={{ mb: 1 }}>ไม่มีงาน Setup ที่รอดำเนินการ</Alert>
       )}
 
-      {jobs.map((job) => (
-        <Card
-          key={job.id}
-          variant="outlined"
-          sx={{ mb: 1.5, borderLeft: '4px solid', borderColor: 'warning.main' }}
-        >
-          <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-              <Box>
-                <Typography variant="subtitle1" fontWeight={700}>
-                  {job.machineName || job.machineCode || `Machine ${job.machineId}`}
-                  {job.machineType && (
-                    <Chip label={job.machineType} size="small" sx={{ ml: 1, fontSize: '0.7rem' }} />
-                  )}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  วันที่: {job.planDate}
-                  &nbsp;&nbsp;|&nbsp;&nbsp;
-                  <strong>{job.fromProductCode || '—'}</strong>
-                  {' → '}
-                  <strong>{job.toProductCode || '—'}</strong>
-                </Typography>
-                {job.requiredBefore && (
-                  <Typography variant="caption" color="error.main">
-                    ต้องเสร็จก่อน {job.requiredBefore}
-                  </Typography>
-                )}
-              </Box>
-              <Chip
-                label={job.status}
-                color={STATUS_COLOR[job.status] || 'default'}
-                size="small"
-              />
-            </Box>
+      {/* ── Zone 1: IN_PROGRESS ────────────────────────────────────────────── */}
+      {inProgress.length > 0 && (
+        <>
+          <ZoneHeader label="ทำอยู่" count={inProgress.length} color="primary" />
+          {inProgress.map(job => renderJobCard(job, 'primary.main'))}
+        </>
+      )}
 
-            <Divider sx={{ mb: 1 }} />
+      {/* ── Zone 2: Overdue (เลยกำหนด) ─────────────────────────────────────── */}
+      {overdue.length > 0 && (
+        <>
+          <ZoneHeader
+            label="⚠️ เลยกำหนด"
+            count={overdue.length}
+            color="error"
+            sx={{ mt: inProgress.length > 0 ? 2 : 0 }}
+          />
+          {overdue.map(job => renderJobCard(job, 'error.main', true))}
+        </>
+      )}
 
-            <Stack direction="row" spacing={1}>
-              {job.status === 'PENDING' && (
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<BuildIcon />}
-                  onClick={() => handleStart(job)}
-                >
-                  เริ่ม Setup
-                </Button>
-              )}
-              {job.status === 'IN_PROGRESS' && (
-                <Button
-                  variant="contained"
-                  color="success"
-                  size="small"
-                  startIcon={<CheckCircleOutlineIcon />}
-                  onClick={() => openComplete(job)}
-                >
-                  เสร็จสิ้น
-                </Button>
-              )}
-              <Button
-                variant="outlined"
-                size="small"
-                color="inherit"
-                startIcon={<SkipNextIcon />}
-                onClick={() => { setSkipJob(job); setSkipReason(''); }}
-              >
-                ข้าม
-              </Button>
-            </Stack>
-          </CardContent>
-        </Card>
-      ))}
+      {/* ── Zone 3: Due Today (วันนี้) ──────────────────────────────────────── */}
+      {todayJobs.length > 0 && (
+        <>
+          <ZoneHeader
+            label="วันนี้"
+            count={todayJobs.length}
+            color="warning"
+            sx={{ mt: (inProgress.length + overdue.length) > 0 ? 2 : 0 }}
+          />
+          {visibleToday.map(job => renderJobCard(job, 'warning.main'))}
+          {todayJobs.length > TODAY_LIMIT && (
+            <Button
+              size="small"
+              variant="text"
+              endIcon={showAllToday ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              onClick={() => setShowAllToday(p => !p)}
+              sx={{ mt: 0.5, mb: 0.5 }}
+            >
+              {showAllToday
+                ? 'แสดงน้อยลง'
+                : `แสดงเพิ่มอีก ${todayJobs.length - TODAY_LIMIT} รายการ`}
+            </Button>
+          )}
+        </>
+      )}
+
+      {/* ── Zone 4: Done / Skipped ──────────────────────────────────────────── */}
+      {done.length > 0 && (
+        <>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2, mb: 1, cursor: 'pointer' }}
+            onClick={() => setShowDone(p => !p)}
+          >
+            <Chip
+              label={showDone ? '▲ เสร็จ/ข้าม' : '▼ เสร็จ/ข้าม'}
+              color="default"
+              size="small"
+              clickable
+            />
+            <Typography variant="caption" color="text.secondary">{done.length} งาน</Typography>
+          </Box>
+          {showDone && done.map(job => renderJobCard(job, 'grey.400'))}
+        </>
+      )}
 
       {/* ── Complete / Checklist Dialog ─────────────────────────────────────── */}
       <Dialog
@@ -381,7 +464,6 @@ const SetupJobPanel = () => {
 
                 return (
                   <Box key={tpl.id} sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 1.5 }}>
-                    {/* Checkbox row */}
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <FormControlLabel
                         control={
@@ -399,8 +481,6 @@ const SetupJobPanel = () => {
                           </Typography>
                         }
                       />
-
-                      {/* Camera button */}
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         {photoSrc && (
                           <IconButton size="small" color="error" onClick={() => clearPhoto(tpl.id)}>
@@ -427,7 +507,6 @@ const SetupJobPanel = () => {
                       </Box>
                     </Box>
 
-                    {/* Photo thumbnail */}
                     {photoSrc && (
                       <Box sx={{ mt: 0.5, ml: 4 }}>
                         <img
@@ -438,7 +517,6 @@ const SetupJobPanel = () => {
                       </Box>
                     )}
 
-                    {/* Mold code fields — only on Mold step when checked */}
                     {isMoldStep(tpl.label) && sr.done && (
                       <Stack direction="row" spacing={1} sx={{ mt: 1, ml: 4 }}>
                         <TextField
@@ -458,14 +536,13 @@ const SetupJobPanel = () => {
                       </Stack>
                     )}
 
-                    {/* Per-step notes */}
                     <TextField
                       size="small"
                       placeholder="หมายเหตุขั้นตอนนี้ (ถ้ามี)"
                       fullWidth
                       value={sr.notes ?? ''}
                       onChange={(e) => setStepNotes(tpl.id, e.target.value)}
-                      sx={{ mt: 1, ml: 0 }}
+                      sx={{ mt: 1 }}
                     />
                   </Box>
                 );
@@ -475,7 +552,6 @@ const SetupJobPanel = () => {
                 <Alert severity="warning">ยังไม่มีขั้นตอน Setup — กรุณาให้ Admin เพิ่มขั้นตอนก่อน</Alert>
               )}
 
-              {/* Overall job notes */}
               <TextField
                 multiline
                 rows={2}
@@ -490,9 +566,7 @@ const SetupJobPanel = () => {
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setCompleteJob(null)} disabled={completing}>
-            ยกเลิก
-          </Button>
+          <Button onClick={() => setCompleteJob(null)} disabled={completing}>ยกเลิก</Button>
           <Button
             variant="contained"
             color="success"
@@ -514,9 +588,7 @@ const SetupJobPanel = () => {
       >
         <DialogTitle>
           ข้ามงาน Setup
-          <Typography variant="body2" color="text.secondary">
-            {skipJob?.machineName}
-          </Typography>
+          <Typography variant="body2" color="text.secondary">{skipJob?.machineName}</Typography>
         </DialogTitle>
         <DialogContent>
           <TextField
@@ -531,9 +603,7 @@ const SetupJobPanel = () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSkipJob(null)} disabled={skipping}>
-            ยกเลิก
-          </Button>
+          <Button onClick={() => setSkipJob(null)} disabled={skipping}>ยกเลิก</Button>
           <Button
             variant="contained"
             color="warning"

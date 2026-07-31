@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -340,22 +341,54 @@ public class ShiftLeaderService {
         labelStockRepository.save(stock);
     }
 
+    /** Lightweight summary — 2 SQL queries total regardless of material count */
+    @Transactional(readOnly = true)
+    public List<StockSummaryDto> getStockSummaries() {
+        Map<Long, BigDecimal> balanceMap = transactionRepository.findBalancesForAllMaterials()
+                .stream()
+                .collect(Collectors.toMap(
+                    row -> (Long) row[0],
+                    row -> (BigDecimal) row[1]
+                ));
+        return materialRepository.findAll().stream()
+                .map(m -> new StockSummaryDto(
+                    m.getId(), m.getMaterialCode(), m.getMaterialName(), m.getUnit(),
+                    balanceMap.getOrDefault(m.getId(), BigDecimal.ZERO)
+                ))
+                .sorted(Comparator.comparing(StockSummaryDto::getMaterialCode))
+                .collect(Collectors.toList());
+    }
+
+    /** Per-material history with JOIN FETCH — no N+1 */
+    @Transactional(readOnly = true)
+    public MaterialStockCardDto getStockCardForMaterial(Long materialId) {
+        Material material = materialRepository.findById(materialId)
+                .orElseThrow(() -> new EntityNotFoundException("ไม่พบวัตถุดิบ"));
+        List<MaterialStockTransactionDto> history = transactionRepository
+                .findByMaterialIdWithDetailsOrderByTimestampDesc(materialId)
+                .stream()
+                .map(this::convertToTransactionDto)
+                .collect(Collectors.toList());
+        BigDecimal balance = transactionRepository.getStockBalanceByMaterialId(materialId);
+        return new MaterialStockCardDto(
+                material.getId(), material.getMaterialCode(), material.getMaterialName(),
+                balance != null ? balance.doubleValue() : 0.0,
+                history
+        );
+    }
+
+    /** @deprecated ใช้ getStockSummaries() + getStockCardForMaterial() แทน */
     public List<MaterialStockCardDto> getMaterialStocks() {
         return materialRepository.findAll().stream().map(material -> {
-            List<MaterialStockTransactionDto> history = transactionRepository.findByMaterialIdOrderByTimestampDesc(material.getId())
-                    .stream()
+            List<MaterialStockTransaction> txList = transactionRepository.findByMaterialIdOrderByTimestampDesc(material.getId());
+            List<MaterialStockTransactionDto> history = txList.stream()
                     .map(this::convertToTransactionDto)
                     .collect(Collectors.toList());
-
-            Double currentStock = calculateCurrentStock(material.getId());
-
-            return new MaterialStockCardDto(
-                material.getId(),
-                material.getMaterialCode(),
-                material.getMaterialName(),
-                currentStock,
-                history
-            );
+            BigDecimal stock = txList.stream().reduce(BigDecimal.ZERO, (acc, t) ->
+                "IN".equals(t.getTransactionType()) ? acc.add(t.getQuantity()) : acc.subtract(t.getQuantity()),
+                BigDecimal::add);
+            return new MaterialStockCardDto(material.getId(), material.getMaterialCode(), material.getMaterialName(),
+                    stock.doubleValue(), history);
         }).collect(Collectors.toList());
     }
 
@@ -373,19 +406,6 @@ public class ShiftLeaderService {
             productionInfo,
             transaction.getUser().getUsername()
         );
-    }
-
-    private Double calculateCurrentStock(Long materialId) {
-        List<MaterialStockTransaction> transactions = transactionRepository.findByMaterialIdOrderByTimestampDesc(materialId);
-        BigDecimal stock = BigDecimal.ZERO;
-        for (MaterialStockTransaction transaction : transactions) {
-            if ("IN".equals(transaction.getTransactionType())) {
-                stock = stock.add(transaction.getQuantity());
-            } else if ("OUT".equals(transaction.getTransactionType())) {
-                stock = stock.subtract(transaction.getQuantity());
-            }
-        }
-        return stock.doubleValue();
     }
 
     private ShiftDataDto createEmptyShiftData() {

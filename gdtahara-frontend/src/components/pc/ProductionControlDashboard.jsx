@@ -8,6 +8,7 @@ import BomUploadPage from './BomUploadPage';
 import BomViewerPage from './BomViewerPage';
 import MaterialRequirementDashboard from './MaterialRequirementDashboard';
 import VarianceReportPage from './VarianceReportPage';
+import BlowDailyReportPage from './BlowDailyReportPage';
 
 // --- API Service ---
 const API_URL = 'http://localhost:8080/api';
@@ -2050,7 +2051,7 @@ const ProductionOrderManagement = ({ onBack, onViewDetail, machines, products, a
     );
 };
 
-const HistoricalReports = ({ onBack, onViewDetail, onViewDailyReport, onViewDailyShiftReport, machines, products }) => {
+const HistoricalReports = ({ onBack, onViewDetail, onViewDailyReport, onViewDailyShiftReport, onViewBlowDailyReport, machines, products }) => {
     const [filters, setFilters] = useState({ startDate: new Date().toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0], machineId: 'all', productId: 'all' });
     const [results, setResults] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -2162,6 +2163,7 @@ const HistoricalReports = ({ onBack, onViewDetail, onViewDailyReport, onViewDail
                                     <button className="add-button" onClick={() => onViewDetail(report.id)}>1. {t('orderOverview')}</button>
                                     <button className="edit-button" onClick={() => onViewDailyReport(report)}>2. {t('dailySummary')}</button>
                                     <button className="finalize-button" onClick={() => onViewDailyShiftReport(report)}>3. {t('dailyShiftSummary')}</button>
+                                    <button style={{background:'#1a3a5c',color:'#fff',border:'none',borderRadius:4,padding:'4px 8px',cursor:'pointer',fontSize:'0.78rem',fontWeight:600}} onClick={() => onViewBlowDailyReport && onViewBlowDailyReport(report)}>4. ใบรายงานประจำวัน BLOW</button>
                                 </td></tr>))}
                             </tbody>
                         </table>
@@ -2662,7 +2664,7 @@ const ProductionControlDashboard = () => {
     const changeView = (newView, data = null) => {
         console.log('🔄 ProductionControlDashboard: changeView called with view:', newView, 'data:', data);
         console.log('🔄 Current view:', view, 'Selected date:', selectedDate);
-        
+
         setPreviousView(view);
         if (newView === 'detail') {
             setSelectedReportId(data);
@@ -2672,6 +2674,9 @@ const ProductionControlDashboard = () => {
         } else if (newView === 'dailySelector' || newView === 'dailyShiftSelector') {
             console.log('🗑️ Resetting selectedDate');
             setSelectedDate(null); // Reset when going to selector
+        } else if (newView === 'blowDailyReport' && data) {
+            setSelectedReportId(data.id);
+            setSelectedDate(data.startDate || new Date().toISOString().split('T')[0]);
         }
         console.log('🎯 Setting view to:', newView);
         setView(newView);
@@ -2700,9 +2705,10 @@ const ProductionControlDashboard = () => {
         return <ReportDetailView reportId={selectedReportId} onBack={() => changeView(previousView)} />;
     } else if (view === 'history') {
         return (
-            <HistoricalReports 
-                onBack={() => changeView('dashboard')} 
-                onViewDetail={(id) => changeView('detail', id)} 
+            <HistoricalReports
+                onBack={() => changeView('dashboard')}
+                onViewDetail={(id) => changeView('detail', id)}
+                onViewBlowDailyReport={(report) => changeView('blowDailyReport', report)}
                 onViewDailyReport={(report) => {
                     // สร้าง context จาก report ที่เลือก เพื่อให้ Daily กรองถูกใบสั่ง
                     const machine = Array.isArray(machines) ? machines.find(m => (m.machineName || '').toString() === (report.machineName || '').toString()) : null;
@@ -2804,6 +2810,12 @@ const ProductionControlDashboard = () => {
         return <MaterialRequirementDashboard onBack={() => changeView('dashboard')} />;
     } else if (view === 'variance') {
         return <VarianceReportPage onBack={() => changeView('dashboard')} />;
+    } else if (view === 'blowDailyReport') {
+        return <BlowDailyReportPage
+            reportId={selectedReportId}
+            initialDate={selectedDate}
+            onBack={() => changeView('history')}
+        />;
     }
 
     // Default view: 'dashboard'
@@ -2942,6 +2954,14 @@ const MachineScheduleCalendar = ({ onBack, allReports, machines }) => {
         return today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
     };
 
+    // ยอดผลิต/วัน = targetQty ÷ จำนวนวันของ WO (ป้องกันเข้าใจผิดว่าต้องผลิตยอดรวม)
+    const calcDailyQty = (r) => {
+        if (r.targetQty == null || !r.startDate || !r.endDate) return null;
+        const spanDays = Math.max(1,
+            Math.round((new Date(r.endDate) - new Date(r.startDate)) / 86400000) + 1);
+        return Math.round(r.targetQty / spanDays);
+    };
+
     const lang = typeof getLang === 'function' ? getLang() : 'th';
 
     return (
@@ -3008,7 +3028,7 @@ const MachineScheduleCalendar = ({ onBack, allReports, machines }) => {
                                         }}>
                                             {cellReports.map(r => (
                                                 <div key={r.id}
-                                                     title={`${r.orderNumber}\n${r.productName || ''}\nQty: ${r.targetQty != null ? r.targetQty.toLocaleString() : '-'}\n${r.startDate} – ${r.endDate}\n${statusLabel(r.status)}`}
+                                                     title={`${r.orderNumber}\n${r.productName || ''}\nยอด/วัน: ${calcDailyQty(r) != null ? calcDailyQty(r).toLocaleString() : '-'}\nยอดรวม WO: ${r.targetQty != null ? r.targetQty.toLocaleString() : '-'}\n${r.startDate} – ${r.endDate}\n${statusLabel(r.status)}`}
                                                      style={{
                                                          backgroundColor: statusColor(r.status),
                                                          color: '#fff', borderRadius: '3px',
@@ -3025,7 +3045,7 @@ const MachineScheduleCalendar = ({ onBack, allReports, machines }) => {
                                                     )}
                                                     {r.targetQty != null && (
                                                         <div style={{ opacity: 0.85, fontSize: '0.58rem', whiteSpace: 'nowrap' }}>
-                                                            {r.targetQty.toLocaleString()}
+                                                            {(calcDailyQty(r) ?? 0).toLocaleString()}
                                                         </div>
                                                     )}
                                                 </div>

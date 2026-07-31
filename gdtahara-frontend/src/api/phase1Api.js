@@ -177,3 +177,9 @@ export const uploadStepPhoto = async (jobId, templateId, file) => {
 
 export const getStepPhotoUrl = (filename) =>
   `${axiosInstance.defaults.baseURL}/setup-checklist/photos/${encodeURIComponent(filename)}`;
+
+// ── Daily Blow Report ──────────────────────────────────────────────
+export const fetchBlowDailyReport = async (reportId, date) => {
+  const response = await axiosInstance.get(`/reports/blow-daily/${reportId}`, { params: { date } });
+  return response.data;
+};

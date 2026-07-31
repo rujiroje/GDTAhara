@@ -36,10 +36,10 @@ const Dashboard = () => {
         return <AdminDashboard />;
       case "Production Control": 
         return <ProductionControlDashboard />;
-      // Route Document/Management to the same PC dashboard to ensure identical behavior
       case "Management":
-      case "Document":
         return <ProductionControlDashboard />;
+      case "Document":
+        return <DocMgmtDashboard />;
       case "Shift Leader": 
         return <ShiftLeaderDashboard />;
       case "Operator": 
