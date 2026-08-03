@@ -1,19 +1,33 @@
 #!/bin/bash
 # =============================================================================
 # GDTahara Deploy Script
-# รันจาก project root บนเครื่อง local (Git Bash บน Windows หรือ Terminal บน Mac/Linux)
+# รันจาก project root บน Git Bash (Windows)
 # Usage: bash deploy/deploy.sh
+#
+# ต้องมีไฟล์ deploy/.env.deploy (ไม่ commit ขึ้น git):
+#   SERVER_PASS=your_ssh_password
 # =============================================================================
 
-set -e  # หยุดทันทีถ้า command ไหน fail
+set -e
 
-# ──── CONFIG ──────────────────────────────────────────────────────────────────
-SERVER_USER="ubuntu"          # << เปลี่ยนเป็น username ที่ใช้ SSH เข้า server
+# ── Load server credentials ───────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_DEPLOY="$SCRIPT_DIR/.env.deploy"
+if [ ! -f "$ENV_DEPLOY" ]; then
+  echo "ERROR: ไม่พบ deploy/.env.deploy"
+  echo "สร้างไฟล์นั้นก่อน:"
+  echo "  echo 'SERVER_PASS=รหัสผ่าน' > deploy/.env.deploy"
+  exit 1
+fi
+source "$ENV_DEPLOY"
+
+PLINK="/c/Program Files/PuTTY/plink"
+PSCP="/c/Program Files/PuTTY/pscp"
+SERVER_USER="tst"
 SERVER_HOST="10.1.53.30"
 SERVER_APP_DIR="/opt/gdtahara"
 SERVER_FE_DIR="/var/www/gdtahara"
 SERVICE_NAME="gdtahara"
-# ─────────────────────────────────────────────────────────────────────────────
 
 echo ""
 echo "========================================="
@@ -40,45 +54,39 @@ echo "      OK: gdtahara-frontend/dist/"
 echo ""
 echo "[3/4] Uploading to $SERVER_HOST..."
 
-# Upload JAR (ชื่อ app-new.jar ก่อน → rename เป็น app.jar หลัง restart)
-echo "      → Uploading JAR..."
-scp "$JAR_FILE" "$SERVER_USER@$SERVER_HOST:/tmp/gdtahara-app-new.jar"
+echo "      → JAR..."
+"$PSCP" -pw "$SERVER_PASS" -batch \
+  "$JAR_FILE" \
+  "$SERVER_USER@$SERVER_HOST:$SERVER_APP_DIR/app-new.jar"
 
-# Upload FE: zip ส่ง แล้ว unzip บน server (ทำงานได้บน Windows Git Bash ไม่ต้อง rsync)
-echo "      → Uploading Frontend..."
+echo "      → Frontend..."
+ZIPFILE="${TEMP:-/tmp}/gdtahara_fe_$(date +%s).zip"
 cd gdtahara-frontend/dist
-zip -qr /tmp/gdtahara-fe.zip .
+zip -qr "$ZIPFILE" .
 cd ../..
-scp /tmp/gdtahara-fe.zip "$SERVER_USER@$SERVER_HOST:/tmp/gdtahara-fe.zip"
-rm /tmp/gdtahara-fe.zip
+"$PSCP" -pw "$SERVER_PASS" -batch "$ZIPFILE" "$SERVER_USER@$SERVER_HOST:/tmp/gdtahara-fe.zip"
+rm -f "$ZIPFILE"
 
 # ── Step 4: Apply on Server ───────────────────────────────────────────────────
 echo ""
-echo "[4/4] Applying on server and restarting..."
-ssh "$SERVER_USER@$SERVER_HOST" bash <<ENDSSH
+echo "[4/4] Applying on server..."
+"$PLINK" -ssh -pw "$SERVER_PASS" -batch "$SERVER_USER@$SERVER_HOST" "
   set -e
-
-  # Deploy JAR
-  sudo mv /tmp/gdtahara-app-new.jar $SERVER_APP_DIR/app.jar
-  sudo chown gdtahara:gdtahara $SERVER_APP_DIR/app.jar
-
-  # Deploy FE (clear old files แล้ว unzip ใหม่)
-  sudo rm -rf $SERVER_FE_DIR/*
-  sudo unzip -qo /tmp/gdtahara-fe.zip -d $SERVER_FE_DIR/
-  sudo chown -R www-data:www-data $SERVER_FE_DIR/
+  mv $SERVER_APP_DIR/app-new.jar $SERVER_APP_DIR/app.jar
+  chown gdtahara:gdtahara $SERVER_APP_DIR/app.jar
+  rm -rf $SERVER_FE_DIR/*
+  unzip -qo /tmp/gdtahara-fe.zip -d $SERVER_FE_DIR/
   rm /tmp/gdtahara-fe.zip
-
-  # Restart service
   sudo systemctl restart $SERVICE_NAME
-  sleep 4
+  sleep 5
   sudo systemctl is-active --quiet $SERVICE_NAME \
-    && echo "      Service: RUNNING" \
-    || (echo "      Service: FAILED — checking logs..." && sudo journalctl -u $SERVICE_NAME -n 20 --no-pager)
-ENDSSH
+    && echo '      Service: RUNNING' \
+    || (echo '      Service: FAILED — logs:' && sudo journalctl -u $SERVICE_NAME -n 30 --no-pager && exit 1)
+"
 
 echo ""
 echo "========================================="
 echo " Deploy complete!"
-echo " App: http://$SERVER_HOST/MES/"
-echo " Health: http://$SERVER_HOST/MES/api/actuator/health"
+echo " App   : https://$SERVER_HOST/MES/"
+echo " Health: https://$SERVER_HOST/MES/api/actuator/health"
 echo "========================================="

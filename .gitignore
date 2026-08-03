@@ -34,3 +34,4 @@ build/
 
 # Environment secrets — never commit
 .env
+deploy/.env.deploy
