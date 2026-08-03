@@ -6,11 +6,13 @@ import path from 'path'
 export default defineConfig({
   plugins: [react()],
   server: {
-    hmr: {
-      overlay: false, // Disable the HMR overlay
-    },
+    hmr: { overlay: false },
     host: 'localhost',
     port: 5173,
+    proxy: {
+      // Forward /api calls to Spring Boot during development
+      '/api': { target: 'http://localhost:8080', changeOrigin: true },
+    },
   },
   resolve: {
     // Avoid resolving to real paths on Windows/OneDrive which can trigger spawn EPERM in Vite's safe realpath checks

@@ -1,0 +1,29 @@
+[Unit]
+Description=GDTahara Backend (Spring Boot)
+After=network.target
+
+[Service]
+Type=simple
+User=gdtahara
+WorkingDirectory=/opt/gdtahara
+
+# Load credentials from .env file (DB user/password, JWT secret, CORS)
+EnvironmentFile=/opt/gdtahara/.env
+
+ExecStart=/usr/bin/java \
+  -Xms256m -Xmx512m \
+  -Dspring.profiles.active=prod \
+  -jar /opt/gdtahara/app.jar
+
+# Keep logs in journald (view with: journalctl -u gdtahara -f)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gdtahara
+
+Restart=on-failure
+RestartSec=15
+StartLimitIntervalSec=120
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target

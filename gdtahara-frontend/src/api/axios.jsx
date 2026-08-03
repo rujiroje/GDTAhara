@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+// In dev: Vite proxies /api → localhost:8080 (see vite.config.js)
+// In prod: Nginx proxies /api → localhost:8080 (same-origin, no CORS needed)
 const axiosInstance = axios.create({
-    baseURL: 'http://localhost:8080/api', // Backend API URL
+    baseURL: '/api',
     withCredentials: true, // ส่ง Credentials (เช่น Cookies) ไปกับทุก Request
     headers: {
         'Cache-Control': 'no-cache',
