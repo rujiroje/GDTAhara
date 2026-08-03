@@ -4,6 +4,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import _ from 'lodash';
+import { Badge, Box, Tab, Tabs } from '@mui/material';
+import BuildIcon from '@mui/icons-material/Build';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import ParameterChecklistForm from './ParameterChecklistForm';
 import PmSchedulePanel from './PmSchedulePanel';
 import SetupJobPanel from './SetupJobPanel';
@@ -343,11 +346,13 @@ const ParameterRecordsView = ({ records, onEdit, onAddNew, onBack }) => (
 );
 
 const TechnicianDashboard = () => {
+    const [activeTab, setActiveTab] = useState(0);
+
     const [activeReports, setActiveReports] = useState([]);
     const [selectedReport, setSelectedReport] = useState(null);
     const [error, setError] = useState('');
-    
-    const [currentView, setCurrentView] = useState('reportList'); 
+
+    const [currentView, setCurrentView] = useState('reportList');
     const [parameterRecords, setParameterRecords] = useState([]);
     const [currentRecord, setCurrentRecord] = useState(null); 
     const [formData, setFormData] = useState(_.cloneDeep(initialParameterFormData));
@@ -396,7 +401,8 @@ const TechnicianDashboard = () => {
     const _handleBackToReportSelection = () => {
         setSelectedReport(null);
         setCurrentView('reportList');
-        fetchActiveReports(); // Add this line
+        setActiveTab(1);
+        fetchActiveReports();
     };
 
     const handleDowntimeSubmit = async (e) => {
@@ -516,7 +522,7 @@ const TechnicianDashboard = () => {
 
     const renderMainTaskView = () => (
         <>
-            <button onClick={() => {setSelectedReport(null); setCurrentView('reportList');}} className="back-button"> &larr; กลับไปหน้ารายการ</button>
+            <button onClick={_handleBackToReportSelection} className="back-button"> &larr; กลับไปหน้ารายการ</button>
             <h2 className="dashboard-title">บันทึกข้อมูลเทคนิค</h2>
             <div className="selected-report-info">
                 <span><strong>เครื่องจักร:</strong> {selectedReport.machineName}</span>
@@ -594,14 +600,55 @@ const TechnicianDashboard = () => {
     return (
         <div className="dashboard-card">
             <NotificationPanel />
-            <SetupJobPanel />
-            <PmSchedulePanel />
-            {error && <p className="error-message">{error}</p>}
-            <MachineSelectGrid
-                reports={activeReports ?? []}
-                onSelect={report => setSelectedReport(report)}
-                title="เลือกใบสั่งผลิตเพื่อบันทึกข้อมูล"
-            />
+
+            {/* ── Tab bar ─────────────────────────────────────────────── */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                <Tabs
+                    value={activeTab}
+                    onChange={(_, v) => setActiveTab(v)}
+                    variant="fullWidth"
+                >
+                    <Tab
+                        icon={<BuildIcon fontSize="small" />}
+                        iconPosition="start"
+                        label="งาน Setup"
+                        sx={{ fontWeight: 700, minHeight: 48 }}
+                    />
+                    <Tab
+                        icon={
+                            <Badge badgeContent={activeReports.length || null} color="warning">
+                                <AssignmentIcon fontSize="small" />
+                            </Badge>
+                        }
+                        iconPosition="start"
+                        label="บันทึกข้อมูลผลิต"
+                        sx={{ fontWeight: 700, minHeight: 48 }}
+                    />
+                </Tabs>
+            </Box>
+
+            {/* ── Tab 0: Setup + PM ───────────────────────────────────── */}
+            {activeTab === 0 && (
+                <>
+                    <SetupJobPanel />
+                    <PmSchedulePanel />
+                </>
+            )}
+
+            {/* ── Tab 1: Production recording ──────────────────────────── */}
+            {activeTab === 1 && (
+                <>
+                    {error && <p className="error-message">{error}</p>}
+                    <MachineSelectGrid
+                        reports={activeReports ?? []}
+                        onSelect={(report) => {
+                            setSelectedReport(report);
+                            setCurrentView('reportList');
+                        }}
+                        title="เลือกใบสั่งผลิตเพื่อบันทึกข้อมูล"
+                    />
+                </>
+            )}
         </div>
     );
 };

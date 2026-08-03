@@ -9,6 +9,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 public class ProductionReportSimpleViewDto {
     private Long id;
+    private Long productId;
     private String orderNumber;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")

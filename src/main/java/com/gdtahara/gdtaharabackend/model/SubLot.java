@@ -28,6 +28,10 @@ public class SubLot {
     @Column(name = "pallet_number", length = 50)
     private String palletNumber;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pallet_id")
+    private Pallet pallet;
+
     @Column(name = "box_quantity", nullable = false)
     private Integer boxQuantity;
 

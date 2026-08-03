@@ -183,3 +183,105 @@ export const fetchBlowDailyReport = async (reportId, date) => {
   const response = await axiosInstance.get(`/reports/blow-daily/${reportId}`, { params: { date } });
   return response.data;
 };
+
+// ── Pallet Assembly ────────────────────────────────────────────────
+
+export const createPallet = async (payload) => {
+  const response = await axiosInstance.post('/operator/pallets', payload);
+  return response.data;
+};
+
+export const scanBoxIntoPallet = async (palletId, subLotNumber) => {
+  const response = await axiosInstance.post(`/operator/pallets/${palletId}/scan`, { subLotNumber });
+  return response.data;
+};
+
+export const removeBoxFromPallet = async (palletId, subLotId) => {
+  const response = await axiosInstance.delete(`/operator/pallets/${palletId}/boxes/${subLotId}`);
+  return response.data;
+};
+
+export const closePallet = async (palletId) => {
+  const response = await axiosInstance.post(`/operator/pallets/${palletId}/close`);
+  return response.data;
+};
+
+export const markPalletPrinted = async (palletId) => {
+  const response = await axiosInstance.post(`/operator/pallets/${palletId}/print`);
+  return response.data;
+};
+
+export const getPallet = async (palletId) => {
+  const response = await axiosInstance.get(`/operator/pallets/${palletId}`);
+  return response.data;
+};
+
+export const listOpenPallets = async () => {
+  const response = await axiosInstance.get('/operator/pallets/open');
+  return response.data;
+};
+
+export const listPalletsByDate = async (date, productId) => {
+  const params = { date };
+  if (productId) params.productId = productId;
+  const response = await axiosInstance.get('/operator/pallets', { params });
+  return response.data;
+};
+
+export const getPalletLabel = async (palletId) => {
+  const response = await axiosInstance.get(`/operator/pallets/${palletId}/label`);
+  return response.data;
+};
+
+export const rearrangePallet = async (palletId, newPalletNumber, reason) => {
+  const response = await axiosInstance.post(`/operator/pallets/${palletId}/rearrange`, { newPalletNumber, reason });
+  return response.data;
+};
+
+// ── Setup Activity Codes ───────────────────────────────────────────
+
+export const getSetupActivityCodes = async () => {
+  const response = await axiosInstance.get('/setup-activity-codes');
+  return response.data;
+};
+
+export const createSetupActivityCode = async (payload) => {
+  const response = await axiosInstance.post('/setup-activity-codes', payload);
+  return response.data;
+};
+
+export const toggleSetupActivityCode = async (id, active) => {
+  const response = await axiosInstance.put(`/setup-activity-codes/${id}/toggle`, null, { params: { active } });
+  return response.data;
+};
+
+// ── Setup Time Log ─────────────────────────────────────────────────
+
+export const getSetupTimeLogs = async (jobId) => {
+  const response = await axiosInstance.get(`/setup-jobs/${jobId}/time-logs`);
+  return response.data;
+};
+
+export const startTimeLog = async (jobId, activityCodeId, description, startTime) => {
+  const response = await axiosInstance.post(`/setup-jobs/${jobId}/time-logs`, {
+    activityCodeId,
+    description: description || null,
+    startTime: startTime || null,
+  });
+  return response.data;
+};
+
+export const endTimeLog = async (jobId, logId) => {
+  const response = await axiosInstance.put(`/setup-jobs/${jobId}/time-logs/${logId}/end`);
+  return response.data;
+};
+
+export const deleteTimeLog = async (jobId, logId) => {
+  const response = await axiosInstance.delete(`/setup-jobs/${jobId}/time-logs/${logId}`);
+  return response.data;
+};
+
+export const endAllTimeLogs = async (jobId) => {
+  const response = await axiosInstance.put(`/setup-jobs/${jobId}/time-logs/end-all`);
+  return response.data;
+};

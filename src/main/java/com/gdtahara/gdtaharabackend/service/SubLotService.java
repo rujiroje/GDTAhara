@@ -95,7 +95,7 @@ public class SubLotService {
 
     @Transactional(readOnly = true)
     public SubLot getById(Long id) {
-        return subLotRepository.findById(id)
+        return subLotRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new EntityNotFoundException("SubLot not found: " + id));
     }
 
@@ -108,7 +108,7 @@ public class SubLotService {
     public SubLot markAsLabeled(Long subLotId, String zplRef, String username) {
         logger.info("Marking sub-lot {} as labeled by user {}", subLotId, username);
 
-        SubLot subLot = subLotRepository.findById(subLotId)
+        SubLot subLot = subLotRepository.findByIdWithDetails(subLotId)
                 .orElseThrow(() -> new EntityNotFoundException("SubLot not found: " + subLotId));
 
         String previousStatus = subLot.getStatus();

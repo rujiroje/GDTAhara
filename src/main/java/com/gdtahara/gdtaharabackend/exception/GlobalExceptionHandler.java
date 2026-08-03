@@ -6,6 +6,7 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -46,6 +47,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleBadRequest(IllegalArgumentException ex, HttpServletRequest req) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(body(HttpStatus.BAD_REQUEST, ex.getMessage(), req));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest req) {
+        String msg = ex.getMostSpecificCause().getMessage();
+        String friendly;
+        if (msg != null && msg.contains("uk_pallet_number"))
+            friendly = "หมายเลข Pallet นี้มีอยู่แล้วในวันนี้ กรุณาใช้หมายเลขอื่น";
+        else if (msg != null && msg.contains("UK_sac_code"))
+            friendly = "Activity Code นี้มีอยู่แล้ว กรุณาใช้ Code อื่น";
+        else
+            friendly = "ข้อมูลซ้ำหรือขัดกับเงื่อนไขในฐานข้อมูล";
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(body(HttpStatus.CONFLICT, friendly, req));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

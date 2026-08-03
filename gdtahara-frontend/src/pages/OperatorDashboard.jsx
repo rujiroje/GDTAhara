@@ -25,6 +25,7 @@ import TrackOutPanel from '../components/operator/TrackOutPanel';
 import ReprintBarcode from '../components/operator/ReprintBarcode';
 import NgRecording from '../components/NgRecording';
 import PackagingRecording from '../components/PackagingRecording';
+import PalletAssemblyPanel from '../components/operator/PalletAssemblyPanel';
 
 const OperatorDashboard = () => {
     const [view, setView] = useState('select_report'); // 'select_report', 'select_task', 'ng_task', 'packaging_task'
@@ -32,27 +33,6 @@ const OperatorDashboard = () => {
     const [selectedReport, setSelectedReport] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [ setConnectionStatus] = useState('testing');
-
-    // Test backend connection when component mounts
-    useEffect(() => {
-        const testConnection = async () => {
-            try {
-                console.log('Testing operator backend connection...');
-                const response = await axiosInstance.get('/operator/test');
-                console.log('Operator backend test response:', response.data);
-                if (response.data.status === 'success') {
-                    setConnectionStatus('connected');
-                } else {
-                    setConnectionStatus('failed');
-                }
-            } catch (error) {
-                console.error('Operator backend test failed:', error);
-                setConnectionStatus('failed');
-            }
-        };
-        testConnection();
-    }, []);
 
     useEffect(() => {
         // ดึงข้อมูลใบสั่งผลิตที่ Active เฉพาะเมื่ออยู่หน้าเลือก
@@ -88,6 +68,11 @@ const OperatorDashboard = () => {
     // View: Track-Out (barcode scan)
     if (view === 'track_out') {
         return <TrackOutPanel onBack={() => setView('select_report')} />;
+    }
+
+    // View: Pallet Assembly
+    if (view === 'pallet_assembly') {
+        return <PalletAssemblyPanel report={selectedReport} onBack={() => setView('select_task')} />;
     }
 
     // View: Reprint Barcode
@@ -144,10 +129,11 @@ const OperatorDashboard = () => {
     // View: เลือกงาน (บันทึก NG หรือ Packaging)
     if (view === 'select_task') {
         const TASKS = [
-            { view: 'ng_task',       label: 'บันทึกของเสีย',    sub: 'NG Recording',     color: LINE_COLORS[0] },
-            { view: 'packaging_task',label: 'บันทึกการบรรจุ',   sub: 'Packaging',        color: LINE_COLORS[2] },
-            { view: 'reprint_task',  label: 'พิมพ์ซ้ำ Label',   sub: 'Reprint Barcode',  color: LINE_COLORS[6] },
-            { view: 'track_out',     label: 'Track-Out',        sub: 'สแกน Barcode',     color: LINE_COLORS[9] },
+            { view: 'ng_task',        label: 'บันทึกของเสีย',    sub: 'NG Recording',     color: LINE_COLORS[0] },
+            { view: 'packaging_task', label: 'บันทึกการบรรจุ',   sub: 'Packaging',        color: LINE_COLORS[2] },
+            { view: 'reprint_task',   label: 'พิมพ์ซ้ำ Label',   sub: 'Reprint Barcode',  color: LINE_COLORS[6] },
+            { view: 'track_out',      label: 'Track-Out',        sub: 'สแกน Barcode',     color: LINE_COLORS[9] },
+            { view: 'pallet_assembly',label: 'ประกอบ Pallet',    sub: 'Pallet Assembly',  color: LINE_COLORS[3] },
         ];
         return (
             <Box sx={{ p: 2 }}>

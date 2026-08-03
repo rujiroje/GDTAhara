@@ -11,6 +11,7 @@ import com.gdtahara.gdtaharabackend.dto.ProductionReportSimpleViewDto;
 import com.gdtahara.gdtaharabackend.model.*;
 import com.gdtahara.gdtaharabackend.repository.*;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,9 @@ public class OperatorService {
     private final UserRepository userRepository;
     private final NgTypeRepository ngTypeRepository;
     private final AuditLogService auditLogService;
+
+    @Autowired
+    private SubLotRepository subLotRepository;
 
     public OperatorService(ProductionReportRepository productionReportRepository, NgLogRepository ngLogRepository, LabelStockRepository labelStockRepository, PackagingLogRepository packagingLogRepository, ProblemAlertRepository problemAlertRepository, UserRepository userRepository, NgTypeRepository ngTypeRepository, AuditLogService auditLogService) {
         this.productionReportRepository = productionReportRepository;
@@ -79,7 +83,7 @@ public class OperatorService {
     }
 
     private ProductionReportSimpleViewDto convertToSimpleDto(ProductionReport report) {
-        return new ProductionReportSimpleViewDto(
+        ProductionReportSimpleViewDto dto = new ProductionReportSimpleViewDto(
                 report.getId(),
                 report.getOrderNumber(),
                 report.getStartDate(),
@@ -91,6 +95,10 @@ public class OperatorService {
                 report.getParentLotNumber(),
                 report.getShift()
         );
+        if (report.getProduct() != null) {
+            dto.setProductId(report.getProduct().getId());
+        }
+        return dto;
     }
 
     private java.time.LocalDate toLocalDate(Object obj) {
@@ -191,6 +199,25 @@ public class OperatorService {
                 Map.of("id", savedPkg.getId(), "reportId", String.valueOf(reportId),
                         "lotNumber", String.valueOf(request.getLotNumber()),
                         "boxNo", String.valueOf(request.getBoxNo())));
+
+        // Create matching SubLot so Track-Out and Pallet Assembly can find this box by barcode
+        if (report.getProduct() != null && report.getProduct().getProductCode() != null) {
+            String slNumber = report.getProduct().getProductCode()
+                    + "-" + request.getLotNumber()
+                    + "-" + String.format("%03d", request.getBoxNo());
+            if (!subLotRepository.existsBySubLotNumber(slNumber)) {
+                SubLot sl = new SubLot();
+                sl.setProductionReport(report);
+                sl.setSubLotNumber(slNumber);
+                sl.setBoxQuantity(report.getProduct().getQtyPerBox() != null
+                        ? report.getProduct().getQtyPerBox() : 0);
+                sl.setConfirmedAt(savedPkg.getTimestamp());
+                sl.setConfirmedBy(operator);
+                sl.setStatus("draft");
+                subLotRepository.save(sl);
+            }
+        }
+
         return savedPkg;
     }
 
