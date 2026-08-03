@@ -1,49 +1,84 @@
 #!/bin/bash
 # =============================================================================
-# GDTahara Deploy Script — run from project root on your LOCAL machine
-# Usage:
-#   chmod +x deploy/deploy.sh
-#   ./deploy/deploy.sh
+# GDTahara Deploy Script
+# รันจาก project root บนเครื่อง local (Git Bash บน Windows หรือ Terminal บน Mac/Linux)
+# Usage: bash deploy/deploy.sh
 # =============================================================================
 
-set -e  # exit on any error
+set -e  # หยุดทันทีถ้า command ไหน fail
 
-# ──── CONFIG (edit these) ────────────────────────────────────────────────────
-SERVER_USER="gdtahara"                # Linux user on the server
+# ──── CONFIG ──────────────────────────────────────────────────────────────────
+SERVER_USER="ubuntu"          # << เปลี่ยนเป็น username ที่ใช้ SSH เข้า server
 SERVER_HOST="10.1.53.30"
-SERVER_APP_DIR="/opt/gdtahara"        # directory บน server
-SERVER_FE_DIR="/var/www/gdtahara"     # Nginx web root
-SERVICE_NAME="gdtahara"              # systemd service name
+SERVER_APP_DIR="/opt/gdtahara"
+SERVER_FE_DIR="/var/www/gdtahara"
+SERVICE_NAME="gdtahara"
 # ─────────────────────────────────────────────────────────────────────────────
 
-echo "=== [1/4] Building Backend JAR ==="
+echo ""
+echo "========================================="
+echo " GDTahara Deploy → $SERVER_HOST"
+echo "========================================="
+
+# ── Step 1: Build Backend ─────────────────────────────────────────────────────
+echo ""
+echo "[1/4] Building Backend JAR..."
 mvn clean package -DskipTests -q
 JAR_FILE=$(ls target/gdtahara-backend-*.jar | head -1)
-echo "    Built: $JAR_FILE"
+echo "      OK: $JAR_FILE"
 
-echo "=== [2/4] Building Frontend (base=/MES/) ==="
+# ── Step 2: Build Frontend ────────────────────────────────────────────────────
+echo ""
+echo "[2/4] Building Frontend (base=/MES/)..."
 cd gdtahara-frontend
 npm install --silent
-VITE_BASE_PATH=/MES/ npm run build --silent
+VITE_BASE_PATH=/MES/ npm run build
 cd ..
-echo "    Built: gdtahara-frontend/dist/"
+echo "      OK: gdtahara-frontend/dist/"
 
-echo "=== [3/4] Uploading to server ($SERVER_HOST) ==="
-# Upload JAR
-scp "$JAR_FILE" "$SERVER_USER@$SERVER_HOST:$SERVER_APP_DIR/app-new.jar"
+# ── Step 3: Upload to Server ──────────────────────────────────────────────────
+echo ""
+echo "[3/4] Uploading to $SERVER_HOST..."
 
-# Upload FE
-rsync -az --delete gdtahara-frontend/dist/ "$SERVER_USER@$SERVER_HOST:$SERVER_FE_DIR/"
+# Upload JAR (ชื่อ app-new.jar ก่อน → rename เป็น app.jar หลัง restart)
+echo "      → Uploading JAR..."
+scp "$JAR_FILE" "$SERVER_USER@$SERVER_HOST:/tmp/gdtahara-app-new.jar"
 
-echo "=== [4/4] Restarting Backend ==="
-ssh "$SERVER_USER@$SERVER_HOST" "
-  mv $SERVER_APP_DIR/app-new.jar $SERVER_APP_DIR/app.jar
+# Upload FE: zip ส่ง แล้ว unzip บน server (ทำงานได้บน Windows Git Bash ไม่ต้อง rsync)
+echo "      → Uploading Frontend..."
+cd gdtahara-frontend/dist
+zip -qr /tmp/gdtahara-fe.zip .
+cd ../..
+scp /tmp/gdtahara-fe.zip "$SERVER_USER@$SERVER_HOST:/tmp/gdtahara-fe.zip"
+rm /tmp/gdtahara-fe.zip
+
+# ── Step 4: Apply on Server ───────────────────────────────────────────────────
+echo ""
+echo "[4/4] Applying on server and restarting..."
+ssh "$SERVER_USER@$SERVER_HOST" bash <<ENDSSH
+  set -e
+
+  # Deploy JAR
+  sudo mv /tmp/gdtahara-app-new.jar $SERVER_APP_DIR/app.jar
+  sudo chown gdtahara:gdtahara $SERVER_APP_DIR/app.jar
+
+  # Deploy FE (clear old files แล้ว unzip ใหม่)
+  sudo rm -rf $SERVER_FE_DIR/*
+  sudo unzip -qo /tmp/gdtahara-fe.zip -d $SERVER_FE_DIR/
+  sudo chown -R www-data:www-data $SERVER_FE_DIR/
+  rm /tmp/gdtahara-fe.zip
+
+  # Restart service
   sudo systemctl restart $SERVICE_NAME
-  sleep 3
-  sudo systemctl status $SERVICE_NAME --no-pager -l
-"
+  sleep 4
+  sudo systemctl is-active --quiet $SERVICE_NAME \
+    && echo "      Service: RUNNING" \
+    || (echo "      Service: FAILED — checking logs..." && sudo journalctl -u $SERVICE_NAME -n 20 --no-pager)
+ENDSSH
 
 echo ""
-echo "✓ Deploy complete!"
-echo "  App: http://$SERVER_HOST/"
-echo "  API: http://$SERVER_HOST/api/actuator/health"
+echo "========================================="
+echo " Deploy complete!"
+echo " App: http://$SERVER_HOST/MES/"
+echo " Health: http://$SERVER_HOST/MES/api/actuator/health"
+echo "========================================="
