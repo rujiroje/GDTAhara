@@ -6,8 +6,8 @@ import path from 'path'
 export default defineConfig({
   plugins: [react()],
   // Base path: '/' for dev, '/MES/' for production build
-  // Set VITE_BASE_PATH=/MES/ when running: npm run build
-  base: process.env.VITE_BASE_PATH || '/',
+  // Set VITE_PROD=1 when building for production (avoids Git Bash path mangling)
+  base: process.env.VITE_PROD ? '/MES/' : '/',
   server: {
     hmr: { overlay: false },
     host: 'localhost',

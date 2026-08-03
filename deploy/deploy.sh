@@ -37,7 +37,7 @@ echo "========================================="
 # ── Step 1: Build Backend ─────────────────────────────────────────────────────
 echo ""
 echo "[1/4] Building Backend JAR..."
-mvn clean package -DskipTests -q
+./mvnw clean package -DskipTests -q -Dmaven.clean.failOnError=false
 JAR_FILE=$(ls target/gdtahara-backend-*.jar | head -1)
 echo "      OK: $JAR_FILE"
 
@@ -46,7 +46,7 @@ echo ""
 echo "[2/4] Building Frontend (base=/MES/)..."
 cd gdtahara-frontend
 npm install --silent
-VITE_BASE_PATH=/MES/ npm run build
+VITE_PROD=1 npm run build
 cd ..
 echo "      OK: gdtahara-frontend/dist/"
 
@@ -60,29 +60,43 @@ echo "      → JAR..."
   "$SERVER_USER@$SERVER_HOST:$SERVER_APP_DIR/app-new.jar"
 
 echo "      → Frontend..."
-ZIPFILE="${TEMP:-/tmp}/gdtahara_fe_$(date +%s).zip"
+TARFILE="/tmp/gdtahara_fe.tar.gz"
 cd gdtahara-frontend/dist
-zip -qr "$ZIPFILE" .
+tar -czf "$TARFILE" .
 cd ../..
-"$PSCP" -pw "$SERVER_PASS" -batch "$ZIPFILE" "$SERVER_USER@$SERVER_HOST:/tmp/gdtahara-fe.zip"
-rm -f "$ZIPFILE"
+"$PSCP" -pw "$SERVER_PASS" -batch "$TARFILE" "$SERVER_USER@$SERVER_HOST:/tmp/gdtahara-fe.tar.gz"
+rm -f "$TARFILE"
 
 # ── Step 4: Apply on Server ───────────────────────────────────────────────────
 echo ""
 echo "[4/4] Applying on server..."
+
+# 4a. File operations (no sudo needed)
 "$PLINK" -ssh -pw "$SERVER_PASS" -batch "$SERVER_USER@$SERVER_HOST" "
   set -e
   mv $SERVER_APP_DIR/app-new.jar $SERVER_APP_DIR/app.jar
-  chown gdtahara:gdtahara $SERVER_APP_DIR/app.jar
-  rm -rf $SERVER_FE_DIR/*
-  unzip -qo /tmp/gdtahara-fe.zip -d $SERVER_FE_DIR/
-  rm /tmp/gdtahara-fe.zip
-  sudo systemctl restart $SERVICE_NAME
-  sleep 5
-  sudo systemctl is-active --quiet $SERVICE_NAME \
-    && echo '      Service: RUNNING' \
-    || (echo '      Service: FAILED — logs:' && sudo journalctl -u $SERVICE_NAME -n 30 --no-pager && exit 1)
+  chmod 644 $SERVER_APP_DIR/app.jar
+  find $SERVER_FE_DIR -mindepth 1 -delete
+  tar -xzf /tmp/gdtahara-fe.tar.gz -C $SERVER_FE_DIR/
+  rm /tmp/gdtahara-fe.tar.gz
+  echo '      Files applied OK'
 "
+
+# 4b. Restart service (separate SSH call avoids sudo TTY issue in multi-command sessions)
+"$PLINK" -ssh -pw "$SERVER_PASS" -batch "$SERVER_USER@$SERVER_HOST" "sudo systemctl restart $SERVICE_NAME"
+echo "      Service restarted"
+sleep 8
+
+# 4c. Check status
+STATUS=$("$PLINK" -ssh -pw "$SERVER_PASS" -batch "$SERVER_USER@$SERVER_HOST" "sudo systemctl is-active $SERVICE_NAME")
+if [ "$STATUS" = "active" ]; then
+  echo "      Service: RUNNING"
+else
+  echo "      Service: FAILED (status=$STATUS) — last 30 log lines:"
+  "$PLINK" -ssh -pw "$SERVER_PASS" -batch "$SERVER_USER@$SERVER_HOST" \
+    "sudo journalctl -u $SERVICE_NAME -n 30 --no-pager"
+  exit 1
+fi
 
 echo ""
 echo "========================================="
