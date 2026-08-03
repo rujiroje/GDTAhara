@@ -10,7 +10,7 @@ set -e  # exit on any error
 
 # ──── CONFIG (edit these) ────────────────────────────────────────────────────
 SERVER_USER="gdtahara"                # Linux user on the server
-SERVER_HOST="10.1.x.x"               # << เปลี่ยนเป็น IP ของ App Server
+SERVER_HOST="10.1.53.30"
 SERVER_APP_DIR="/opt/gdtahara"        # directory บน server
 SERVER_FE_DIR="/var/www/gdtahara"     # Nginx web root
 SERVICE_NAME="gdtahara"              # systemd service name
