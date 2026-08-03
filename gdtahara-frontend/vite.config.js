@@ -5,6 +5,9 @@ import path from 'path'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Base path: '/' for dev, '/MES/' for production build
+  // Set VITE_BASE_PATH=/MES/ when running: npm run build
+  base: process.env.VITE_BASE_PATH || '/',
   server: {
     hmr: { overlay: false },
     host: 'localhost',

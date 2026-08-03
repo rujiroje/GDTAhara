@@ -21,10 +21,10 @@ mvn clean package -DskipTests -q
 JAR_FILE=$(ls target/gdtahara-backend-*.jar | head -1)
 echo "    Built: $JAR_FILE"
 
-echo "=== [2/4] Building Frontend ==="
+echo "=== [2/4] Building Frontend (base=/MES/) ==="
 cd gdtahara-frontend
 npm install --silent
-npm run build --silent
+VITE_BASE_PATH=/MES/ npm run build --silent
 cd ..
 echo "    Built: gdtahara-frontend/dist/"
 

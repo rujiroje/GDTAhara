@@ -8,6 +8,7 @@ JWT_SECRET=CHANGE_ME_64_CHARS_MIN
 # CORS: ใส่ IP ของ App Server (ที่ผู้ใช้จะเข้าจาก browser)
 # ถ้ามีหลาย origin คั่นด้วย comma ไม่มี space
 # ถ้ามีหลาย origin คั่นด้วย comma ไม่มี space
+# ใช้ /MES/ sub-path → origin ยังเป็น http://10.1.53.30 (ไม่ใส่ path)
 CORS_ALLOWED_ORIGINS=http://10.1.53.30
 
 # Label printer (ถ้ายังไม่มีเครื่องพิมพ์จริง ใช้ log)
