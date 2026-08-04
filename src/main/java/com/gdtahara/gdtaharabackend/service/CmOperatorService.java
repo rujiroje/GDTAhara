@@ -99,7 +99,9 @@ public class CmOperatorService {
         if (report.getProduct() == null) return Collections.emptyList();
 
         String fgCode = report.getProduct().getProductCode();
-        LocalDate refDate = report.getStartDate() != null ? report.getStartDate() : LocalDate.now();
+        // Use today's date for BOM lookup: WO.startDate is the month-start date (e.g. Aug 1)
+        // but BOM effectiveFrom may be later (e.g. Aug 4), so startDate would miss the BOM.
+        LocalDate refDate = LocalDate.now();
 
         Optional<BillOfMaterials> bomOpt = bomRepository.findActiveByFgCodeAndDate(fgCode, refDate);
         if (bomOpt.isEmpty()) return Collections.emptyList();
