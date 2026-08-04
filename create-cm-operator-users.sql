@@ -2,7 +2,7 @@
 -- Test User Creation for CM Operator
 -- =================================================================
 
--- สร้าง test user สำหรับ CM Operator (password: test123)
+-- สร้าง test user สำหรับ CM Operator
 -- BCrypt hash ของ "test123" คือ $2a$10$N.zmdr/YzI8aY6N2xBfC3eE/TSLB5CBU4WCQ8DXnzUWwpKjb.eMTq
 INSERT INTO Users (username, password_hash, role, full_name, is_active, created_at, updated_at)
 VALUES 
