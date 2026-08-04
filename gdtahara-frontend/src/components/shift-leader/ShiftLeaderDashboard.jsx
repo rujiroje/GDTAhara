@@ -8,7 +8,7 @@ import MaterialRequirementDashboard from '../pc/MaterialRequirementDashboard';
 import MaterialStockManager from '../common/MaterialStockManager';
 
 // --- API Service ---
-const API_URL = 'http://localhost:8080/api';
+const API_URL = `${import.meta.env.BASE_URL}api`;
 const api = axios.create({ baseURL: API_URL });
 api.interceptors.request.use(config => {
     const token = localStorage.getItem('token');

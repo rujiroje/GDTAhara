@@ -4,7 +4,7 @@
 // =================================================================
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8080/api';
+const API_URL = `${import.meta.env.BASE_URL}api`;
 
 // สร้าง instance ของ axios
 export const api = axios.create({

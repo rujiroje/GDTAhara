@@ -20,10 +20,15 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.time.Duration;
 import java.util.Arrays;
 
+import org.springframework.beans.factory.annotation.Value;
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:8081,http://localhost:3000}")
+    private String[] allowedOrigins;
 
     private final JwtAuthFilter jwtAuthFilter;
     private final AuthenticationProvider authenticationProvider;
@@ -110,11 +115,7 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:5173",
-            "http://localhost:8081",
-            "http://localhost:3000"
-        ));
+        configuration.setAllowedOrigins(Arrays.asList(allowedOrigins));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
         configuration.addAllowedHeader("*");
         configuration.setExposedHeaders(Arrays.asList("X-Total-Count", "X-Debug-Info", "X-Error-Message"));

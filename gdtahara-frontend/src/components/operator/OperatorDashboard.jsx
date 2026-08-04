@@ -6,7 +6,7 @@ import axios from 'axios';
 import MachineStatusPanel from '../common/MachineStatusPanel';
 
 // --- API Service (ควรย้ายไปไฟล์กลาง) ---
-const API_URL = 'http://localhost:8080/api';
+const API_URL = `${import.meta.env.BASE_URL}api`;
 const api = axios.create({ baseURL: API_URL });
 api.interceptors.request.use(config => {
     const token = localStorage.getItem('token');

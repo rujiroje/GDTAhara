@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 // --- API Service (จำลองการตั้งค่า) ---
-const API_URL = 'http://localhost:8080/api';
+const API_URL = `${import.meta.env.BASE_URL}api`;
 const api = axios.create({ baseURL: API_URL });
 api.interceptors.request.use(config => {
     const token = localStorage.getItem('token');

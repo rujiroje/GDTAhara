@@ -1,12 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-
-const api = axios.create({ baseURL: 'http://localhost:8080/api' });
-api.interceptors.request.use(config => {
-    const token = localStorage.getItem('token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-});
+import api from '../../api/axios';
 
 const STATUS_BADGE = {
     UPCOMING: { label: 'กำหนดการปกติ', color: '#16a34a', bg: '#f0fdf4' },

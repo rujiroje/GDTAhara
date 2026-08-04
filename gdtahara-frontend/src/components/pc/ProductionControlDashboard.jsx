@@ -11,7 +11,7 @@ import VarianceReportPage from './VarianceReportPage';
 import BlowDailyReportPage from './BlowDailyReportPage';
 
 // --- API Service ---
-const API_URL = 'http://localhost:8080/api';
+const API_URL = `${import.meta.env.BASE_URL}api`;
 const api = axios.create({
     baseURL: API_URL,
     withCredentials: true, // ส่ง Credentials (เช่น Cookies) ไปกับทุก Request
