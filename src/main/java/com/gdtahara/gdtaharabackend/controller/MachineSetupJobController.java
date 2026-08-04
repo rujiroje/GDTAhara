@@ -20,7 +20,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/setup-jobs")
-@PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
+@PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin','ADMIN','Shift Leader')")
 @Tag(name = "Machine Setup Job", description = "Setup job lifecycle — scan, assign, start, complete, skip + time log")
 public class MachineSetupJobController {
 
@@ -90,7 +90,7 @@ public class MachineSetupJobController {
     }
 
     @GetMapping("/pending")
-    @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
+    @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin','ADMIN','Shift Leader')")
     public ResponseEntity<List<SetupJobResponse>> allPending() {
         return ResponseEntity.ok(machineSetupJobService.getAllPendingJobs().stream()
                 .map(SetupJobResponse::from).toList());

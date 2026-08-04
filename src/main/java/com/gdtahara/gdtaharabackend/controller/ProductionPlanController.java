@@ -27,7 +27,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/production-plans")
-@PreAuthorize("hasAnyRole('Production Control','DataAdmin')")
+@PreAuthorize("hasAnyRole('Production Control','DataAdmin','ADMIN')")
 @Tag(name = "Production Plan", description = "Production plan CRUD and shift-split")
 public class ProductionPlanController {
 
@@ -75,14 +75,14 @@ public class ProductionPlanController {
     }
 
     @GetMapping("/date/{date}")
-    @PreAuthorize("hasAnyRole('Production Control','Shift Leader','Management','Operator','DataAdmin')")
+    @PreAuthorize("hasAnyRole('Production Control','Shift Leader','Management','Operator','DataAdmin','ADMIN','CM Operator','Document')")
     public ResponseEntity<List<ProductionPlanResponse>> byDate(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(productionPlanService.getPlansForDateAsDto(date));
     }
 
     @GetMapping("/machine/{machineId}")
-    @PreAuthorize("hasAnyRole('Production Control','Shift Leader','Management','Operator','DataAdmin')")
+    @PreAuthorize("hasAnyRole('Production Control','Shift Leader','Management','Operator','DataAdmin','ADMIN','CM Operator','Document')")
     public ResponseEntity<List<ProductionPlanResponse>> byMachineRange(
             @PathVariable Long machineId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -91,14 +91,14 @@ public class ProductionPlanController {
     }
 
     @GetMapping("/month/{year}/{month}")
-    @PreAuthorize("hasAnyRole('Production Control','Shift Leader','Management','Operator','DataAdmin')")
+    @PreAuthorize("hasAnyRole('Production Control','Shift Leader','Management','Operator','DataAdmin','ADMIN','CM Operator','Document')")
     public ResponseEntity<List<ProductionPlanResponse>> byMonth(
             @PathVariable int year, @PathVariable int month) {
         return ResponseEntity.ok(productionPlanService.getPlansForMonth(year, month));
     }
 
     @GetMapping("/{id}/shift-split")
-    @PreAuthorize("hasAnyRole('Production Control','Shift Leader','Management','Operator','DataAdmin')")
+    @PreAuthorize("hasAnyRole('Production Control','Shift Leader','Management','Operator','DataAdmin','ADMIN','CM Operator','Document')")
     public ResponseEntity<ShiftSplitResponse> shiftSplit(@PathVariable Long id) {
         ProductionPlan plan = productionPlanService.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Production plan not found: " + id));

@@ -13,17 +13,12 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.http.HttpStatus;
 import java.security.Principal;
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import jakarta.persistence.EntityNotFoundException;
 
 @RestController
 @RequestMapping("/api/shift-leader")
-@PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control')")
+@PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'ADMIN')")
 public class ShiftLeaderController {
 
     private final ShiftLeaderService shiftLeaderService;
@@ -38,13 +33,13 @@ public class ShiftLeaderController {
     public ResponseEntity<ShiftLeaderDashboardDto> getDashboardData(@PathVariable Long reportId) { return ResponseEntity.ok(shiftLeaderService.getDashboardData(reportId)); }
 
     @PostMapping("/stock-transactions")
-    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
+    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document', 'ADMIN')")
     public ResponseEntity<MaterialStockTransaction> createStockTransaction(@Valid @RequestBody StockTransactionRequestDto request, Principal principal) {
         return ResponseEntity.ok(shiftLeaderService.recordStockTransaction(request, principal.getName()));
     }
 
     @PutMapping("/stock-transactions/{id}")
-    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
+    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document', 'ADMIN')")
     public ResponseEntity<MaterialStockTransaction> updateStockTransaction(@PathVariable Long id, @Valid @RequestBody StockTransactionRequestDto request, Principal principal) {
         return ResponseEntity.ok(shiftLeaderService.updateStockTransaction(id, request, principal.getName()));
     }
@@ -74,41 +69,23 @@ public class ShiftLeaderController {
 
     // **[เพิ่มใหม่]** Endpoints สำหรับการจัดการ Material Stock
     @GetMapping("/material-stocks")
-    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
+    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document', 'ADMIN')")
     public ResponseEntity<List<MaterialStockCardDto>> getMaterialStocks() {
         return ResponseEntity.ok(shiftLeaderService.getMaterialStocks());
     }
 
     /** Lightweight: 2 SQL queries, no history payload — ใช้โหลดหน้าแรก */
     @GetMapping("/stock-summary")
-    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
+    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document', 'ADMIN')")
     public ResponseEntity<List<StockSummaryDto>> getStockSummaries() {
         return ResponseEntity.ok(shiftLeaderService.getStockSummaries());
     }
 
     /** On-demand history for ONE material — เรียกเมื่อกด "ดูประวัติ" */
     @GetMapping("/stock-history/{materialId}")
-    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document')")
+    @PreAuthorize("hasAnyRole('Shift Leader', 'DataAdmin', 'Production Control', 'Document', 'ADMIN')")
     public ResponseEntity<MaterialStockCardDto> getStockHistory(@PathVariable Long materialId) {
         return ResponseEntity.ok(shiftLeaderService.getStockCardForMaterial(materialId));
     }
 
-    // --- Centralized error handling for clearer client responses ---
-    @ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleEntityNotFound(EntityNotFoundException ex) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("status", "error");
-        body.put("message", ex.getMessage());
-        body.put("timestamp", LocalDateTime.now());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("status", "error");
-        body.put("message", ex.getMessage());
-        body.put("timestamp", LocalDateTime.now());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
-    }
 }
