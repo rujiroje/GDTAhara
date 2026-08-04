@@ -164,15 +164,17 @@ public class ProductionPlanService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProductionPlan> getPlansForMachineInRange(Long machineId, LocalDate from, LocalDate to) {
-        return productionPlanRepository.findByMachineIdAndPlanDateBetweenOrderByPlanDate(machineId, from, to);
+    public List<ProductionPlanResponse> getPlansForMachineInRange(Long machineId, LocalDate from, LocalDate to) {
+        return productionPlanRepository.findByMachineIdAndPlanDateBetweenOrderByPlanDate(machineId, from, to)
+                .stream().map(ProductionPlanResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
-    public List<ProductionPlan> getPlansForMonth(int year, int month) {
+    public List<ProductionPlanResponse> getPlansForMonth(int year, int month) {
         LocalDate first = LocalDate.of(year, month, 1);
         LocalDate last = first.withDayOfMonth(first.lengthOfMonth());
-        return productionPlanRepository.findByPlanDateBetween(first, last);
+        return productionPlanRepository.findByPlanDateBetween(first, last)
+                .stream().map(ProductionPlanResponse::from).toList();
     }
 
     @Transactional(readOnly = true)

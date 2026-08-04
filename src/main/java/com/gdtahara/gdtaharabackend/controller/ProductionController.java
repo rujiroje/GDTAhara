@@ -32,7 +32,7 @@ public class ProductionController {
     }
 
     @GetMapping("/dashboard-summary") // เปลี่ยนจาก "/production/dashboard-summary" เป็น "/dashboard-summary"
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<List<PcDashboardSummaryDto>> getDashboardSummary() {
         logger.info("Fetching dashboard summary...");
         try {
@@ -44,7 +44,7 @@ public class ProductionController {
     }
     
     @GetMapping("/reports/{id}/report-summary")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<ReportSummaryDto> getReportSummary(
             @PathVariable Long id,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
@@ -66,7 +66,7 @@ public class ProductionController {
     }
 
     @GetMapping("/reports")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<List<ProductionReportDto>> getAllReports() {
         logger.info("Fetching all production reports...");
         try {
@@ -78,7 +78,7 @@ public class ProductionController {
     }
 
     @GetMapping("/machines")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<List<MachineSimpleDto>> getMachinesForDropdown() {
         logger.info("Fetching machine list for dropdown...");
         try {
@@ -90,7 +90,7 @@ public class ProductionController {
     }
 
     @GetMapping("/products")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<List<ProductSimpleDto>> getProductsForDropdown() {
         logger.info("Fetching product list for dropdown...");
         try {
@@ -103,7 +103,7 @@ public class ProductionController {
 
     @GetMapping("/reports/active")
     // **[แก้ไข]** เพิ่ม 'CM Operator' เข้าไปใน Role ที่สามารถเข้าถึงได้
-    @PreAuthorize("hasAnyRole('Production Control', 'Shift Leader', 'Operator', 'Technician', 'QA', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'Shift Leader', 'Operator', 'Technician', 'QA', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<List<ProductionReportDto>> getActiveReports(@RequestParam(name = "scope", required = false) String scope) {
         logger.info("Fetching active production reports with scope: {}", scope);
         try {
@@ -118,7 +118,7 @@ public class ProductionController {
     }
 
     @PostMapping("/reports")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin')")
     public ResponseEntity<?> createReport(@RequestBody ReportCreateRequest request, Principal principal) {
         logger.info("Creating a new production report by user: {}", principal.getName());
         try {
@@ -131,7 +131,7 @@ public class ProductionController {
     }
 
     @PutMapping("/reports/{id}")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin')")
     public ResponseEntity<?> updateReport(@PathVariable Long id, @RequestBody ReportCreateRequest request, Principal principal) {
         logger.info("Updating production report with ID: {}", id);
         try {
@@ -143,7 +143,7 @@ public class ProductionController {
     }
 
     @DeleteMapping("/reports/{id}")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin')")
     public ResponseEntity<?> deleteReport(@PathVariable Long id, Principal principal) {
         logger.info("Deleting production report with ID: {}", id);
         try {
@@ -156,7 +156,7 @@ public class ProductionController {
     }
 
     @PostMapping("/reports/{id}/finalize")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin')")
     public ResponseEntity<Void> finalizeReport(@PathVariable Long id, Principal principal) {
         logger.info("Finalizing production report with ID: {}", id);
         try {
@@ -171,7 +171,7 @@ public class ProductionController {
 
 
     @GetMapping("/reports/{id}/detailed")
-    @PreAuthorize("hasAnyRole('Production Control', 'Shift Leader', 'Operator', 'Technician', 'QA', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'Shift Leader', 'Operator', 'Technician', 'QA', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<DetailedProductionReportDto> getDetailedReport(
             @PathVariable Long id,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
@@ -189,7 +189,7 @@ public class ProductionController {
     }
     
     @GetMapping("/reports/production-historical")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<List<HistoricalReportSummaryDto>> getProductionHistoricalReports(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
@@ -234,7 +234,7 @@ public class ProductionController {
     }
     
     @GetMapping("/reports/summary/daily")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<DailyProductionSummaryDto> getDailySummary(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String machineId,
@@ -253,7 +253,7 @@ public class ProductionController {
     }
 
     @GetMapping("/reports/summary/daily-shift")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<DailyShiftSummaryDto> getDailySummaryByShift(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String machineId,
@@ -281,7 +281,7 @@ public class ProductionController {
     }
 
     @GetMapping("/reports/summary/daily-by-shift")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<DailyShiftSummaryDto> getDailySummaryByShiftAlias(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) String machineId,
@@ -311,7 +311,7 @@ public class ProductionController {
 
 
     @GetMapping("/reports/available-dates")
-    @PreAuthorize("hasAnyRole('Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'DataAdmin', 'Management', 'Document', 'CM Operator')")
     public ResponseEntity<List<String>> getAvailableDates(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
@@ -331,7 +331,7 @@ public class ProductionController {
     }
 
     @PostMapping("/material-usage")
-    @PreAuthorize("hasAnyRole('Production Control', 'Technician', 'DataAdmin')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'Production Control', 'Technician', 'DataAdmin')")
     public ResponseEntity<MaterialUsageLogDto> logMaterialUsage(@RequestBody MaterialUsageLogRequestDto request) {
         logger.info("Logging material usage...");
         try {

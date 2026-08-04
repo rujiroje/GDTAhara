@@ -90,7 +90,7 @@ public class MachineSetupJobController {
     }
 
     @GetMapping("/pending")
-    @PreAuthorize("hasAnyRole('Production Control','DataAdmin')")
+    @PreAuthorize("hasAnyRole('Technician','Production Control','DataAdmin')")
     public ResponseEntity<List<SetupJobResponse>> allPending() {
         return ResponseEntity.ok(machineSetupJobService.getAllPendingJobs().stream()
                 .map(SetupJobResponse::from).toList());

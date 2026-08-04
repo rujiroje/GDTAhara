@@ -87,16 +87,14 @@ public class ProductionPlanController {
             @PathVariable Long machineId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ResponseEntity.ok(productionPlanService.getPlansForMachineInRange(machineId, from, to)
-                .stream().map(ProductionPlanResponse::from).toList());
+        return ResponseEntity.ok(productionPlanService.getPlansForMachineInRange(machineId, from, to));
     }
 
     @GetMapping("/month/{year}/{month}")
     @PreAuthorize("hasAnyRole('Production Control','Shift Leader','Management','Operator','DataAdmin')")
     public ResponseEntity<List<ProductionPlanResponse>> byMonth(
             @PathVariable int year, @PathVariable int month) {
-        return ResponseEntity.ok(productionPlanService.getPlansForMonth(year, month)
-                .stream().map(ProductionPlanResponse::from).toList());
+        return ResponseEntity.ok(productionPlanService.getPlansForMonth(year, month));
     }
 
     @GetMapping("/{id}/shift-split")
