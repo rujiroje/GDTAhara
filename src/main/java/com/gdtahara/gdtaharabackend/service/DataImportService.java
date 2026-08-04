@@ -164,30 +164,30 @@ public class DataImportService {
         if (!productsToSave.isEmpty()) productRepository.saveAll(productsToSave);
     }
     
- // **[ใหม่]** เพิ่มเมธอดสำหรับนำเข้าข้อมูลวัตถุดิบ
     @Transactional
     public void importMaterials(MultipartFile file) throws IOException, CsvValidationException {
-        List<Material> materialsToSave = new ArrayList<>();
+        List<Material> toSave = new ArrayList<>();
         Set<String> processedCodes = new HashSet<>();
 
         try (CSVReader reader = new CSVReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String[] line;
-            reader.readNext(); // Skip Header
+            reader.readNext(); // skip header
             while ((line = reader.readNext()) != null) {
                 if (line.length < 4) continue;
                 String materialCode = line[0].trim();
-                if (!materialCode.isEmpty() && !processedCodes.contains(materialCode) && materialRepository.findByMaterialCode(materialCode).isEmpty()) {
-                    Material material = new Material();
-                    material.setMaterialCode(materialCode);
-                    material.setMaterialName(line[1].trim());
-                    material.setMaterialType(line[2].trim());
-                    material.setUnit(line[3].trim());
-                    materialsToSave.add(material);
-                    processedCodes.add(materialCode);
-                }
+                if (materialCode.isEmpty() || processedCodes.contains(materialCode)) continue;
+                processedCodes.add(materialCode);
+                // UPSERT: update existing row if code already exists (fixes corrupted Thai names)
+                Material material = materialRepository.findByMaterialCode(materialCode)
+                        .orElse(new Material());
+                material.setMaterialCode(materialCode);
+                material.setMaterialName(line[1].trim());
+                material.setMaterialType(line[2].trim());
+                material.setUnit(line[3].trim());
+                toSave.add(material);
             }
         }
-        if (!materialsToSave.isEmpty()) materialRepository.saveAll(materialsToSave);
+        if (!toSave.isEmpty()) materialRepository.saveAll(toSave);
     }
     
     private BigDecimal safeParseBigDecimal(String value) {
