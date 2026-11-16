@@ -14,7 +14,7 @@ import TechnicianDashboard from "../components/technician/TechnicianDashboard";
 import QaDashboard from "../components/qa/QaDashboard";
 import CmOperatorDashboard from "../components/cm-operator/CmOperatorDashboard";
 import CmOperatorHub from "../components/cm-operator/CmOperatorHub";
-import DocMgmtDashboard from "../components/doc-mgmt/DocMgmtDashboard"; // Kept for backward-compat/import order, not used for now
+import DocHub from "../components/doc-mgmt/DocHub";
 
 // --- Dashboard Layout ---
 const Dashboard = () => {
@@ -40,7 +40,7 @@ const Dashboard = () => {
       case "Management":
         return <ProductionControlDashboard />;
       case "Document":
-        return <DocMgmtDashboard />;
+        return <DocHub />;
       case "Shift Leader": 
         return <ShiftLeaderDashboard />;
       case "Operator": 

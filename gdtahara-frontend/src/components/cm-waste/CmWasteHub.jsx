@@ -3,8 +3,10 @@ import { Box, Typography, Chip, Alert } from '@mui/material';
 import WasteEntryForm from './WasteEntryForm';
 import WasteHistoryTable from './WasteHistoryTable';
 import { getMyWasteRecords } from '../../api/cmWasteApi';
+import { useAuth } from '../../App';
 
 export default function CmWasteHub() {
+  const { user } = useAuth();
   const [records, setRecords] = useState([]);
   const [error, setError] = useState('');
 
@@ -31,7 +33,7 @@ export default function CmWasteHub() {
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
             รายการของฉัน — กะปัจจุบัน
           </Typography>
-          <WasteHistoryTable records={records} onRefresh={loadRecords} />
+          <WasteHistoryTable records={records} onRefresh={loadRecords} currentUsername={user?.username} />
         </Box>
       </Box>
     </Box>

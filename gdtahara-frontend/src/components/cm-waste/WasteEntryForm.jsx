@@ -4,9 +4,11 @@ import {
   CircularProgress, Alert, InputAdornment
 } from '@mui/material';
 import { getWasteTypes, createWasteRecord } from '../../api/cmWasteApi';
+import { getCmMachines } from '../../api/cmMeterApi';
 
 export default function WasteEntryForm({ onSaved }) {
   const [wasteTypes, setWasteTypes] = useState([]);
+  const [machines, setMachines] = useState([]);
   const [form, setForm] = useState({
     machineId: '', woNumber: '', wasteTypeCode: '', weightKg: '', note: ''
   });
@@ -17,9 +19,9 @@ export default function WasteEntryForm({ onSaved }) {
 
   useEffect(() => {
     setLoading(true);
-    getWasteTypes()
-      .then(setWasteTypes)
-      .catch(() => setError('โหลดประเภทของเสียไม่สำเร็จ'))
+    Promise.all([getWasteTypes(), getCmMachines()])
+      .then(([types, macs]) => { setWasteTypes(types); setMachines(macs); })
+      .catch(() => setError('โหลดข้อมูลไม่สำเร็จ'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -61,13 +63,18 @@ export default function WasteEntryForm({ onSaved }) {
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <TextField
-          label="รหัสเครื่อง *"
+          select
+          label="เครื่องจักร *"
           value={form.machineId}
           onChange={handleChange('machineId')}
-          placeholder="เช่น RBL201"
           size="small"
           fullWidth
-        />
+        >
+          <MenuItem value="">-- เลือกเครื่อง --</MenuItem>
+          {machines.map(m => (
+            <MenuItem key={m.machineId} value={m.machineId}>{m.machineId}</MenuItem>
+          ))}
+        </TextField>
         <TextField
           label="เลข WO"
           value={form.woNumber}
