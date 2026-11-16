@@ -13,6 +13,7 @@ import OperatorDashboard from "./OperatorDashboard"; // MUI version with Run Car
 import TechnicianDashboard from "../components/technician/TechnicianDashboard";
 import QaDashboard from "../components/qa/QaDashboard";
 import CmOperatorDashboard from "../components/cm-operator/CmOperatorDashboard";
+import CmOperatorHub from "../components/cm-operator/CmOperatorHub";
 import DocMgmtDashboard from "../components/doc-mgmt/DocMgmtDashboard"; // Kept for backward-compat/import order, not used for now
 
 // --- Dashboard Layout ---
@@ -48,8 +49,8 @@ const Dashboard = () => {
         return <TechnicianDashboard />;
       case "QA": 
         return <QaDashboard />;
-      case "CM Operator": 
-        return <CmOperatorDashboard />;
+      case "CM Operator":
+        return <CmOperatorHub />;
       default:
         return ( <div className="dashboard-card"> <h2>ยินดีต้อนรับ, {user.username}</h2> <p>ยังไม่มีหน้าจอสำหรับบทบาท: {user.role}</p> </div> );
     }

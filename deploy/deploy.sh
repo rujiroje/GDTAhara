@@ -24,7 +24,7 @@ source "$ENV_DEPLOY"
 PLINK="/c/Program Files/PuTTY/plink"
 PSCP="/c/Program Files/PuTTY/pscp"
 SERVER_USER="tst"
-SERVER_HOST="10.1.53.30"
+SERVER_HOST="10.1.53.31"
 SERVER_APP_DIR="/opt/gdtahara"
 SERVER_FE_DIR="/var/www/gdtahara"
 SERVICE_NAME="gdtahara"
@@ -82,13 +82,13 @@ echo "[4/4] Applying on server..."
   echo '      Files applied OK'
 "
 
-# 4b. Restart service (separate SSH call avoids sudo TTY issue in multi-command sessions)
-"$PLINK" -ssh -pw "$SERVER_PASS" -batch "$SERVER_USER@$SERVER_HOST" "sudo systemctl restart $SERVICE_NAME"
+# 4b. Restart service — use echo pipe to feed sudo password (plink -batch has no TTY)
+"$PLINK" -ssh -pw "$SERVER_PASS" -batch "$SERVER_USER@$SERVER_HOST" "echo '$SERVER_PASS' | sudo -S systemctl restart $SERVICE_NAME"
 echo "      Service restarted"
 sleep 8
 
 # 4c. Check status
-STATUS=$("$PLINK" -ssh -pw "$SERVER_PASS" -batch "$SERVER_USER@$SERVER_HOST" "sudo systemctl is-active $SERVICE_NAME")
+STATUS=$("$PLINK" -ssh -pw "$SERVER_PASS" -batch "$SERVER_USER@$SERVER_HOST" "echo '$SERVER_PASS' | sudo -S systemctl is-active $SERVICE_NAME 2>/dev/null")
 if [ "$STATUS" = "active" ]; then
   echo "      Service: RUNNING"
 else

@@ -6,6 +6,7 @@ package com.gdtahara.gdtaharabackend.repository;
 
 import com.gdtahara.gdtaharabackend.model.MaterialStockTransaction;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -54,4 +55,15 @@ public interface MaterialStockTransactionRepository extends JpaRepository<Materi
 
     List<MaterialStockTransaction> findByProductionReportIdAndTimestampBetween(
             Long productionReportId, java.time.LocalDateTime start, java.time.LocalDateTime end);
+
+    // C-01: deduct qty from lot remaining balance when CM records a refill
+    @Modifying
+    @Query("UPDATE MaterialStockTransaction t SET t.remainingQty = t.remainingQty - :qty WHERE t.id = :id")
+    void deductRemainingQty(@Param("id") Long id, @Param("qty") BigDecimal qty);
+
+    // C-01: available lots for a material with remaining qty > 0
+    @Query("SELECT t FROM MaterialStockTransaction t JOIN FETCH t.material m " +
+           "WHERE m.materialCode = :materialCode AND t.transactionType = 'IN' " +
+           "AND t.remainingQty > 0 ORDER BY t.timestamp ASC")
+    List<MaterialStockTransaction> findAvailableLots(@Param("materialCode") String materialCode);
 }

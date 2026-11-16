@@ -33,6 +33,9 @@ public class MaterialStockTransaction {
     @JoinColumn(name = "bom_item_id", nullable = true)
     private BomItem bomItem;
 
+    // V34: remaining_qty added to track lot balance for CM refill picking
+    private BigDecimal remainingQty;
+
     @PrePersist
     protected void onCreate() {
         this.timestamp = LocalDateTime.now();
