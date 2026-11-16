@@ -20,8 +20,14 @@ public interface PackagingLogRepository extends JpaRepository<PackagingLog, Long
 
     List<PackagingLog> findByReportIdOrderByLotNumberAscBoxNoAsc(Long reportId);
 
-    // เมธอดสำหรับหา Box No. ล่าสุด
+    // เมธอดสำหรับหา Box No. ล่าสุด (ใช้สำหรับ estimate เท่านั้น — ไม่ atomic)
     PackagingLog findTopByReportIdAndLotNumberOrderByBoxNoDesc(Long reportId, String lotNumber);
+
+    // Atomic next-box-no: UPDLOCK+HOLDLOCK ป้องกัน race condition แม้ table ว่าง
+    @Query(value = "SELECT ISNULL(MAX(box_no), 0) + 1 FROM packaging_logs WITH (UPDLOCK, HOLDLOCK) " +
+                   "WHERE report_id = :reportId AND lot_number = :lotNumber",
+           nativeQuery = true)
+    Integer nextBoxNoForUpdate(@Param("reportId") Long reportId, @Param("lotNumber") String lotNumber);
 
     List<PackagingLog> findByReportIdAndTimestampBetween(Long reportId, LocalDateTime start, LocalDateTime end);
 

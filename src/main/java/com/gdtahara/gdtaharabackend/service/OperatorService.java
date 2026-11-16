@@ -45,6 +45,13 @@ public class OperatorService {
     @Autowired
     private SubLotRepository subLotRepository;
 
+    @Autowired
+    private MachineCurrentMoldRepository machineCurrentMoldRepository;
+
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private CmOperatorService cmOperatorService;
+
     public OperatorService(ProductionReportRepository productionReportRepository, NgLogRepository ngLogRepository, LabelStockRepository labelStockRepository, PackagingLogRepository packagingLogRepository, ProblemAlertRepository problemAlertRepository, UserRepository userRepository, NgTypeRepository ngTypeRepository, AuditLogService auditLogService) {
         this.productionReportRepository = productionReportRepository;
         this.ngLogRepository = ngLogRepository;
@@ -182,29 +189,43 @@ public class OperatorService {
         data.put("parentLotNumber", report.getParentLotNumber() != null ? report.getParentLotNumber() : "");
         data.put("machineName",     machine != null ? machine.getMachineName() : "");
         data.put("shift",           report.getShift() != null ? report.getShift() : "");
+        String cavityNumbers = "";
+        if (machine != null) {
+            cavityNumbers = machineCurrentMoldRepository.findByMachineId(machine.getId())
+                    .map(mcm -> mcm.getMold() != null ? mcm.getMold().getCavityNumbers() : "")
+                    .orElse("");
+        }
+        data.put("cavityNumbers", cavityNumbers);
         return data;
     }
 
+    @Transactional
     public PackagingLog recordPackaging(Long reportId, PackagingLogRequestDto request, String username) {
-        ProductionReport report = productionReportRepository.findById(reportId).orElseThrow(() -> new EntityNotFoundException("Production Report not found"));
-        User operator = userRepository.findByUsername(username).orElseThrow(() -> new EntityNotFoundException("User not found: " + username));
+        ProductionReport report = productionReportRepository.findById(reportId)
+                .orElseThrow(() -> new EntityNotFoundException("Production Report not found"));
+        User operator = userRepository.findByUsername(username)
+                .orElseThrow(() -> new EntityNotFoundException("User not found: " + username));
+
+        // Generate boxNo atomically — UPDLOCK+HOLDLOCK serializes concurrent inserts,
+        // preventing duplicate box numbers when 2 operators pack the same lot simultaneously.
+        int boxNo = packagingLogRepository.nextBoxNoForUpdate(reportId, request.getLotNumber());
 
         PackagingLog packagingLog = new PackagingLog();
         packagingLog.setReport(report);
         packagingLog.setOperator(operator);
         packagingLog.setLotNumber(request.getLotNumber());
-        packagingLog.setBoxNo(request.getBoxNo());
+        packagingLog.setBoxNo(boxNo);
         PackagingLog savedPkg = packagingLogRepository.save(packagingLog);
         auditLogService.log("CREATE", "PackagingLog", savedPkg.getId(), null,
                 Map.of("id", savedPkg.getId(), "reportId", String.valueOf(reportId),
-                        "lotNumber", String.valueOf(request.getLotNumber()),
-                        "boxNo", String.valueOf(request.getBoxNo())));
+                        "lotNumber", request.getLotNumber(),
+                        "boxNo", String.valueOf(boxNo)));
 
         // Create matching SubLot so Track-Out and Pallet Assembly can find this box by barcode
         if (report.getProduct() != null && report.getProduct().getProductCode() != null) {
             String slNumber = report.getProduct().getProductCode()
                     + "-" + request.getLotNumber()
-                    + "-" + String.format("%03d", request.getBoxNo());
+                    + "-" + String.format("%03d", boxNo);
             if (!subLotRepository.existsBySubLotNumber(slNumber)) {
                 SubLot sl = new SubLot();
                 sl.setProductionReport(report);
@@ -216,6 +237,13 @@ public class OperatorService {
                 sl.setStatus("draft");
                 subLotRepository.save(sl);
             }
+        }
+
+        // Auto-deduct packaging materials (HIBE/VERP/UNBW) per BOM × qtyPerBox
+        int qtyPerBox = (report.getProduct() != null && report.getProduct().getQtyPerBox() != null)
+                ? report.getProduct().getQtyPerBox() : 0;
+        if (qtyPerBox > 0) {
+            cmOperatorService.autoDeductPackagingMaterials(reportId, qtyPerBox, operator);
         }
 
         return savedPkg;

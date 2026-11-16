@@ -110,6 +110,8 @@ public class CmOperatorService {
         BigDecimal baseQty = (bom.getBaseQuantity() != null && bom.getBaseQuantity().compareTo(BigDecimal.ZERO) > 0)
                 ? bom.getBaseQuantity() : BigDecimal.ONE;
 
+        // For ROH materials CM records usage against the WO target quantity (planned).
+        // HIBE/VERP/UNBW are deducted automatically at packaging time — not shown here.
         BigDecimal target = report.getTargetQty() != null
                 ? BigDecimal.valueOf(report.getTargetQty()) : BigDecimal.ZERO;
 
@@ -125,6 +127,9 @@ public class CmOperatorService {
             boolean autoDeduct = item.getMaterialType() != null
                     && AUTO_DEDUCT_TYPES.contains(item.getMaterialType().toUpperCase());
 
+            // HIBE/VERP/UNBW are auto-deducted per box at packaging time — CM sees ROH only
+            if (autoDeduct) continue;
+
             Optional<Material> matOpt = materialRepository.findByMaterialCode(item.getRmCode());
             Long     materialId       = matOpt.map(Material::getId).orElse(null);
             String   materialName     = matOpt.map(Material::getMaterialName).orElse(item.getRmName());
@@ -139,5 +144,56 @@ public class CmOperatorService {
                     qtyPer, suggested, materialId, lots, materialId != null, autoDeduct));
         }
         return result;
+    }
+
+    /**
+     * Auto-deduct HIBE / VERP / UNBW (packaging materials) when Operator confirms one box.
+     * Called by OperatorService.recordPackaging() — runs inside the same transaction.
+     */
+    @Transactional
+    public void autoDeductPackagingMaterials(Long reportId, int qtyPerBox, User operator) {
+        if (qtyPerBox <= 0) return;
+
+        ProductionReport report = reportRepository.findById(reportId).orElse(null);
+        if (report == null || report.getProduct() == null) return;
+
+        String fgCode = report.getProduct().getProductCode();
+        Optional<BillOfMaterials> bomOpt = bomRepository.findActiveByFgCodeAndDate(fgCode, LocalDate.now());
+        if (bomOpt.isEmpty()) return;
+
+        BillOfMaterials bom = bomOpt.get();
+        BigDecimal baseQty = (bom.getBaseQuantity() != null && bom.getBaseQuantity().compareTo(BigDecimal.ZERO) > 0)
+                ? bom.getBaseQuantity() : BigDecimal.ONE;
+        BigDecimal qty = BigDecimal.valueOf(qtyPerBox);
+
+        for (BomItem item : bomItemRepository.findByBomIdOrderByItemNumber(bom.getId())) {
+            if (Boolean.TRUE.equals(item.getIsScrap())) continue;
+            if (item.getMaterialType() == null
+                    || !AUTO_DEDUCT_TYPES.contains(item.getMaterialType().toUpperCase())) continue;
+
+            BigDecimal deductQty = item.getQuantityPer() != null
+                    ? item.getQuantityPer().multiply(qty).divide(baseQty, 3, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            if (deductQty.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            materialRepository.findByMaterialCode(item.getRmCode()).ifPresent(material -> {
+                MaterialStockTransaction tx = new MaterialStockTransaction();
+                tx.setProductionReport(report);
+                tx.setMaterial(material);
+                tx.setLotNumber("AUTO");
+                tx.setQuantity(deductQty);
+                tx.setTransactionType("OUT");
+                tx.setUser(operator);
+                transactionRepository.save(tx);
+
+                MaterialUsageLog usageLog = new MaterialUsageLog();
+                usageLog.setReport(report);
+                usageLog.setMaterialCode(material.getMaterialCode());
+                usageLog.setLotNumber("AUTO");
+                usageLog.setQuantityKg(deductQty);
+                usageLog.setTechnician(operator);
+                materialUsageLogRepository.save(usageLog);
+            });
+        }
     }
 }
