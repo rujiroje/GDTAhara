@@ -201,3 +201,22 @@
   background-color: #e9ecef;
   color: #495057;
 }
+
+@media (max-width: 768px) {
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .buttons-section {
+    justify-content: stretch;
+  }
+
+  .search-button {
+    width: 100%;
+    padding: 0.75rem;
+  }
+
+  .shift-card {
+    padding: 0.75rem;
+  }
+}

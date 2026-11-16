@@ -7,7 +7,7 @@
 .pkg-label {
     font-family: 'Angsana New', 'TH SarabunPSK', Arial, sans-serif;
     font-size: 8pt;
-    width: 96mm;
+    width: 4in;
     padding: 2mm;
     border: 1px solid #555;
     box-sizing: border-box;
@@ -152,4 +152,52 @@
     overflow-x: auto;
     overflow-y: hidden;
     padding: 4px 0 8px;
+}
+
+/* ── Export GOODS section ────────────────────────────────────────────── */
+.pkg-export-section {
+    border: 1px solid #555;
+    margin-top: 2mm;
+    padding: 1.5mm 2mm;
+    font-family: Arial, sans-serif;
+    font-size: 8pt;
+}
+.pkg-export-title {
+    text-align: center;
+    font-weight: 900;
+    font-size: 12pt;
+    letter-spacing: 3px;
+    margin-bottom: 0.5mm;
+}
+.pkg-export-subtitle {
+    text-align: center;
+    font-size: 7.5pt;
+    margin-bottom: 2mm;
+}
+.pkg-export-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pkg-exp-no {
+    width: 5mm;
+    font-weight: 700;
+    vertical-align: top;
+    padding: 0.5mm 0.5mm;
+    white-space: nowrap;
+}
+.pkg-exp-label {
+    width: 27mm;
+    vertical-align: top;
+    padding: 0.5mm 0.5mm;
+    white-space: nowrap;
+}
+.pkg-exp-sep {
+    width: 3mm;
+    vertical-align: top;
+    padding: 0.5mm 0;
+}
+.pkg-exp-val {
+    vertical-align: top;
+    padding: 0.5mm 0.5mm;
+    font-weight: 700;
 }

@@ -67,6 +67,13 @@ const DataForm = ({ item, type, onSave, onCancel }) => {
                         <div className="form-group"><label className="form-label">Product Code</label><input name="productCode" value={formData.productCode || ''} onChange={handleChange} className="form-input" required /></div>
                         <div className="form-group"><label className="form-label">Product Name</label><input name="productName" value={formData.productName || ''} onChange={handleChange} className="form-input" required /></div>
                         <div className="form-group"><label className="form-label">Qty/Box</label><input name="qtyPerBox" type="number" value={formData.qtyPerBox || ''} onChange={handleChange} className="form-input" /></div>
+                        <div className="form-group">
+                            <label className="form-label">Label Variant (ประเภทฉลาก)</label>
+                            <select name="labelVariant" value={formData.labelVariant || ''} onChange={handleChange} className="form-input">
+                                <option value="">Standard (ปกติ)</option>
+                                <option value="EXPORT">EXPORT (ส่งออกต่างประเทศ)</option>
+                            </select>
+                        </div>
                     </div>
                 </>;
             case 'machines':
@@ -337,7 +344,7 @@ const ImportData = () => {
 const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('users');
     const userColumns = [{ key: 'id', label: 'ID' }, { key: 'username', label: 'Username' }, { key: 'role', label: 'Role' }];
-    const productColumns = [{ key: 'id', label: 'ID' }, { key: 'productCode', label: 'Product Code' }, { key: 'productName', label: 'Product Name' }];
+    const productColumns = [{ key: 'id', label: 'ID' }, { key: 'productCode', label: 'Product Code' }, { key: 'productName', label: 'Product Name' }, { key: 'labelVariant', label: 'Label Variant' }];
     const machineColumns = [{ key: 'id', label: 'ID' }, { key: 'machineCode', label: 'Machine Code' }, { key: 'machineName', label: 'Machine Name' }, { key: 'machineType', label: 'Type' }];
     const ngTypeColumns = [{ key: 'id', label: 'ID' }, { key: 'ngCode', label: 'NG Code' }, { key: 'ngDescriptionTh', label: 'Description' }, { key: 'ngType', label: 'Category' }, { key: 'machineType', label: 'Machine Type' }];
     const materialColumns = [ { key: 'id', label: 'ID' }, { key: 'materialCode', label: 'Material Code' }, { key: 'materialName', label: 'Material Name' }, { key: 'materialType', label: 'Type' }, { key: 'unit', label: 'Unit' } ];

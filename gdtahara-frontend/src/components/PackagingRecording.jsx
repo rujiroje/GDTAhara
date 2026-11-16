@@ -18,18 +18,19 @@ const PackagingRecording = ({ report, onBack }) => {
     const [printOpen, setPrintOpen]     = useState(false);
     const [feedback, setFeedback]       = useState({ open: false, message: '', severity: 'success' });
 
-    // Pre-fill lot number with today's date in yymmdd format (e.g. 260602)
+    // Auto-fill lot number as yymmdd-{machineName} from the selected report
     useEffect(() => {
-        if (!lotNumber) {
-            const now = new Date();
-            const yy = String(now.getFullYear()).slice(2);
-            const mm = String(now.getMonth() + 1).padStart(2, '0');
-            const dd = String(now.getDate()).padStart(2, '0');
-            setLotNumber(yy + mm + dd);
-        }
-    }, []);
+        if (!report || isLotLocked) return;
+        const now = new Date();
+        const yy = String(now.getFullYear()).slice(2);
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const machine = report.machineName ? `-${report.machineName}` : '';
+        setLotNumber(`${yy}${mm}${dd}${machine}`);
+        setBoxNo('');
+    }, [report]);
 
-    // Auto-fetch next box number (debounced)
+    // Fetch estimated next box number for display only (not sent to server)
     useEffect(() => {
         if (!report || !lotNumber || isLotLocked) return;
         const timer = setTimeout(() => {
@@ -41,19 +42,20 @@ const PackagingRecording = ({ report, onBack }) => {
     }, [lotNumber, report, isLotLocked]);
 
     const handleRecord = async () => {
-        if (!lotNumber || !boxNo) {
+        if (!lotNumber) {
             setFeedback({ open: true, message: 'กรุณากรอก Lot Number', severity: 'warning' });
             return;
         }
         setSaving(true);
         try {
+            // ส่งเฉพาะ lotNumber — server generate boxNo atomically เอง
             const [saveRes, labelRes] = await Promise.all([
-                axiosInstance.post(`/operator/reports/${report.id}/packaging-logs`, {
-                    lotNumber,
-                    boxNo: parseInt(boxNo, 10),
-                }),
+                axiosInstance.post(`/operator/reports/${report.id}/packaging-logs`, { lotNumber }),
                 axiosInstance.get(`/operator/reports/${report.id}/label-data`),
             ]);
+
+            // ใช้ boxNo จริงที่ server ยืนยัน (ไม่ใช่ estimate)
+            const confirmedBoxNo = saveRes.data?.boxNo;
 
             const ld = labelRes.data ?? {};
             const built = {
@@ -64,21 +66,19 @@ const PackagingRecording = ({ report, onBack }) => {
                 qtyPerBox:       ld.qtyPerBox       ?? '',
                 parentLotNumber: ld.parentLotNumber ?? report.parentLotNumber ?? '',
                 lotNumber,
-                boxNo:           parseInt(boxNo, 10),
+                boxNo:           confirmedBoxNo,
                 machineName:     ld.machineName     ?? report.machineName ?? '',
                 operatorName:    saveRes.data?.operator?.username ?? '',
                 shift:           ld.shift           ?? report.shift ?? '',
+                cavityNumbers:   ld.cavityNumbers   ?? '',
             };
             setLabelData(built);
             setIsLotLocked(true);
             setPrintOpen(true);
 
-            // Fetch next box number
-            const nextRes = await axiosInstance.get(
-                `/operator/reports/${report.id}/next-box-no?lotNumber=${lotNumber}`
-            );
-            setBoxNo(String(nextRes.data));
-            setFeedback({ open: true, message: `บันทึกกล่องที่ ${boxNo} สำเร็จ`, severity: 'success' });
+            // อัปเดต estimate สำหรับกล่องถัดไป
+            setBoxNo(String(confirmedBoxNo + 1));
+            setFeedback({ open: true, message: `บันทึกกล่องที่ ${confirmedBoxNo} สำเร็จ`, severity: 'success' });
 
         } catch (err) {
             setFeedback({
@@ -128,7 +128,7 @@ const PackagingRecording = ({ report, onBack }) => {
                     variant="contained"
                     sx={{ height: 90, width: 180, fontSize: '1rem', fontWeight: 700 }}
                     onClick={handleRecord}
-                    disabled={saving || !lotNumber || !boxNo}
+                    disabled={saving || !lotNumber}
                 >
                     {saving ? <CircularProgress size={24} color="inherit" /> : 'บันทึก 1 กล่อง'}
                 </Button>

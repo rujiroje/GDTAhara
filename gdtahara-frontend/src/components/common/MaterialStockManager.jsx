@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 const API_URL = `${import.meta.env.BASE_URL}api`;
@@ -12,6 +12,92 @@ api.interceptors.request.use(config => {
 const Modal = ({ isOpen, onClose, title, children }) => {
     if (!isOpen) return null;
     return ( <div className="modal-overlay"> <div className="modal-content"> <div className="modal-header"> <h3>{title}</h3> <button onClick={onClose} className="modal-close-button">&times;</button> </div> <div className="modal-body">{children}</div> </div> </div> );
+};
+
+/** Searchable material picker — shows CODE first, filters by code or name */
+const MaterialCombobox = ({ materials, value, onChange }) => {
+    const [query, setQuery] = useState('');
+    const [open, setOpen] = useState(false);
+    const wrapRef = useRef(null);
+
+    const selectedMat = materials.find(m => String(m.id) === String(value));
+
+    const filtered = query.trim()
+        ? materials.filter(m =>
+            m.materialCode.toLowerCase().includes(query.toLowerCase()) ||
+            m.materialName.toLowerCase().includes(query.toLowerCase()))
+        : materials;
+
+    const handleSelect = (mat) => {
+        onChange({ target: { name: 'materialId', value: String(mat.id) } });
+        setQuery('');
+        setOpen(false);
+    };
+
+    const handleClear = () => {
+        onChange({ target: { name: 'materialId', value: '' } });
+        setQuery('');
+        setTimeout(() => setOpen(true), 0);
+    };
+
+    useEffect(() => {
+        const handleClick = (e) => {
+            if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, []);
+
+    return (
+        <div ref={wrapRef} style={{ position: 'relative' }}>
+            {selectedMat ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ flex: 1, padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, background: '#f0f9ff', fontSize: '0.875rem', lineHeight: 1.4 }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1e40af' }}>{selectedMat.materialCode}</span>
+                        <span style={{ color: '#374151', marginLeft: 8 }}>{selectedMat.materialName}</span>
+                    </div>
+                    <button type="button" onClick={handleClear}
+                        style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                        เปลี่ยน
+                    </button>
+                </div>
+            ) : (
+                <input
+                    type="text"
+                    placeholder="พิมพ์รหัส หรือ ชื่อวัตถุดิบเพื่อค้นหา..."
+                    value={query}
+                    onChange={e => { setQuery(e.target.value); setOpen(true); }}
+                    onFocus={() => setOpen(true)}
+                    className="form-input"
+                    autoComplete="off"
+                />
+            )}
+            {/* hidden required field for form validation */}
+            <input type="text" required value={value || ''} onChange={() => {}}
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} tabIndex={-1} />
+
+            {open && !selectedMat && (
+                <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0,
+                    maxHeight: 260, overflowY: 'auto',
+                    background: '#fff', border: '1px solid #d1d5db', borderRadius: 6,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 9999, marginTop: 2,
+                }}>
+                    {filtered.length === 0 ? (
+                        <div style={{ padding: '10px 12px', color: '#9ca3af', fontSize: '0.85rem' }}>ไม่พบวัตถุดิบ</div>
+                    ) : filtered.map(mat => (
+                        <div key={mat.id} onMouseDown={() => handleSelect(mat)}
+                            style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', fontSize: '0.85rem', display: 'flex', gap: 10, alignItems: 'baseline' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#eff6ff'}
+                            onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1e40af', minWidth: 110 }}>{mat.materialCode}</span>
+                            <span style={{ color: '#374151' }}>{mat.materialName}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 };
 
 const MaterialStockManager = ({ onBack }) => {
@@ -224,10 +310,7 @@ const MaterialStockManager = ({ onBack }) => {
                         {!editingTransaction && (
                             <div className="form-group">
                                 <label className="form-label">วัตถุดิบ</label>
-                                <select name="materialId" value={formData.materialId} onChange={handleFormChange} className="form-input" required>
-                                    <option value="" disabled>-- เลือกวัตถุดิบ --</option>
-                                    {materials.map(mat => (<option key={mat.id} value={mat.id}>{mat.materialName} ({mat.materialCode})</option>))}
-                                </select>
+                                <MaterialCombobox materials={materials} value={formData.materialId} onChange={handleFormChange} />
                             </div>
                         )}
                         <div className="form-group"><label className="form-label">Lot Number</label><input type="text" name="lotNumber" value={formData.lotNumber} onChange={handleFormChange} className="form-input" required /></div>
@@ -295,10 +378,7 @@ const MaterialStockManager = ({ onBack }) => {
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label className="form-label">วัตถุดิบ</label>
-                        <select name="materialId" value={formData.materialId} onChange={handleFormChange} className="form-input" required>
-                            <option value="" disabled>-- เลือกวัตถุดิบ --</option>
-                            {materials.map(mat => (<option key={mat.id} value={mat.id}>{mat.materialName} ({mat.materialCode})</option>))}
-                        </select>
+                        <MaterialCombobox materials={materials} value={formData.materialId} onChange={handleFormChange} />
                     </div>
                     <div className="form-group"><label className="form-label">Lot Number</label><input type="text" name="lotNumber" value={formData.lotNumber} onChange={handleFormChange} className="form-input" required /></div>
                     <div className="form-group"><label className="form-label">จำนวน (หน่วย: Kg.)</label><input type="number" step="0.01" name="quantity" value={formData.quantity} onChange={handleFormChange} className="form-input" required /></div>
