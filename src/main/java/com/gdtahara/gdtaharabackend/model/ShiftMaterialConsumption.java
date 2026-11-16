@@ -22,6 +22,9 @@ public class ShiftMaterialConsumption {
     @Column(name = "machine_id")
     private String machineId;
 
+    @Column(name = "material_code")
+    private String materialCode;
+
     @Column(name = "shift_code")
     private String shiftCode;
 
@@ -36,17 +39,19 @@ public class ShiftMaterialConsumption {
     private Integer correctionCount = 0;
     private Boolean isFinal = false;
 
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    @Column(name = "computed_at")
+    private LocalDateTime computedAt;
+
+    @Column(name = "computed_by")
+    private String computedBy;
 
     @PrePersist
     protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = this.createdAt;
+        if (this.computedAt == null) this.computedAt = LocalDateTime.now();
     }
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        this.computedAt = LocalDateTime.now();
     }
 }

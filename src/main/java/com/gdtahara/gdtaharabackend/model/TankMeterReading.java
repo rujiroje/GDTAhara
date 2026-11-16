@@ -16,6 +16,7 @@ public class TankMeterReading {
     private Long id;
 
     private String tankId;
+    private String machineId;
     private String readingType; // SHIFT_START, SHIFT_END, ADHOC
     private BigDecimal meterValueKg;
     private String shiftCode;

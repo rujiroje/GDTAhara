@@ -135,9 +135,8 @@ public class CmMeterService {
     // ── Meter reading ─────────────────────────────────────────────────────────
 
     public TankMeterReading recordMeterReading(String tankId, TankMeterEntryDto dto, String recordedBy) {
-        if (!tankRepo.existsById(tankId)) {
-            throw new EntityNotFoundException("ไม่พบถัง tankId=" + tankId);
-        }
+        MachineTank tank = tankRepo.findById(tankId)
+                .orElseThrow(() -> new EntityNotFoundException("ไม่พบถัง tankId=" + tankId));
 
         // ป้องกัน SHIFT_START ซ้ำในกะเดียวกัน
         if ("SHIFT_START".equals(dto.getReadingType()) &&
@@ -148,6 +147,7 @@ public class CmMeterService {
 
         TankMeterReading reading = new TankMeterReading();
         reading.setTankId(tankId);
+        reading.setMachineId(tank.getMachineId());
         reading.setReadingType(dto.getReadingType());
         reading.setMeterValueKg(dto.getMeterValueKg());
         reading.setShiftCode(dto.getShiftCode());
@@ -356,6 +356,7 @@ public class CmMeterService {
 
         record.setTankId(tankId);
         record.setMachineId(tank != null ? tank.getMachineId() : null);
+        record.setMaterialCode(tank != null ? tank.getDefaultMaterialCode() : "TBD");
         record.setShiftCode(shiftCode);
         record.setShiftDate(shiftDate);
         record.setStartingMeterKg(startKg);
