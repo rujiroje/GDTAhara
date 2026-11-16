@@ -17,6 +17,9 @@ import {
   getStockOverview, getMultiMaterialSummary, getLowStockAlerts, getMaterialDetail
 } from '../../api/cmStockApi';
 import StockCardTable from './StockCardTable';
+import ReorderConfigPanel from './ReorderConfigPanel';
+import { useAuth } from '../../App';
+import SettingsIcon from '@mui/icons-material/Settings';
 
 const fmtKg = (v) =>
   v == null ? '-' : Number(v).toLocaleString('th-TH', { minimumFractionDigits: 2 });
@@ -334,6 +337,8 @@ const MaterialDetailView = ({ materialCode, materialName, onBack, onShowStockCar
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 const CmStockDashboard = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'DataAdmin' || user?.role === 'Admin' || user?.role === 'ADMIN';
   const [tab, setTab] = useState(0);
   const [overview, setOverview] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -416,14 +421,17 @@ const CmStockDashboard = () => {
             label={`แจ้งเตือน${alerts?.length > 0 ? ` (${alerts.length})` : ''}`}
             sx={{ minHeight: 48 }}
           />
+          {isAdmin && (
+            <Tab icon={<SettingsIcon />} iconPosition="start" label="ตั้งค่า Reorder" sx={{ minHeight: 48 }} />
+          )}
         </Tabs>
       </Box>
 
       <Box sx={{ p: 2 }}>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {loading && <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress /></Box>}
+        {loading && tab < 3 && <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress /></Box>}
 
-        {!loading && (
+        {(!loading || tab === 3) && (
           <>
             {tab === 0 && (
               <OverviewTab
@@ -434,6 +442,7 @@ const CmStockDashboard = () => {
             )}
             {tab === 1 && <MultiMaterialTab summary={summary} />}
             {tab === 2 && <AlertsTab alerts={alerts} />}
+            {tab === 3 && isAdmin && <ReorderConfigPanel />}
           </>
         )}
       </Box>

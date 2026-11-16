@@ -24,3 +24,16 @@ export const getLowStockAlerts = async () => {
   const res = await axiosInstance.get('/cm/stock/low-stock');
   return res.data;
 };
+
+export const getReorderConfig = async () => {
+  const res = await axiosInstance.get('/cm/stock/reorder-config');
+  return res.data;
+};
+
+export const updateReorderConfig = async (materialCode, patch) => {
+  const res = await axiosInstance.patch(
+    `/cm/stock/reorder-config/${encodeURIComponent(materialCode)}`,
+    patch
+  );
+  return res.data;
+};
