@@ -8,7 +8,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import SelfEditModal from './SelfEditModal';
 import EditRequestModal from './EditRequestModal';
 
-export default function WasteHistoryTable({ records = [], onRefresh }) {
+export default function WasteHistoryTable({ records = [], onRefresh, currentUsername }) {
   const [selfEditRecord, setSelfEditRecord] = useState(null);
   const [editReqRecord, setEditReqRecord] = useState(null);
 
@@ -93,11 +93,13 @@ export default function WasteHistoryTable({ records = [], onRefresh }) {
                     </Tooltip>
                   ) : (
                     <>
-                      <Tooltip title="แก้ไขทันที (กะนี้)">
-                        <IconButton size="small" onClick={() => setSelfEditRecord(rec)} color="primary">
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      {(!currentUsername || rec.recordedBy === currentUsername) && (
+                        <Tooltip title="แก้ไขทันที (กะนี้)">
+                          <IconButton size="small" onClick={() => setSelfEditRecord(rec)} color="primary">
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <Tooltip title="ส่งคำขอแก้ไข">
                         <IconButton size="small" onClick={() => setEditReqRecord(rec)} color="warning">
                           <HistoryIcon fontSize="small" />

@@ -19,7 +19,7 @@ function RespondDialog({ request, onClose, onDone }) {
     setSubmitting(true);
     setError('');
     try {
-      await respondToEditRequest(request.id, { approved, note });
+      await respondToEditRequest(request.id, { decision: approved ? 'APPROVED' : 'REJECTED', docNote: note });
       onDone();
     } catch (err) {
       setError(err.response?.data?.message || 'ตอบสนองไม่สำเร็จ');

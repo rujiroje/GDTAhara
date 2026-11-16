@@ -7,6 +7,7 @@ import { createWasteEditRequest } from '../../api/cmWasteApi';
 
 export default function EditRequestModal({ record, onClose, onSaved }) {
   const [form, setForm] = useState({
+    requestedWoNumber: record?.woNumber || '',
     weightKg: record?.weightKg?.toString() || '',
     wasteTypeCode: record?.wasteTypeCode || '',
     note: record?.note || '',
@@ -23,10 +24,13 @@ export default function EditRequestModal({ record, onClose, onSaved }) {
     setSubmitting(true);
     setError('');
     try {
-      const payload = { reason: form.reason };
-      if (form.weightKg) payload.requestedWeightKg = parseFloat(form.weightKg);
-      if (form.wasteTypeCode) payload.requestedWasteTypeCode = form.wasteTypeCode;
-      if (form.note) payload.requestedNote = form.note;
+      const payload = {
+        reason: form.reason,
+        requestedWoNumber: form.requestedWoNumber || undefined,
+        requestedWasteTypeCode: form.wasteTypeCode || undefined,
+        requestedWeightKg: form.weightKg ? parseFloat(form.weightKg) : undefined,
+        requestedNote: form.note || undefined,
+      };
       await createWasteEditRequest(record.id, payload);
       onSaved();
     } catch (err) {
@@ -44,6 +48,12 @@ export default function EditRequestModal({ record, onClose, onSaved }) {
           รายการ #{record?.id} — {record?.machineId} — {record?.wasteTypeCode}
         </Typography>
         {error && <Alert severity="error">{error}</Alert>}
+        <TextField
+          label="เลข WO (ใหม่)"
+          value={form.requestedWoNumber}
+          onChange={e => setForm(p => ({ ...p, requestedWoNumber: e.target.value }))}
+          size="small" fullWidth
+        />
         <TextField
           label="ประเภทของเสีย (ใหม่)"
           value={form.wasteTypeCode}
