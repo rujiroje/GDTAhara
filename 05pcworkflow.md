@@ -404,9 +404,40 @@ Screenshot: (แนบรูป)
 | **GaugeCard** | การ์ดหน้า dashboard แสดงเครื่อง 1 ตัว |
 | **canManage** | Role permission — คนแก้แผนได้ (PC + Admin) |
 | **Yield %** | (Good / Target) × 100 |
+| **label_variant** | คอลัมน์ใน products — ระบุประเภท Tag Barcode ที่ใช้ (`EXPORT` หรือว่าง) |
 
 ---
 
-**เอกสารเวอร์ชัน**: v1.0 · 31 กรกฎาคม 2026
-**ระบบเวอร์ชัน**: Phase 1 · commit `bb6da49` (W18)
+## 🏷️ Admin: จัดการประเภท Tag Barcode (label_variant)
+
+**สำหรับ**: DataAdmin / ADMIN  
+**ทางเข้า**: เมนู Admin → แท็บ **ผลิตภัณฑ์**
+
+### ประเภท Tag ที่มี
+
+| label_variant | ขนาด Tag | ใช้กับ |
+|---|---|---|
+| ว่าง (Standard) | **4" × 4"** | สินค้าในประเทศทั่วไป |
+| `EXPORT` | **4" × 8"** | สินค้าส่งออกต่างประเทศ (มี GOODS section ต่อท้าย) |
+
+### วิธีเปลี่ยนประเภท Tag ของ product
+1. ไปที่ **Admin → ผลิตภัณฑ์**
+2. ค้นหา product ที่ต้องการเปลี่ยน → กด **แก้ไข**
+3. Dropdown **"Label Variant (ประเภทฉลาก)"**:
+   - `Standard (ปกติ)` — Tag 4"×4" ปกติ
+   - `EXPORT (ส่งออกต่างประเทศ)` — Tag 4"×8" มี GOODS section
+4. กด **บันทึก** → มีผลทันที (Operator พิมพ์ครั้งถัดไปใช้ format ใหม่เลย)
+
+### สินค้า Export ที่ตั้งค่าไว้แล้ว (V26 migration)
+Aji130 · Aji260 · Aji430 · Aji1kg · QP130 · QP310 · QP520 · QP1kg · Ottogi · AGV · Handy(Gallon) · Common200 และ variant ที่เกี่ยวข้อง
+
+### ⚠️ หมายเหตุ
+- การเปลี่ยน label_variant **ไม่กระทบ label เก่าที่พิมพ์ไปแล้ว** — มีผลเฉพาะการพิมพ์ใหม่
+- ยังไม่ใช้ **GS1-128** (รอ GS1 Company Prefix จาก GS1 Thailand)
+- Barcode format ปัจจุบัน: `{productCode}-{lotNumber}-{boxNo}` (CODE128 มาตรฐาน)
+
+---
+
+**เอกสารเวอร์ชัน**: v1.1 · 14 สิงหาคม 2026 (เพิ่ม Admin label_variant management)
+**ระบบเวอร์ชัน**: Phase 1 · W11
 **เขียนสำหรับ**: GDTAHARA MES Pilot · Toyo Seikan (Thailand)
