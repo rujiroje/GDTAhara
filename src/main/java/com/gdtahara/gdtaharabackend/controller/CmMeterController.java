@@ -1,6 +1,7 @@
 package com.gdtahara.gdtaharabackend.controller;
 
 import com.gdtahara.gdtaharabackend.dto.*;
+import com.gdtahara.gdtaharabackend.dto.MachineRefillHistoryDto;
 import com.gdtahara.gdtaharabackend.service.CmMeterService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -84,5 +85,19 @@ public class CmMeterController {
             Principal principal) {
         service.recordCorrection(refillId, dto, principal.getName());
         return ResponseEntity.ok().build();
+    }
+
+    // GET /api/cm/machines — รายชื่อเครื่องที่ active
+    @GetMapping("/machines")
+    public ResponseEntity<List<java.util.Map<String, String>>> getMachines() {
+        return ResponseEntity.ok(service.getMachines());
+    }
+
+    // GET /api/cm/machines/{machineId}/refill-history?limit=20 — ประวัติเติมของเครื่อง
+    @GetMapping("/machines/{machineId}/refill-history")
+    public ResponseEntity<List<MachineRefillHistoryDto>> getRefillHistory(
+            @PathVariable String machineId,
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(service.getRefillHistoryForMachine(machineId, limit));
     }
 }

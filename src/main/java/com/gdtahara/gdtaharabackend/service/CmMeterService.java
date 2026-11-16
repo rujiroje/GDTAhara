@@ -1,6 +1,7 @@
 package com.gdtahara.gdtaharabackend.service;
 
 import com.gdtahara.gdtaharabackend.dto.*;
+import com.gdtahara.gdtaharabackend.dto.MachineRefillHistoryDto;
 import com.gdtahara.gdtaharabackend.model.*;
 import com.gdtahara.gdtaharabackend.repository.*;
 import jakarta.persistence.EntityNotFoundException;
@@ -368,6 +369,46 @@ public class CmMeterService {
         // isFinal only set explicitly — don't reset it here
 
         consumptionRepo.save(record);
+    }
+
+    // ── Machines list ─────────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<java.util.Map<String, String>> getMachines() {
+        return tankRepo.findByIsActiveTrue().stream()
+                .map(MachineTank::getMachineId)
+                .distinct()
+                .sorted()
+                .map(id -> java.util.Map.of("machineId", id, "machineName", id))
+                .collect(Collectors.toList());
+    }
+
+    // ── Refill history for a machine ─────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<MachineRefillHistoryDto> getRefillHistoryForMachine(String machineId, int limit) {
+        List<MachineTank> tanks = tankRepo.findByMachineIdAndIsActiveTrue(machineId);
+        java.util.Map<String, String> tankNameMap = tanks.stream()
+                .collect(Collectors.toMap(MachineTank::getTankId, MachineTank::getTankName));
+
+        List<TankRefill> allRefills = new java.util.ArrayList<>();
+        for (MachineTank mt : tanks) {
+            allRefills.addAll(refillRepo.findByTankIdOrderByRefillAtDesc(mt.getTankId()));
+        }
+        allRefills.sort((a, b) -> b.getRefillAt().compareTo(a.getRefillAt()));
+
+        return allRefills.stream().limit(limit).map(r -> {
+            MachineRefillHistoryDto dto = new MachineRefillHistoryDto();
+            dto.setRecordedAt(r.getRefillAt());
+            dto.setTankId(r.getTankId());
+            dto.setTankName(tankNameMap.getOrDefault(r.getTankId(), r.getTankId()));
+            dto.setMaterial(r.getMaterialCode() != null ? r.getMaterialCode() : "");
+            dto.setQuantity(r.getQtyKg());
+            dto.setUnit("kg");
+            dto.setShiftCode(r.getShiftCode());
+            dto.setEntryType(Boolean.TRUE.equals(r.getIsCorrection()) ? "CORRECTION" : "REFILL");
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     // ── Mappers ───────────────────────────────────────────────────────────────
