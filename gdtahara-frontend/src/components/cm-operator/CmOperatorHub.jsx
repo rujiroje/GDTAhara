@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { Box, Tabs, Tab } from '@mui/material';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import ScienceIcon from '@mui/icons-material/Science';
+import BarChartIcon from '@mui/icons-material/BarChart';
 
 import CmOperatorDashboard from './CmOperatorDashboard';
 import CmMeterDashboard from '../cm-meter/CmMeterDashboard';
+import CmStockDashboard from '../cm-stock/CmStockDashboard';
 
 const CmOperatorHub = () => {
   const [tab, setTab] = useState(0);
@@ -29,6 +31,12 @@ const CmOperatorHub = () => {
             label="บันทึกวัตถุดิบ"
             sx={{ minHeight: 52, minWidth: 160 }}
           />
+          <Tab
+            icon={<BarChartIcon />}
+            iconPosition="start"
+            label="สต็อกวัตถุดิบ"
+            sx={{ minHeight: 52, minWidth: 160 }}
+          />
         </Tabs>
       </Box>
 
@@ -37,6 +45,9 @@ const CmOperatorHub = () => {
       </Box>
       <Box hidden={tab !== 1}>
         {tab === 1 && <CmMeterDashboard />}
+      </Box>
+      <Box hidden={tab !== 2}>
+        {tab === 2 && <CmStockDashboard />}
       </Box>
     </Box>
   );
