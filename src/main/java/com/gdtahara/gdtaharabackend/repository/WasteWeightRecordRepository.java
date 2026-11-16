@@ -15,6 +15,12 @@ public interface WasteWeightRecordRepository extends JpaRepository<WasteWeightRe
     List<WasteWeightRecord> findAllByMachineIdAndShiftDateAndIsActiveTrueOrderByRecordedAtDesc(
             String machineId, LocalDate shiftDate);
 
+    List<WasteWeightRecord> findAllByMachineIdAndShiftDateBetweenAndIsActiveTrueOrderByRecordedAtDesc(
+            String machineId, LocalDate from, LocalDate to);
+
+    List<WasteWeightRecord> findAllByShiftDateBetweenAndIsActiveTrueOrderByRecordedAtDesc(
+            LocalDate from, LocalDate to);
+
     @Query("SELECT w FROM WasteWeightRecord w WHERE w.isActive = true " +
            "AND w.recordedBy = :username AND w.shiftDate = :shiftDate AND w.shiftCode = :shiftCode " +
            "ORDER BY w.recordedAt DESC")
