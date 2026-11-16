@@ -1,0 +1,70 @@
+import React, { useState } from 'react';
+import {
+  Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, Button, CircularProgress, Alert, InputAdornment
+} from '@mui/material';
+import { selfEditWaste } from '../../api/cmWasteApi';
+
+export default function SelfEditModal({ record, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    weightKg: record?.weightKg?.toString() || '',
+    wasteTypeCode: record?.wasteTypeCode || '',
+    note: record?.note || '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setError('');
+    try {
+      const payload = {};
+      if (form.weightKg) payload.weightKg = parseFloat(form.weightKg);
+      if (form.wasteTypeCode) payload.wasteTypeCode = form.wasteTypeCode;
+      if (form.note !== undefined) payload.note = form.note;
+      await selfEditWaste(record.id, payload);
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.message || 'แก้ไขไม่สำเร็จ — ตรวจสอบสิทธิ์หรือเวลา');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>แก้ไขรายการของเสีย (Self Edit)</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+        {error && <Alert severity="error">{error}</Alert>}
+        <TextField
+          label="ประเภทของเสีย"
+          value={form.wasteTypeCode}
+          onChange={e => setForm(p => ({ ...p, wasteTypeCode: e.target.value }))}
+          size="small" fullWidth
+        />
+        <TextField
+          label="น้ำหนัก (kg)"
+          type="number"
+          inputProps={{ min: 0.001, step: 0.001 }}
+          value={form.weightKg}
+          onChange={e => setForm(p => ({ ...p, weightKg: e.target.value }))}
+          InputProps={{ endAdornment: <InputAdornment position="end">kg</InputAdornment> }}
+          size="small" fullWidth
+        />
+        <TextField
+          label="หมายเหตุ"
+          value={form.note}
+          onChange={e => setForm(p => ({ ...p, note: e.target.value }))}
+          multiline rows={2}
+          size="small" fullWidth
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={submitting}>ยกเลิก</Button>
+        <Button onClick={handleSubmit} variant="contained" disabled={submitting}>
+          {submitting ? <CircularProgress size={18} /> : 'บันทึก'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}

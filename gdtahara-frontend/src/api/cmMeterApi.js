@@ -53,3 +53,23 @@ export const getShiftReport = async (tankId, shiftDate, shiftCode) => {
   );
   return res.data;
 };
+
+// GET /api/cm/machines — list of machine IDs
+export const getCmMachines = async () => {
+  const res = await axiosInstance.get('/cm/machines');
+  return res.data;
+};
+
+// alias getCmTanksByMachine for backward compat
+export const getCmTanks = async (machineId) => {
+  return getCmTanksByMachine(machineId);
+};
+
+// GET /api/cm/machines/{machineId}/refill-history?limit=N
+export const getRefillHistory = async (machineId, limit = 20) => {
+  const res = await axiosInstance.get(
+    `/cm/machines/${encodeURIComponent(machineId)}/refill-history`,
+    { params: { limit } }
+  );
+  return res.data;
+};

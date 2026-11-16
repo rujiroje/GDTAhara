@@ -3,10 +3,12 @@ import { Box, Tabs, Tab } from '@mui/material';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import ScienceIcon from '@mui/icons-material/Science';
 import BarChartIcon from '@mui/icons-material/BarChart';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 
 import CmOperatorDashboard from './CmOperatorDashboard';
 import CmMeterDashboard from '../cm-meter/CmMeterDashboard';
 import CmStockDashboard from '../cm-stock/CmStockDashboard';
+import CmWasteHub from '../cm-waste/CmWasteHub';
 
 const CmOperatorHub = () => {
   const [tab, setTab] = useState(0);
@@ -37,6 +39,12 @@ const CmOperatorHub = () => {
             label="สต็อกวัตถุดิบ"
             sx={{ minHeight: 52, minWidth: 160 }}
           />
+          <Tab
+            icon={<DeleteSweepIcon />}
+            iconPosition="start"
+            label="บันทึกของเสีย"
+            sx={{ minHeight: 52, minWidth: 160 }}
+          />
         </Tabs>
       </Box>
 
@@ -48,6 +56,9 @@ const CmOperatorHub = () => {
       </Box>
       <Box hidden={tab !== 2}>
         {tab === 2 && <CmStockDashboard />}
+      </Box>
+      <Box hidden={tab !== 3}>
+        {tab === 3 && <CmWasteHub />}
       </Box>
     </Box>
   );

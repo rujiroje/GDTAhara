@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Typography, Card, CardContent, CardActionArea, Grid,
+  Box, Typography, Card, CardActionArea, Grid,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer,
-  Paper, Button, Chip, CircularProgress, Alert, Divider
+  Paper, Button, Chip, CircularProgress, Alert
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import EditIcon from '@mui/icons-material/Edit';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 import { getCmMachines, getCmTanks, getRefillHistory } from '../../api/cmMeterApi';
 import RefillEntry from './RefillEntry';
@@ -33,6 +32,22 @@ const statusLabel = {
   LOW:      'ใกล้หมด',
   CRITICAL: 'วิกฤต',
   EMPTY:    'หมด',
+};
+
+const calcStatus = (tank) => {
+  const kg = tank.latestMeterKg ?? 0;
+  const cap = tank.capacityKg ?? 500;
+  const pct = cap > 0 ? (kg / cap) * 100 : 0;
+  if (pct <= 0) return 'EMPTY';
+  if (pct < 20) return 'CRITICAL';
+  if (pct < 40) return 'LOW';
+  return 'OK';
+};
+
+const calcLevel = (tank) => {
+  const kg = tank.latestMeterKg ?? 0;
+  const cap = tank.capacityKg ?? 500;
+  return cap > 0 ? Math.round((kg / cap) * 100) : 0;
 };
 
 const LevelBar = ({ level, status }) => (
@@ -62,7 +77,7 @@ const CmMeterDashboard = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [activeView, setActiveView] = useState(null); // null | 'refill' | 'eos' | 'correction'
+  const [activeView, setActiveView] = useState(null);
 
   useEffect(() => {
     getCmMachines()
@@ -97,7 +112,6 @@ const CmMeterDashboard = () => {
 
   return (
     <Box sx={{ p: 2, maxWidth: 960, mx: 'auto' }}>
-      {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1.5 }}>
         <Typography variant="h6" fontWeight={700}>บันทึกวัตถุดิบ CM</Typography>
         <Chip label={`กะ ${shift}`} size="small" color="primary" />
@@ -105,7 +119,6 @@ const CmMeterDashboard = () => {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {/* Machine picker */}
       <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>เลือกเครื่อง</Typography>
       <Grid container spacing={1.5} sx={{ mb: 3 }}>
         {machines.map(m => (
@@ -122,13 +135,8 @@ const CmMeterDashboard = () => {
                 sx={{ p: 1.5, minHeight: 56 }}
               >
                 <Typography variant="body1" fontWeight={600} textAlign="center">
-                  {m.machineName}
+                  {m.machineName || m.machineId}
                 </Typography>
-                {m.lineCode && (
-                  <Typography variant="caption" color="text.secondary" display="block" textAlign="center">
-                    {m.lineCode}
-                  </Typography>
-                )}
               </CardActionArea>
             </Card>
           </Grid>
@@ -137,7 +145,6 @@ const CmMeterDashboard = () => {
 
       {selected && (
         <>
-          {/* Action buttons */}
           <Box sx={{ display: 'flex', gap: 1.5, mb: 3, flexWrap: 'wrap' }}>
             <Button
               variant="contained"
@@ -172,9 +179,8 @@ const CmMeterDashboard = () => {
             </Button>
           </Box>
 
-          {/* Tank status table */}
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-            สถานะถัง — {selected.machineName}
+            สถานะถัง — {selected.machineName || selected.machineId}
           </Typography>
 
           {loading ? (
@@ -189,9 +195,9 @@ const CmMeterDashboard = () => {
                     <TableCell>ถัง</TableCell>
                     <TableCell>วัตถุดิบ</TableCell>
                     <TableCell>ระดับ</TableCell>
-                    <TableCell>ปริมาณ</TableCell>
+                    <TableCell>ปริมาณ (kg)</TableCell>
                     <TableCell>สถานะ</TableCell>
-                    <TableCell>เติมล่าสุด</TableCell>
+                    <TableCell>อ่านล่าสุด</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -201,46 +207,49 @@ const CmMeterDashboard = () => {
                         ไม่มีข้อมูลถัง
                       </TableCell>
                     </TableRow>
-                  ) : tanks.map(tank => (
-                    <TableRow key={tank.tankId} hover>
-                      <TableCell sx={{ fontWeight: 600 }}>{tank.tankName}</TableCell>
-                      <TableCell>
-                        <Chip label={tank.material} size="small" variant="outlined" />
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 130 }}>
-                        <LevelBar level={tank.levelPercent ?? 0} status={tank.status} />
-                      </TableCell>
-                      <TableCell>
-                        {tank.currentLevel} {tank.unit}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={statusLabel[tank.status] || tank.status}
-                          size="small"
-                          sx={{
-                            bgcolor: (statusColor[tank.status] || '#757575') + '18',
-                            color: statusColor[tank.status] || '#757575',
-                            fontWeight: 700,
-                            border: `1px solid ${(statusColor[tank.status] || '#757575')}44`
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                        {tank.lastRefill
-                          ? new Date(tank.lastRefill).toLocaleString('th-TH', {
-                              day: '2-digit', month: '2-digit',
-                              hour: '2-digit', minute: '2-digit'
-                            })
-                          : '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  ) : tanks.map(tank => {
+                    const status = calcStatus(tank);
+                    const level = calcLevel(tank);
+                    return (
+                      <TableRow key={tank.tankId} hover>
+                        <TableCell sx={{ fontWeight: 600 }}>{tank.tankName}</TableCell>
+                        <TableCell>
+                          <Chip label={tank.defaultMaterialCode || 'TBD'} size="small" variant="outlined" />
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 130 }}>
+                          <LevelBar level={level} status={status} />
+                        </TableCell>
+                        <TableCell>
+                          {tank.latestMeterKg ?? 0} kg
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={statusLabel[status] || status}
+                            size="small"
+                            sx={{
+                              bgcolor: (statusColor[status] || '#757575') + '18',
+                              color: statusColor[status] || '#757575',
+                              fontWeight: 700,
+                              border: `1px solid ${(statusColor[status] || '#757575')}44`
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                          {tank.latestReadingAt
+                            ? new Date(tank.latestReadingAt).toLocaleString('th-TH', {
+                                day: '2-digit', month: '2-digit',
+                                hour: '2-digit', minute: '2-digit'
+                              })
+                            : '—'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
           )}
 
-          {/* Refill history */}
           {history.length > 0 && (
             <>
               <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
@@ -252,7 +261,7 @@ const CmMeterDashboard = () => {
                     <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'grey.50' } }}>
                       <TableCell>เวลา</TableCell>
                       <TableCell>ถัง</TableCell>
-                      <TableCell>วัตถุดิบ</TableCell>
+                      <TableCell>วัตถุดิบ / Lot</TableCell>
                       <TableCell>ปริมาณ</TableCell>
                       <TableCell>กะ</TableCell>
                       <TableCell>ประเภท</TableCell>
@@ -268,14 +277,14 @@ const CmMeterDashboard = () => {
                           })}
                         </TableCell>
                         <TableCell>{row.tankName}</TableCell>
-                        <TableCell>{row.material}</TableCell>
+                        <TableCell>{row.material || '—'}</TableCell>
                         <TableCell sx={{ color: row.quantity < 0 ? '#d32f2f' : 'inherit' }}>
                           {row.quantity > 0 ? '+' : ''}{row.quantity} {row.unit}
                         </TableCell>
                         <TableCell>{row.shiftCode}</TableCell>
                         <TableCell>
                           <Chip
-                            label={row.entryType === 'CORRECTION' ? 'แก้ไข' : row.entryType === 'END_OF_SHIFT' ? 'สิ้นกะ' : 'เติม'}
+                            label={row.entryType === 'CORRECTION' ? 'แก้ไข' : 'เติม'}
                             size="small"
                             variant="outlined"
                           />
