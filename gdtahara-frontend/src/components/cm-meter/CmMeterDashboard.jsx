@@ -2,11 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Card, CardActionArea, Grid,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer,
-  Paper, Button, Chip, CircularProgress, Alert
+  Paper, Button, Chip, CircularProgress, Alert, Tooltip
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import EditIcon from '@mui/icons-material/Edit';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 
 import { getCmMachines, getCmTanks, getRefillHistory } from '../../api/cmMeterApi';
 import RefillEntry from './RefillEntry';
@@ -103,6 +105,16 @@ const CmMeterDashboard = () => {
     if (selected) loadMachineData(selected);
   };
 
+  // C-04: build map tankId → last-refilled materialCode (most recent non-correction)
+  const lastRefillByTank = {};
+  history
+    .filter(r => r.entryType !== 'CORRECTION')
+    .forEach(r => {
+      if (!lastRefillByTank[r.tankId] && r.material) {
+        lastRefillByTank[r.tankId] = r.material;
+      }
+    });
+
   if (activeView === 'refill')
     return <RefillEntry machine={selected} tanks={tanks} onBack={handleBack} />;
   if (activeView === 'eos')
@@ -193,7 +205,7 @@ const CmMeterDashboard = () => {
                 <TableHead>
                   <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'grey.50' } }}>
                     <TableCell>ถัง</TableCell>
-                    <TableCell>วัตถุดิบ</TableCell>
+                    <TableCell>BOM แนะนำ</TableCell>
                     <TableCell>ระดับ</TableCell>
                     <TableCell>ปริมาณ (kg)</TableCell>
                     <TableCell>สถานะ</TableCell>
@@ -210,11 +222,42 @@ const CmMeterDashboard = () => {
                   ) : tanks.map(tank => {
                     const status = calcStatus(tank);
                     const level = calcLevel(tank);
+                    const bom = tank.bomSuggestedMaterial;
+                    const lastRefill = lastRefillByTank[tank.tankId];
+                    const hasMismatch = bom && lastRefill && lastRefill !== bom.materialCode;
+                    const hasMatch   = bom && lastRefill && lastRefill === bom.materialCode;
                     return (
                       <TableRow key={tank.tankId} hover>
                         <TableCell sx={{ fontWeight: 600 }}>{tank.tankName}</TableCell>
                         <TableCell>
-                          <Chip label={tank.defaultMaterialCode || 'TBD'} size="small" variant="outlined" />
+                          {bom ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Tooltip title={bom.materialName || bom.materialCode} arrow>
+                                <Chip
+                                  label={bom.materialCode}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: hasMismatch ? '#fff3e0' : hasMatch ? '#e8f5e9' : '#e3f2fd',
+                                    color:   hasMismatch ? '#e65100'  : hasMatch ? '#2e7d32'  : '#1565c0',
+                                    fontWeight: 600,
+                                    border: `1px solid ${hasMismatch ? '#ffb74d' : hasMatch ? '#81c784' : '#90caf9'}`,
+                                    maxWidth: 110,
+                                    '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' }
+                                  }}
+                                />
+                              </Tooltip>
+                              {hasMismatch && (
+                                <Tooltip title={`เติมล่าสุด: ${lastRefill} ≠ BOM: ${bom.materialCode}`} arrow>
+                                  <WarningAmberIcon sx={{ fontSize: 16, color: '#e65100', cursor: 'help' }} />
+                                </Tooltip>
+                              )}
+                              {hasMatch && (
+                                <CheckCircleOutlineIcon sx={{ fontSize: 16, color: '#2e7d32' }} />
+                              )}
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">ไม่มีแผน</Typography>
+                          )}
                         </TableCell>
                         <TableCell sx={{ minWidth: 130 }}>
                           <LevelBar level={level} status={status} />
