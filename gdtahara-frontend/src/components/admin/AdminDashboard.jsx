@@ -3,6 +3,7 @@
 // =================================================================
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import TankRoleTagPanel from './TankRoleTagPanel';
 
 // --- API Service (จำลองการตั้งค่า) ---
 const API_URL = `${import.meta.env.BASE_URL}api`;
@@ -361,6 +362,7 @@ const AdminDashboard = () => {
                 <button onClick={() => setActiveTab('materials')} className={activeTab === 'materials' ? 'active' : ''}>วัตถุดิบ</button>
                 <button onClick={() => setActiveTab('ngTypes')} className={activeTab === 'ngTypes' ? 'active' : ''}>ประเภทของเสีย</button>
                 <button onClick={() => setActiveTab('setupTemplates')} className={activeTab === 'setupTemplates' ? 'active' : ''}>ขั้นตอน Setup</button>
+                <button onClick={() => setActiveTab('tankRole')} className={activeTab === 'tankRole' ? 'active' : ''}>แท็ก Tank Role</button>
                 <button onClick={() => setActiveTab('import')} className={activeTab === 'import' ? 'active' : ''}>นำเข้าข้อมูล</button>
             </div>
             <div className="tab-content">
@@ -370,6 +372,7 @@ const AdminDashboard = () => {
                 {activeTab === 'materials' && <CrudTable title="วัตถุดิบ" columns={materialColumns} endpoint="/admin/materials" />}
                 {activeTab === 'ngTypes' && <CrudTable title="ประเภทของเสีย" columns={ngTypeColumns} endpoint="/admin/ng-types" />}
                 {activeTab === 'setupTemplates' && <CrudTable title="ขั้นตอน Setup Checklist" columns={setupTemplateColumns} endpoint="/setup-checklist/templates?includeInactive=true" />}
+                {activeTab === 'tankRole' && <TankRoleTagPanel />}
                 {activeTab === 'import' && <ImportData />}
             </div>
         </div>

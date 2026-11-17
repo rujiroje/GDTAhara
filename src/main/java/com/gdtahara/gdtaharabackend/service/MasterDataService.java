@@ -10,10 +10,11 @@ import com.gdtahara.gdtaharabackend.model.NgType;
 import com.gdtahara.gdtaharabackend.model.ParameterChecklist;
 import com.gdtahara.gdtaharabackend.model.Product;
 import com.gdtahara.gdtaharabackend.repository.MachineRepository;
-import com.gdtahara.gdtaharabackend.repository.MaterialRepository; // **[ใหม่]** Import MaterialRepository
+import com.gdtahara.gdtaharabackend.repository.MaterialRepository;
 import com.gdtahara.gdtaharabackend.repository.NgTypeRepository;
 import com.gdtahara.gdtaharabackend.repository.ParameterChecklistRepository;
 import com.gdtahara.gdtaharabackend.repository.ProductRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,5 +63,12 @@ public class MasterDataService {
     }
     public Material saveMaterial(Material material) { return materialRepository.save(material); }
     public void deleteMaterial(Long id) { materialRepository.deleteById(id); }
-    
+
+    /** C-04 Phase D: update tankRole only (null = clear tag) */
+    public Material updateMaterialTankRole(Long id, String tankRole) {
+        Material mat = materialRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("ไม่พบ material id=" + id));
+        mat.setTankRole(tankRole);
+        return materialRepository.save(mat);
+    }
 }
