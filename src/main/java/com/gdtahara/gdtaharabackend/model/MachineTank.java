@@ -19,4 +19,8 @@ public class MachineTank {
     private BigDecimal capacityKg;
     private String physicalPosition;
     private Boolean isActive = true;
+
+    /** C-04: fixed role of this tank — RESIN_100 | EVOH | ADMER | BLEND */
+    @Column(length = 30)
+    private String tankRole;
 }

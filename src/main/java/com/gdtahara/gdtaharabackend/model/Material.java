@@ -17,4 +17,8 @@ public class Material {
     private String materialType;
     private String unit;
     private String plantCode;
+
+    /** C-04: which tank type this material belongs to — RESIN_100 | EVOH | ADMER | BLEND */
+    @Column(length = 30)
+    private String tankRole;
 }
