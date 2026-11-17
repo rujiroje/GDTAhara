@@ -15,7 +15,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -32,6 +34,11 @@ public class CmMeterService {
     private final ShiftMaterialConsumptionRepository consumptionRepo;
     private final ShiftBoundaryConfigRepository shiftConfigRepo;
     private final MaterialStockTransactionRepository stockTxRepo;
+    // C-04: BOM reverse lookup
+    private final ProductionPlanRepository planRepo;
+    private final BillOfMaterialsRepository bomRepo;
+    private final BomItemRepository bomItemRepo;
+    private final MaterialRepository materialRepo;
 
     // ── Shift detection ───────────────────────────────────────────────────────
 
@@ -77,9 +84,10 @@ public class CmMeterService {
 
     public List<TankStatusDto> getTanksByMachine(String machineId) {
         CurrentShiftDto shift = getCurrentShift();
+        Map<String, BomSuggestedMaterialDto> bomMap = buildBomSuggestionMap(machineId);
         return tankRepo.findByMachineIdAndIsActiveTrue(machineId)
                 .stream()
-                .map(t -> buildTankStatus(t, shift))
+                .map(t -> buildTankStatus(t, shift, bomMap))
                 .collect(Collectors.toList());
     }
 
@@ -87,10 +95,12 @@ public class CmMeterService {
         MachineTank tank = tankRepo.findById(tankId)
                 .orElseThrow(() -> new EntityNotFoundException("ไม่พบถัง tankId=" + tankId));
         CurrentShiftDto shift = getCurrentShift();
-        return buildTankStatus(tank, shift);
+        Map<String, BomSuggestedMaterialDto> bomMap = buildBomSuggestionMap(tank.getMachineId());
+        return buildTankStatus(tank, shift, bomMap);
     }
 
-    private TankStatusDto buildTankStatus(MachineTank tank, CurrentShiftDto shift) {
+    private TankStatusDto buildTankStatus(MachineTank tank, CurrentShiftDto shift,
+                                          Map<String, BomSuggestedMaterialDto> bomMap) {
         TankStatusDto dto = new TankStatusDto();
         dto.setTankId(tank.getTankId());
         dto.setMachineId(tank.getMachineId());
@@ -101,6 +111,8 @@ public class CmMeterService {
         dto.setPhysicalPosition(tank.getPhysicalPosition());
         dto.setCurrentShiftCode(shift.getShiftCode());
         dto.setCurrentShiftDate(shift.getShiftDate());
+        dto.setTankRole(tank.getTankRole());
+        dto.setBomSuggestedMaterial(tank.getTankRole() != null ? bomMap.get(tank.getTankRole()) : null);
 
         // latest reading overall
         List<TankMeterReading> latest = meterRepo.findLatestByTankId(tank.getTankId());
@@ -369,6 +381,37 @@ public class CmMeterService {
         // isFinal only set explicitly — don't reset it here
 
         consumptionRepo.save(record);
+    }
+
+    // ── C-04: BOM reverse lookup ──────────────────────────────────────────────
+
+    /**
+     * Returns a map of tankRole → suggested material from today's active BOM.
+     * Returns empty map when no production plan or BOM exists for the machine today.
+     */
+    Map<String, BomSuggestedMaterialDto> buildBomSuggestionMap(String machineId) {
+        LocalDate today = LocalDate.now();
+        List<ProductionPlan> plans = planRepo.findByMachine_MachineCodeAndPlanDate(machineId, today);
+        if (plans.isEmpty()) return Map.of();
+
+        String fgCode = plans.get(0).getProduct().getProductCode();
+        Optional<BillOfMaterials> bomOpt = bomRepo.findActiveByFgCodeAndDate(fgCode, today);
+        if (bomOpt.isEmpty()) return Map.of();
+
+        List<BomItem> items = bomItemRepo.findByBomIdOrderByItemNumber(bomOpt.get().getId());
+        Map<String, BomSuggestedMaterialDto> result = new LinkedHashMap<>();
+        for (BomItem item : items) {
+            materialRepo.findByMaterialCode(item.getRmCode()).ifPresent(mat -> {
+                if (mat.getTankRole() != null && !result.containsKey(mat.getTankRole())) {
+                    BomSuggestedMaterialDto suggestion = new BomSuggestedMaterialDto();
+                    suggestion.setMaterialCode(mat.getMaterialCode());
+                    suggestion.setMaterialName(mat.getMaterialName());
+                    suggestion.setTankRole(mat.getTankRole());
+                    result.put(mat.getTankRole(), suggestion);
+                }
+            });
+        }
+        return result;
     }
 
     // ── Machines list ─────────────────────────────────────────────────────────

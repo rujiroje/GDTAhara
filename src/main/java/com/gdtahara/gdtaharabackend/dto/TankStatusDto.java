@@ -27,4 +27,9 @@ public class TankStatusDto {
     private Integer refillCount;
     private Boolean shiftStartRecorded;
     private Boolean shiftEndRecorded;
+
+    /** C-04: fixed role of this tank (RESIN_100 | EVOH | ADMER | BLEND) */
+    private String tankRole;
+    /** C-04: material suggested by active BOM for this tank's role */
+    private BomSuggestedMaterialDto bomSuggestedMaterial;
 }

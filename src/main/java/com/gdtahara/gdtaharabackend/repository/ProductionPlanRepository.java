@@ -16,4 +16,7 @@ public interface ProductionPlanRepository extends JpaRepository<ProductionPlan, 
     List<ProductionPlan> findByPlanDateBetween(LocalDate from, LocalDate to);
 
     List<ProductionPlan> findByMachineIdAndPlanDateBetweenOrderByPlanDate(Long machineId, LocalDate from, LocalDate to);
+
+    /** C-04: find today's plan for a machine by machine code (String like "RBL201") */
+    List<ProductionPlan> findByMachine_MachineCodeAndPlanDate(String machineCode, LocalDate planDate);
 }
