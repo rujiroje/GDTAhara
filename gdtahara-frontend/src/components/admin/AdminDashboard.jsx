@@ -340,6 +340,124 @@ const ImportData = () => {
     );
 };
 
+// --- Mold Master Panel (Import / Export / Table) ---
+const MoldMasterPanel = () => {
+    const [molds, setMolds] = useState([]);
+    const [file, setFile] = useState(null);
+    const [importing, setImporting] = useState(false);
+    const [msg, setMsg] = useState('');
+    const [err, setErr] = useState('');
+    const [errors, setErrors] = useState([]);
+
+    const fetchMolds = () => {
+        api.get('/admin/molds').then(r => setMolds(r.data)).catch(() => {});
+    };
+
+    useEffect(() => { fetchMolds(); }, []);
+
+    const downloadBlob = (res, filename) => {
+        const url = URL.createObjectURL(new Blob([res.data]));
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleExport = () => {
+        api.get('/admin/molds/export', { responseType: 'blob' })
+            .then(r => downloadBlob(r, 'mold_master.csv'))
+            .catch(() => setErr('ไม่สามารถ Export ได้'));
+    };
+
+    const handleTemplate = () => {
+        api.get('/admin/molds/template', { responseType: 'blob' })
+            .then(r => downloadBlob(r, 'mold_master_template.csv'))
+            .catch(() => setErr('ไม่สามารถดาวน์โหลด Template ได้'));
+    };
+
+    const handleImport = async () => {
+        if (!file) return;
+        setImporting(true); setMsg(''); setErr(''); setErrors([]);
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const r = await api.post('/import/molds', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            const d = r.data;
+            setMsg(typeof d === 'string' ? d : d?.message || 'นำเข้าสำเร็จ');
+            if (d?.errors?.length) setErrors(d.errors);
+            fetchMolds();
+        } catch (e) {
+            const d = e.response?.data;
+            setErr(typeof d === 'string' ? d : d?.error || d?.message || 'เกิดข้อผิดพลาด');
+        }
+        setImporting(false); setFile(null);
+    };
+
+    const cols = [
+        { k: 'moldCode', l: 'รหัส Mold' }, { k: 'moldName', l: 'ชื่อ (TH)' },
+        { k: 'productCode', l: 'Product' }, { k: 'machineType', l: 'Machine Type' },
+        { k: 'moldType', l: 'Mold Type' }, { k: 'workCavityCount', l: 'Work Cavity' },
+        { k: 'workCavityNo', l: 'หมายเลข Cavity' }, { k: 'isActive', l: 'Active' },
+    ];
+
+    return (
+        <div>
+            <div className="table-header">
+                <h3>Mold Master</h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="add-button" onClick={handleTemplate}>⬇ Template CSV</button>
+                    <button className="add-button" onClick={handleExport}>⬇ Export CSV</button>
+                </div>
+            </div>
+
+            {/* Import Section */}
+            <div style={{ background: 'var(--import-bg,#f4f8ff)', border: '1px solid #c5d9f1',
+                          borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>📥 นำเข้าข้อมูล Mold (CSV)</div>
+                {msg && <div className="success-message" style={{ marginBottom: 8 }}>{msg}</div>}
+                {err && <div className="error-message" style={{ marginBottom: 8 }}>{err}</div>}
+                {errors.length > 0 && (
+                    <details style={{ marginBottom: 8, fontSize: '0.85em', color: '#a00' }}>
+                        <summary>รายละเอียดข้อผิดพลาด ({errors.length} รายการ)</summary>
+                        <ul style={{ margin: '4px 0 0 20px' }}>
+                            {errors.map((e, i) => <li key={i}>{e}</li>)}
+                        </ul>
+                    </details>
+                )}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input type="file" accept=".csv"
+                           onChange={e => { setFile(e.target.files[0]); setMsg(''); setErr(''); setErrors([]); }} />
+                    <button className="import-button" disabled={!file || importing} onClick={handleImport}>
+                        {importing ? 'กำลังนำเข้า...' : 'นำเข้า'}
+                    </button>
+                </div>
+                <div style={{ fontSize: '0.78em', color: '#666', marginTop: 6 }}>
+                    คอลัมน์: moldCode, moldName, moldNameEn, machineType, productCode, moldType,
+                    standardCavityCount, standardCavityNo, workCavityCount, workCavityNo, isActive, description
+                </div>
+            </div>
+
+            {/* Table */}
+            <div className="data-table-container">
+                <table className="data-table">
+                    <thead>
+                        <tr>{cols.map(c => <th key={c.k}>{c.l}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                        {molds.length === 0
+                            ? <tr><td colSpan={cols.length} style={{ textAlign: 'center', color: '#999' }}>ไม่มีข้อมูล</td></tr>
+                            : molds.map(m => (
+                                <tr key={m.id} style={{ opacity: m.isActive === false ? 0.45 : 1 }}>
+                                    {cols.map(c => <td key={c.k}>{String(m[c.k] ?? '')}</td>)}
+                                </tr>
+                            ))
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
 // --- Main Admin Component ---
 const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('users');
@@ -361,6 +479,7 @@ const AdminDashboard = () => {
                 <button onClick={() => setActiveTab('materials')} className={activeTab === 'materials' ? 'active' : ''}>วัตถุดิบ</button>
                 <button onClick={() => setActiveTab('ngTypes')} className={activeTab === 'ngTypes' ? 'active' : ''}>ประเภทของเสีย</button>
                 <button onClick={() => setActiveTab('setupTemplates')} className={activeTab === 'setupTemplates' ? 'active' : ''}>ขั้นตอน Setup</button>
+                <button onClick={() => setActiveTab('molds')} className={activeTab === 'molds' ? 'active' : ''}>Mold Master</button>
                 <button onClick={() => setActiveTab('import')} className={activeTab === 'import' ? 'active' : ''}>นำเข้าข้อมูล</button>
             </div>
             <div className="tab-content">
@@ -370,6 +489,7 @@ const AdminDashboard = () => {
                 {activeTab === 'materials' && <CrudTable title="วัตถุดิบ" columns={materialColumns} endpoint="/admin/materials" />}
                 {activeTab === 'ngTypes' && <CrudTable title="ประเภทของเสีย" columns={ngTypeColumns} endpoint="/admin/ng-types" />}
                 {activeTab === 'setupTemplates' && <CrudTable title="ขั้นตอน Setup Checklist" columns={setupTemplateColumns} endpoint="/setup-checklist/templates?includeInactive=true" />}
+                {activeTab === 'molds' && <MoldMasterPanel />}
                 {activeTab === 'import' && <ImportData />}
             </div>
         </div>

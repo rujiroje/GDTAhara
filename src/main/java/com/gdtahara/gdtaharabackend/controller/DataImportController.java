@@ -69,4 +69,17 @@ public class DataImportController {
             return ResponseEntity.ok("นำเข้าข้อมูลวัตถุดิบสำเร็จ");
         } catch (Exception e) { return ResponseEntity.badRequest().body("เกิดข้อผิดพลาด: " + e.getMessage()); }
     }
+
+    @PostMapping("/molds")
+    public ResponseEntity<?> uploadMolds(@RequestParam("file") MultipartFile file, Principal principal) {
+        try {
+            var result = dataImportService.importMolds(file);
+            auditLogService.log("BULK_IMPORT", "MoldMaster", null, null,
+                    Map.of("filename", file.getOriginalFilename() != null ? file.getOriginalFilename() : "",
+                            "imported", String.valueOf(result.get("imported")),
+                            "updated",  String.valueOf(result.get("updated")),
+                            "importedBy", principal != null ? principal.getName() : "anonymous"));
+            return ResponseEntity.ok(result);
+        } catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
+    }
 }

@@ -6,6 +6,7 @@ package com.gdtahara.gdtaharabackend.service;
 
 import com.gdtahara.gdtaharabackend.model.Machine;
 import com.gdtahara.gdtaharabackend.model.Material;
+import com.gdtahara.gdtaharabackend.model.MoldMaster;
 import com.gdtahara.gdtaharabackend.model.NgType;
 import com.gdtahara.gdtaharabackend.model.Product;
 import com.gdtahara.gdtaharabackend.repository.*;
@@ -23,9 +24,12 @@ import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class DataImportService {
@@ -36,6 +40,7 @@ public class DataImportService {
     @Autowired private ProductRepository productRepository;
     @Autowired private NgTypeRepository ngTypeRepository;
     @Autowired private MaterialRepository materialRepository;
+    @Autowired private MoldMasterRepository moldMasterRepository;
 
 
     @Transactional
@@ -190,6 +195,108 @@ public class DataImportService {
         if (!toSave.isEmpty()) materialRepository.saveAll(toSave);
     }
     
+    // ── Mold Import ──────────────────────────────────────────────────────────────
+
+    /**
+     * CSV columns (row 1 = header, skipped):
+     * moldCode, moldName, moldNameEn, machineType, productCode, moldType,
+     * standardCavityCount, standardCavityNo, workCavityCount, workCavityNo,
+     * isActive, description
+     *
+     * Returns map with keys: imported, updated, errors, message
+     */
+    @Transactional
+    public Map<String, Object> importMolds(MultipartFile file) throws IOException, CsvValidationException {
+        Map<String, Long> productIdByCode = productRepository.findAll().stream()
+                .collect(Collectors.toMap(Product::getProductCode, Product::getId, (a, b) -> a));
+
+        int created = 0, updated = 0;
+        List<String> errors = new ArrayList<>();
+
+        try (CSVReader reader = new CSVReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            reader.readNext(); // skip header
+            String[] line;
+            int row = 1;
+            while ((line = reader.readNext()) != null) {
+                row++;
+                String moldCode = col(line, 0);
+                if (moldCode.isEmpty()) continue;
+                try {
+                    String moldName      = col(line, 1);
+                    String moldNameEn    = col(line, 2);
+                    String machineType   = col(line, 3);
+                    String productCode   = col(line, 4);
+                    String moldType      = col(line, 5);
+                    Integer stdCount     = safeParseInteger(col(line, 6));
+                    String stdNo         = col(line, 7);
+                    Integer workCount    = safeParseInteger(col(line, 8));
+                    String workNo        = col(line, 9);
+                    boolean isActive     = parseBool(col(line, 10));
+                    String description   = col(line, 11);
+
+                    Long productId = null;
+                    if (!productCode.isEmpty()) {
+                        productId = productIdByCode.get(productCode);
+                        if (productId == null) {
+                            errors.add("Row " + row + ": productCode '" + productCode + "' ไม่พบ — product_id จะเป็น null");
+                        }
+                    }
+
+                    MoldMaster m = moldMasterRepository.findByMoldCode(moldCode)
+                            .orElse(new MoldMaster());
+                    boolean isNew = m.getId() == null;
+
+                    m.setMoldCode(moldCode);
+                    m.setMoldName(!moldName.isEmpty() ? moldName : (isNew ? moldCode : m.getMoldName()));
+                    m.setMoldNameEn(!moldNameEn.isEmpty() ? moldNameEn : null);
+                    m.setMachineType(!machineType.isEmpty() ? machineType : m.getMachineType());
+                    m.setProductId(productId);
+                    m.setMoldType(!moldType.isEmpty() ? moldType : null);
+                    m.setStandardCavityCount(stdCount);
+                    m.setStandardCavityNo(!stdNo.isEmpty() ? stdNo : null);
+                    m.setWorkCavityCount(workCount);
+                    m.setWorkCavityNo(!workNo.isEmpty() ? workNo : null);
+                    m.setIsActive(isActive);
+                    m.setDescription(!description.isEmpty() ? description : null);
+
+                    // Sync legacy cavityCount/cavityNumbers (used in TC mold dropdown)
+                    m.setCavityCount(workCount != null ? workCount :
+                                     stdCount  != null ? stdCount  :
+                                     (m.getCavityCount() != null ? m.getCavityCount() : 1));
+                    String legacyNo = !workNo.isEmpty() ? workNo : (!stdNo.isEmpty() ? stdNo : null);
+                    if (legacyNo != null) m.setCavityNumbers(legacyNo);
+                    else if (isNew) m.setCavityNumbers("1");
+
+                    if (isNew) m.setCreatedBy("import");
+
+                    moldMasterRepository.save(m);
+                    if (isNew) created++; else updated++;
+
+                } catch (Exception e) {
+                    errors.add("Row " + row + " (" + moldCode + "): " + e.getMessage());
+                    logger.warn("Mold import error at row {}: {}", row, e.getMessage());
+                }
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("imported", created);
+        result.put("updated", updated);
+        result.put("errors", errors);
+        result.put("message", String.format("นำเข้า %d รายการใหม่, อัปเดต %d รายการ%s",
+                created, updated,
+                errors.isEmpty() ? "" : String.format(", พบ %d ข้อผิดพลาด (ดูรายละเอียดใน errors)", errors.size())));
+        return result;
+    }
+
+    private String col(String[] row, int idx) {
+        return (idx < row.length && row[idx] != null) ? row[idx].trim() : "";
+    }
+
+    private boolean parseBool(String v) {
+        return "true".equalsIgnoreCase(v) || "1".equals(v) || "yes".equalsIgnoreCase(v) || "y".equalsIgnoreCase(v);
+    }
+
     private BigDecimal safeParseBigDecimal(String value) {
         if (value == null || value.trim().isEmpty() || value.trim().equals("-")) return null;
         try { return new BigDecimal(value.trim()); } catch (NumberFormatException e) { return null; }
