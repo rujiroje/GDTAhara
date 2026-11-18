@@ -71,13 +71,13 @@ rm -f "$TARFILE"
 echo ""
 echo "[4/4] Applying on server..."
 
-# 4a. File operations (no sudo needed)
+# 4a. File operations
 "$PLINK" -ssh -pw "$SERVER_PASS" -batch "$SERVER_USER@$SERVER_HOST" "
   set -e
   mv $SERVER_APP_DIR/app-new.jar $SERVER_APP_DIR/app.jar
   chmod 644 $SERVER_APP_DIR/app.jar
-  find $SERVER_FE_DIR -mindepth 1 -delete
-  tar -xzf /tmp/gdtahara-fe.tar.gz -C $SERVER_FE_DIR/
+  echo '$SERVER_PASS' | sudo -S find $SERVER_FE_DIR -mindepth 1 -delete
+  echo '$SERVER_PASS' | sudo -S tar -xzf /tmp/gdtahara-fe.tar.gz -C $SERVER_FE_DIR/
   rm /tmp/gdtahara-fe.tar.gz
   echo '      Files applied OK'
 "
