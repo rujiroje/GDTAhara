@@ -65,6 +65,19 @@ export const getCmTanks = async (machineId) => {
   return getCmTanksByMachine(machineId);
 };
 
+// GET /api/master-data/materials — all materials (for refill material picker)
+export const getCmMaterials = async (_machineId) => {
+  const res = await axiosInstance.get('/master-data/materials');
+  return res.data;
+};
+
+// POST /api/cm/end-of-shift — batch end-of-shift meter readings
+// dto: { machineId, shiftCode, readings: [{ tankId, meterValue, unit }] }
+export const postEndOfShift = async (dto) => {
+  const res = await axiosInstance.post('/cm/end-of-shift', dto);
+  return res.data;
+};
+
 // GET /api/cm/machines/{machineId}/refill-history?limit=N
 export const getRefillHistory = async (machineId, limit = 20) => {
   const res = await axiosInstance.get(
