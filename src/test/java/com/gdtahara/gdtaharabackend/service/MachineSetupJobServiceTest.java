@@ -40,6 +40,8 @@ class MachineSetupJobServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private UserRepository userRepository;
     @Mock private AuditLogService auditLogService;
+    @Mock private com.gdtahara.gdtaharabackend.repository.MoldMasterRepository moldMasterRepository;
+    @Mock private com.gdtahara.gdtaharabackend.repository.MachineCurrentMoldRepository machineCurrentMoldRepository;
 
     private MachineSetupJobService service;
 
@@ -54,7 +56,7 @@ class MachineSetupJobServiceTest {
     void setUp() {
         service = new MachineSetupJobService(machineSetupJobRepository, productionPlanRepository,
                 downtimeEventRepository, machineRepository, productRepository,
-                userRepository, auditLogService);
+                userRepository, auditLogService, moldMasterRepository, machineCurrentMoldRepository);
 
         machine = new Machine();
         machine.setId(1L);
