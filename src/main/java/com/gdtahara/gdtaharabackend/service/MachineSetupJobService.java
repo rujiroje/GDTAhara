@@ -195,7 +195,9 @@ public class MachineSetupJobService {
                 throw new IllegalStateException(
                         "Mold " + moldCodeTo + " belongs to a different product — cannot use for this setup job");
             }
-            updateCurrentMold(job.getMachine().getId(), moldCodeTo, saved.getId(), username, completedAt);
+            if (job.getMachine() != null) {
+                updateCurrentMold(job.getMachine().getId(), selectedMold, saved.getId(), username, completedAt);
+            }
         }
 
         auditLogService.log("UPDATE", "MachineSetupJob", jobId,
@@ -314,10 +316,8 @@ public class MachineSetupJobService {
 
     // --- private helpers ---
 
-    private void updateCurrentMold(Long machineId, String moldCode, Long jobId,
+    private void updateCurrentMold(Long machineId, MoldMaster mold, Long jobId,
                                     String username, LocalDateTime installedAt) {
-        MoldMaster mold = moldMasterRepository.findByMoldCode(moldCode)
-                .orElseThrow(() -> new EntityNotFoundException("Mold not found: " + moldCode));
         MachineCurrentMold current = machineCurrentMoldRepository.findByMachineId(machineId)
                 .orElse(new MachineCurrentMold());
         current.setMachineId(machineId);
@@ -326,7 +326,7 @@ public class MachineSetupJobService {
         current.setInstalledBy(username);
         current.setInstalledAt(installedAt);
         machineCurrentMoldRepository.save(current);
-        logger.info("Updated machine_current_mold for machine {} → mold {}", machineId, moldCode);
+        logger.info("Updated machine_current_mold for machine {} → mold {}", machineId, mold.getMoldCode());
     }
 
     private MachineSetupJob createSetupJobIfNeeded(ProductionPlan plan, Long fromProductId) {

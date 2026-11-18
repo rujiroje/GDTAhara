@@ -3,6 +3,7 @@ package com.gdtahara.gdtaharabackend.service;
 import com.gdtahara.gdtaharabackend.model.DowntimeEvent;
 import com.gdtahara.gdtaharabackend.model.Machine;
 import com.gdtahara.gdtaharabackend.model.MachineSetupJob;
+import com.gdtahara.gdtaharabackend.model.MoldMaster;
 import com.gdtahara.gdtaharabackend.model.Product;
 import com.gdtahara.gdtaharabackend.model.ProductionPlan;
 import com.gdtahara.gdtaharabackend.model.User;
@@ -197,17 +198,24 @@ class MachineSetupJobServiceTest {
         completer.setId(10L);
         completer.setUsername("tech01");
 
+        MoldMaster moldB = new MoldMaster();
+        moldB.setMoldCode("MOLD-B");
+
         MachineSetupJob job = new MachineSetupJob();
         job.setId(1L);
         job.setStatus("IN_PROGRESS");
         job.setStartedAt(startedAt);
         job.setFromProduct(productA);
         job.setToProduct(productB);
+        job.setMachine(machine);
 
         when(machineSetupJobRepository.findById(1L)).thenReturn(Optional.of(job));
         when(userRepository.findByUsername("tech01")).thenReturn(Optional.of(completer));
         when(machineSetupJobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(downtimeEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(moldMasterRepository.findByMoldCode("MOLD-B")).thenReturn(Optional.of(moldB));
+        when(machineCurrentMoldRepository.findByMachineId(1L)).thenReturn(Optional.empty());
+        when(machineCurrentMoldRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.completeSetup(1L, true, "MOLD-A", "MOLD-B",
                 true, true, true, true, "All done", "tech01");
