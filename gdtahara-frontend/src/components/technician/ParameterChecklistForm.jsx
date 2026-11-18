@@ -166,7 +166,7 @@ const ParameterChecklistForm = ({ reportId, onSubmit, onCancel }) => {
       };
       
       const response = await axios.post(
-        `http://localhost:8080/api/technician/parameter-records`,
+        `${import.meta.env.BASE_URL}api/technician/parameter-records`,
         submitData
       );
       

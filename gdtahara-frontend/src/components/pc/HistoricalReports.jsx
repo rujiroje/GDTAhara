@@ -1,5 +1,5 @@
 // Import เพิ่มเติม (ถ้าจำเป็น)
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
 
@@ -69,7 +69,7 @@ function HistoricalReportsSection() {
         }
       };
       
-      const url = `http://localhost:8080/api/production/reports/production-historical?${params}`;  // Fixed: full URL to avoid baseURL conflict
+      const url = `${import.meta.env.BASE_URL}api/production/reports/production-historical?${params}`;  // Fixed: full URL to avoid baseURL conflict
       console.log('Calling API:', url);
       
       const response = await axios.get(url, config);

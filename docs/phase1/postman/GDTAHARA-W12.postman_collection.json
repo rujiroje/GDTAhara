@@ -1,0 +1,311 @@
+{
+  "info": {
+    "name": "GDTAHARA MES — Phase 1 W12",
+    "_postman_id": "gdtahara-phase1-w12",
+    "description": "Phase 1 REST API: ProductionPlan, SubLot, MachineSetupJob, ImportLog.\n\nSetup:\n1. Set {{baseUrl}} = http://localhost:8080\n2. Run POST /api/auth/login — the Tests script auto-sets {{jwt}}\n3. All subsequent requests use Bearer {{jwt}}",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "jwt",     "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (auto-set jwt)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.token) { pm.collectionVariables.set('jwt', res.token); }",
+                  "pm.test('Login OK', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"yourPassword\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api","auth","login"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Production Plan",
+      "item": [
+        {
+          "name": "Create plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planDate\": \"2026-06-02\",\n  \"machineId\": 1,\n  \"productId\": 1,\n  \"targetQty\": 800,\n  \"manpowerDRatio\": 0.50,\n  \"manpowerNRatio\": 0.50,\n  \"source\": \"manual\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/production-plans/", "host": ["{{baseUrl}}"], "path": ["api","production-plans",""] }
+          }
+        },
+        {
+          "name": "Get plans by date",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/production-plans/date/2026-06-02", "host": ["{{baseUrl}}"], "path": ["api","production-plans","date","2026-06-02"] }
+          }
+        },
+        {
+          "name": "Get plans by machine range",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/production-plans/machine/1?from=2026-06-01&to=2026-06-30",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","production-plans","machine","1"],
+              "query": [{ "key": "from", "value": "2026-06-01" }, { "key": "to", "value": "2026-06-30" }]
+            }
+          }
+        },
+        {
+          "name": "Get plans by month",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/production-plans/month/2026/6", "host": ["{{baseUrl}}"], "path": ["api","production-plans","month","2026","6"] }
+          }
+        },
+        {
+          "name": "Update plan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetQty\": 900,\n  \"status\": \"active\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/production-plans/1", "host": ["{{baseUrl}}"], "path": ["api","production-plans","1"] }
+          }
+        },
+        {
+          "name": "Shift split",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/production-plans/1/shift-split", "host": ["{{baseUrl}}"], "path": ["api","production-plans","1","shift-split"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sub-Lot",
+      "item": [
+        {
+          "name": "Confirm box (B0001)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productionReportId\": 1,\n  \"boxQuantity\": 100,\n  \"weightKg\": 12.500,\n  \"palletNumber\": \"PAL-001\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/sub-lots/confirm-box", "host": ["{{baseUrl}}"], "path": ["api","sub-lots","confirm-box"] }
+          }
+        },
+        {
+          "name": "Confirm box (B0002)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productionReportId\": 1,\n  \"boxQuantity\": 100,\n  \"weightKg\": 12.300,\n  \"palletNumber\": \"PAL-001\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/sub-lots/confirm-box", "host": ["{{baseUrl}}"], "path": ["api","sub-lots","confirm-box"] }
+          }
+        },
+        {
+          "name": "Get sub-lots by report",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/sub-lots/report/1", "host": ["{{baseUrl}}"], "path": ["api","sub-lots","report","1"] }
+          }
+        },
+        {
+          "name": "Count sub-lots by report",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/sub-lots/report/1/count", "host": ["{{baseUrl}}"], "path": ["api","sub-lots","report","1","count"] }
+          }
+        },
+        {
+          "name": "Find by sub-lot number",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/sub-lots/by-number/PL-MC01-20260601-D-B0001", "host": ["{{baseUrl}}"], "path": ["api","sub-lots","by-number","PL-MC01-20260601-D-B0001"] }
+          }
+        },
+        {
+          "name": "Mark as labeled",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zplRef\": \"ZPL-2026-06-01-001\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/sub-lots/1/labeled", "host": ["{{baseUrl}}"], "path": ["api","sub-lots","1","labeled"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Machine Setup Job",
+      "item": [
+        {
+          "name": "Scan & create setup jobs",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/setup-jobs/scan?from=2026-06-01&to=2026-06-30",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","setup-jobs","scan"],
+              "query": [{ "key": "from", "value": "2026-06-01" }, { "key": "to", "value": "2026-06-30" }]
+            }
+          }
+        },
+        {
+          "name": "Assign technician",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"technicianUserId\": 5\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/setup-jobs/1/assign", "host": ["{{baseUrl}}"], "path": ["api","setup-jobs","1","assign"] }
+          }
+        },
+        {
+          "name": "Start setup",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/setup-jobs/1/start", "host": ["{{baseUrl}}"], "path": ["api","setup-jobs","1","start"] }
+          }
+        },
+        {
+          "name": "Complete setup",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"moldChanged\": true,\n  \"moldCodeFrom\": \"MOLD-A\",\n  \"moldCodeTo\": \"MOLD-B\",\n  \"tempAdjusted\": true,\n  \"cycleAdjusted\": true,\n  \"blowPinAligned\": true,\n  \"fpiPassed\": true,\n  \"notes\": \"Setup completed without issues\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/setup-jobs/1/complete", "host": ["{{baseUrl}}"], "path": ["api","setup-jobs","1","complete"] }
+          }
+        },
+        {
+          "name": "Skip setup",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skipReason\": \"Product run cancelled by PC\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/setup-jobs/1/skip", "host": ["{{baseUrl}}"], "path": ["api","setup-jobs","1","skip"] }
+          }
+        },
+        {
+          "name": "Get pending jobs for technician",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/setup-jobs/technician/5/pending", "host": ["{{baseUrl}}"], "path": ["api","setup-jobs","technician","5","pending"] }
+          }
+        },
+        {
+          "name": "Get job for plan",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/setup-jobs/plan/1", "host": ["{{baseUrl}}"], "path": ["api","setup-jobs","plan","1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Import Log",
+      "item": [
+        {
+          "name": "List all (top 20)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/import-logs/", "host": ["{{baseUrl}}"], "path": ["api","import-logs",""] }
+          }
+        },
+        {
+          "name": "List by factory code",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/import-logs/?factoryCode=TAHARA",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","import-logs",""],
+              "query": [{ "key": "factoryCode", "value": "TAHARA" }]
+            }
+          }
+        },
+        {
+          "name": "Recent (top 20)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwt}}" }],
+            "url": { "raw": "{{baseUrl}}/api/import-logs/recent", "host": ["{{baseUrl}}"], "path": ["api","import-logs","recent"] }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// BASE_URL is set by vite's `base` option at build time:
+//   dev  → '/'      → baseURL = '/api'      → Vite proxy → localhost:8080
+//   prod → '/MES/'  → baseURL = '/MES/api'  → Nginx proxy → localhost:8080
 const axiosInstance = axios.create({
-    baseURL: 'http://localhost:8080/api', // Backend API URL
+    baseURL: `${import.meta.env.BASE_URL}api`,
     withCredentials: true, // ส่ง Credentials (เช่น Cookies) ไปกับทุก Request
     headers: {
         'Cache-Control': 'no-cache',
@@ -57,7 +60,7 @@ axiosInstance.interceptors.response.use(
             if (!isAuthEndpoint) {
                 console.warn('Unauthorized (401). Redirecting to login.');
                 localStorage.removeItem('token');
-                window.location.href = '/login';
+                window.location.href = import.meta.env.BASE_URL;
             }
         }
         return Promise.reject(error);

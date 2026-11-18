@@ -18,11 +18,23 @@ public interface PackagingLogRepository extends JpaRepository<PackagingLog, Long
     // เมธอดสำหรับนับจำนวน (ใช้ใน Dashboard และการตรวจสอบสิทธิ์)
     long countByReportId(Long reportId);
 
-    // เมธอดสำหรับหา Box No. ล่าสุด
+    List<PackagingLog> findByReportIdOrderByLotNumberAscBoxNoAsc(Long reportId);
+
+    // เมธอดสำหรับหา Box No. ล่าสุด (ใช้สำหรับ estimate เท่านั้น — ไม่ atomic)
     PackagingLog findTopByReportIdAndLotNumberOrderByBoxNoDesc(Long reportId, String lotNumber);
 
-    // เมธอดสำหรับดึงข้อมูลตามช่วงเวลา (ใช้ใน Shift Leader Dashboard)
+    // Atomic next-box-no: UPDLOCK+HOLDLOCK ป้องกัน race condition แม้ table ว่าง
+    @Query(value = "SELECT ISNULL(MAX(box_no), 0) + 1 FROM packaging_logs WITH (UPDLOCK, HOLDLOCK) " +
+                   "WHERE report_id = :reportId AND lot_number = :lotNumber",
+           nativeQuery = true)
+    Integer nextBoxNoForUpdate(@Param("reportId") Long reportId, @Param("lotNumber") String lotNumber);
+
     List<PackagingLog> findByReportIdAndTimestampBetween(Long reportId, LocalDateTime start, LocalDateTime end);
+
+    @Query("SELECT COUNT(pl) FROM PackagingLog pl WHERE pl.report.id = :reportId AND pl.timestamp BETWEEN :start AND :end")
+    long countByReportIdAndTimestampBetween(@Param("reportId") Long reportId,
+                                            @Param("start") LocalDateTime start,
+                                            @Param("end") LocalDateTime end);
 
     // Added for historical report
     List<PackagingLog> findByReportIdIn(List<Long> reportIds);

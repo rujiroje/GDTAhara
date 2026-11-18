@@ -8,14 +8,13 @@ import com.gdtahara.gdtaharabackend.model.Machine;
 import com.gdtahara.gdtaharabackend.model.Material;
 import com.gdtahara.gdtaharabackend.model.NgType;
 import com.gdtahara.gdtaharabackend.model.Product;
-import com.gdtahara.gdtaharabackend.repository.MachineRepository;
-import com.gdtahara.gdtaharabackend.repository.ProductRepository;
 import com.gdtahara.gdtaharabackend.service.MasterDataService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
@@ -27,17 +26,15 @@ public class MasterDataController {
     @Autowired
     private MasterDataService masterDataService;
 
-    @Autowired
-    private MachineRepository machineRepository;
-
-    @Autowired
-    private ProductRepository productRepository;
-
     @GetMapping("/ng-types")
-    public ResponseEntity<List<NgType>> getAllNgTypes() {
+    public ResponseEntity<List<NgType>> getAllNgTypes(
+            @RequestParam(required = false) String machineType) {
+        if (machineType != null && !machineType.isBlank()) {
+            return ResponseEntity.ok(masterDataService.getNgTypesByMachineType(machineType));
+        }
         return ResponseEntity.ok(masterDataService.getAllNgTypes());
     }
-    
+
     @GetMapping("/materials")
     public ResponseEntity<List<Material>> getAllMaterials() {
         return ResponseEntity.ok(masterDataService.getAllMaterials());
@@ -45,11 +42,11 @@ public class MasterDataController {
 
     @GetMapping("/machines")
     public ResponseEntity<List<Machine>> getAllMachines() {
-        return ResponseEntity.ok(machineRepository.findAll());
+        return ResponseEntity.ok(masterDataService.getAllMachines());
     }
 
     @GetMapping("/products")
     public ResponseEntity<List<Product>> getAllProducts() {
-        return ResponseEntity.ok(productRepository.findAll());
+        return ResponseEntity.ok(masterDataService.getAllProducts());
     }
 }

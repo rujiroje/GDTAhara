@@ -7,6 +7,7 @@ import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,15 +52,33 @@ public class ProductionService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private AuditLogService auditLogService;
+
+    // @Lazy breaks any potential circular dependency and defers proxy creation
+    @Autowired @Lazy
+    private WoExpansionService woExpansionService;
+
     @Transactional(readOnly = true)
     public List<ProductionReportDto> getAllProductionReports() {
         try {
             logger.info("🔍 ProductionService.getAllProductionReports() called");
-            List<ProductionReport> reports = productionReportRepository.findAll();
+            List<ProductionReport> reports = productionReportRepository.findAllWithFetch();
             logger.info("📊 Found {} production reports", reports.size());
-            
+
+            // Pre-load has-data flags in bulk (2 queries instead of 2N)
+            List<Long> ids = reports.stream().map(ProductionReport::getId).collect(Collectors.toList());
+            java.util.Set<Long> withBoxes = new java.util.HashSet<>();
+            java.util.Set<Long> withNg    = new java.util.HashSet<>();
+            if (!ids.isEmpty()) {
+                packagingLogRepository.countBoxesByReportIds(ids)
+                        .stream().filter(r -> ((Long) r[1]) > 0).forEach(r -> withBoxes.add((Long) r[0]));
+                ngLogRepository.countNgQuantityByReportIds(ids)
+                        .stream().filter(r -> ((Long) r[1]) > 0).forEach(r -> withNg.add((Long) r[0]));
+            }
+
             return reports.stream()
-                    .map(this::convertToProductionReportDto)
+                    .map(report -> convertToProductionReportDtoBulk(report, withBoxes, withNg))
                     .collect(Collectors.toList());
         } catch (Exception e) {
             logger.error("❌ Error in getAllProductionReports(): {}", e.getMessage(), e);
@@ -109,6 +128,18 @@ public class ProductionService {
             Product product = productRepository.findById(request.getProductId())
                     .orElseThrow(() -> new EntityNotFoundException("ไม่พบผลิตภัณฑ์ (productId=" + request.getProductId() + ")"));
 
+            // Duplicate date/machine check — prevent two active reports on the same machine in overlapping period
+            List<ProductionReport> conflicts = productionReportRepository.findActiveOverlappingByMachine(
+                    request.getMachineId(), request.getStartDate(), request.getEndDate());
+            if (!conflicts.isEmpty()) {
+                ProductionReport conflict = conflicts.get(0);
+                throw new IllegalArgumentException(
+                        "ไม่สามารถสร้างใบสั่งผลิตได้: เครื่องจักร \"" + machine.getMachineName() + "\" " +
+                        "มีใบสั่งผลิต [" + conflict.getOrderNumber() + "] " +
+                        "อยู่แล้วในช่วงวันที่ " + conflict.getStartDate() + " ถึง " + conflict.getEndDate() +
+                        " (สถานะ: " + conflict.getStatus() + ") กรุณาเลือกช่วงวันที่อื่น หรือยกเลิกใบสั่งผลิตเดิมก่อน");
+            }
+
             // PC user is mandatory (pc_id is NOT NULL). Try principal first, then fallback by role.
             User pcUser = null;
             try {
@@ -147,8 +178,34 @@ public class ProductionService {
             report.setProduct(product);
             report.setPc(pcUser);
 
+            // Auto-generate parentLotNumber to satisfy uk_pr_parent_lot_number.
+            // SQL Server UNIQUE allows only ONE NULL; subsequent inserts with NULL fail.
+            // Format: {machineCode}-{yyyyMMdd}-{sanitisedOrderNumber}  e.g. "RBL101-20260602-PO3520"
+            String machinePart = machine.getMachineCode() != null
+                    ? machine.getMachineCode() : String.valueOf(machine.getId());
+            String datePart    = request.getStartDate().toString().replace("-", "");
+            String orderPart   = request.getOrderNumber().trim()
+                    .replaceAll("[^A-Za-z0-9]", "").toUpperCase();
+            String lotNum = machinePart + "-" + datePart + "-" + orderPart;
+            if (lotNum.length() > 95) lotNum = lotNum.substring(0, 95);
+            report.setParentLotNumber(lotNum);
+
             ProductionReport saved = productionReportRepository.save(report);
             logger.info("✅ Production report created with ID: {} by PC: {}", saved.getId(), pcUser.getUsername());
+            auditLogService.log("CREATE", "ProductionReport", saved.getId(), null,
+                    java.util.Map.of("id", saved.getId(), "orderNumber", String.valueOf(saved.getOrderNumber()),
+                            "status", String.valueOf(saved.getStatus())));
+
+            // Expand WO into daily ProductionPlans (REQUIRES_NEW — never rolls back WO creation)
+            try {
+                WoExpansionService.ExpansionResult exp =
+                        woExpansionService.expandWoToDailyPlans(saved, username);
+                logger.info("WO daily-plan expansion: created={} skipPast={} skipExisting={}",
+                        exp.created(), exp.skipPast(), exp.skipExisting());
+            } catch (Exception ex) {
+                logger.warn("Daily-plan expansion failed for WO id={}: {}", saved.getId(), ex.getMessage());
+            }
+
             return convertToProductionReportDto(saved);
         } catch (IllegalArgumentException | EntityNotFoundException | IllegalStateException ex) {
             // surface clear message to controller (HTTP 400)
@@ -163,33 +220,66 @@ public class ProductionService {
 
     @Transactional
     public ProductionReportDto updateProductionReport(Long id, ReportCreateRequest request) {
+        return updateProductionReport(id, request, null);
+    }
+
+    @Transactional
+    public ProductionReportDto updateProductionReport(Long id, ReportCreateRequest request, String username) {
         try {
             logger.info("🔄 Updating production report ID: {}", id);
-            
+
             ProductionReport report = productionReportRepository.findById(id)
                     .orElseThrow(() -> new EntityNotFoundException("Production report not found with id: " + id));
-            
+
+            String oldStatus = report.getStatus();
+            String oldOrder = report.getOrderNumber();
+
             report.setOrderNumber(request.getOrderNumber());
             report.setStartDate(request.getStartDate());
             report.setEndDate(request.getEndDate());
             report.setTargetQty(request.getTargetQty());
-            
+
             Machine machine = machineRepository.findById(request.getMachineId())
                     .orElseThrow(() -> new EntityNotFoundException("Machine not found with id: " + request.getMachineId()));
             Product product = productRepository.findById(request.getProductId())
                     .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + request.getProductId()));
-            
+
+            // Duplicate date/machine check on update — exclude this report from conflict search
+            List<ProductionReport> conflicts = productionReportRepository.findActiveOverlappingByMachineExcluding(
+                    request.getMachineId(), request.getStartDate(), request.getEndDate(), id);
+            if (!conflicts.isEmpty()) {
+                ProductionReport conflict = conflicts.get(0);
+                throw new IllegalArgumentException(
+                        "ไม่สามารถแก้ไขใบสั่งผลิตได้: เครื่องจักร \"" + machine.getMachineName() + "\" " +
+                        "มีใบสั่งผลิต [" + conflict.getOrderNumber() + "] " +
+                        "อยู่แล้วในช่วงวันที่ " + conflict.getStartDate() + " ถึง " + conflict.getEndDate() +
+                        " (สถานะ: " + conflict.getStatus() + ") กรุณาเลือกช่วงวันที่อื่น");
+            }
+
             report.setMachine(machine);
             report.setProduct(product);
-        // Re-derive status if not finalized
-        String existing = report.getStatus();
-        if (!isTerminalStatus(existing)) {
-        report.setStatus(deriveStatusForDates(report.getStartDate(), report.getEndDate(), existing));
-        }
-            
+            String existing = report.getStatus();
+            if (!isTerminalStatus(existing)) {
+                report.setStatus(deriveStatusForDates(report.getStartDate(), report.getEndDate(), existing));
+            }
+
             ProductionReport savedReport = productionReportRepository.save(report);
             logger.info("✅ Production report updated successfully");
-            
+            auditLogService.log("UPDATE", "ProductionReport", id,
+                    java.util.Map.of("id", id, "orderNumber", String.valueOf(oldOrder), "status", String.valueOf(oldStatus)),
+                    java.util.Map.of("id", savedReport.getId(), "orderNumber", String.valueOf(savedReport.getOrderNumber()),
+                            "status", String.valueOf(savedReport.getStatus())));
+
+            // Re-expand WO into daily plans (skips existing, so safe to call on update)
+            try {
+                WoExpansionService.ExpansionResult exp =
+                        woExpansionService.expandWoToDailyPlans(savedReport, username);
+                logger.info("WO daily-plan re-expansion: created={} skipPast={} skipExisting={}",
+                        exp.created(), exp.skipPast(), exp.skipExisting());
+            } catch (Exception ex) {
+                logger.warn("Daily-plan expansion failed for WO id={}: {}", id, ex.getMessage());
+            }
+
             return convertToProductionReportDto(savedReport);
         } catch (Exception e) {
             logger.error("❌ Error updating production report: {}", e.getMessage(), e);
@@ -199,12 +289,20 @@ public class ProductionService {
 
     @Transactional
     public void deleteProductionReport(Long id) {
+        deleteProductionReport(id, null);
+    }
+
+    @Transactional
+    public void deleteProductionReport(Long id, String username) {
         try {
             logger.info("🗑️ Deleting production report ID: {}", id);
-            
+
             ProductionReport report = productionReportRepository.findById(id)
                     .orElseThrow(() -> new EntityNotFoundException("Production report not found with id: " + id));
-            
+
+            auditLogService.log("DELETE", "ProductionReport", id,
+                    java.util.Map.of("id", id, "orderNumber", String.valueOf(report.getOrderNumber()),
+                            "status", String.valueOf(report.getStatus())), null);
             productionReportRepository.delete(report);
             logger.info("✅ Production report deleted successfully");
         } catch (Exception e) {
@@ -235,7 +333,14 @@ public class ProductionService {
 
     @Transactional
     public void finalizeReport(Long id) {
+        finalizeReport(id, null);
+    }
+
+    @Transactional
+    public void finalizeReport(Long id, String username) {
         finalizeProductionReport(id);
+        auditLogService.log("FINALIZE", "ProductionReport", id,
+                java.util.Map.of("id", id), java.util.Map.of("id", id, "status", "COMPLETED"));
     }
 
     @Transactional(readOnly = true)
@@ -256,6 +361,17 @@ public class ProductionService {
                     report.getStatus());
             });
             
+            // Pre-load counts in bulk (2 queries total regardless of N active reports)
+            List<Long> activeIds = activeReports.stream().map(ProductionReport::getId).collect(java.util.stream.Collectors.toList());
+            Map<Long, Long> boxCountMap = new HashMap<>();
+            Map<Long, Long> ngCountMap  = new HashMap<>();
+            if (!activeIds.isEmpty()) {
+                packagingLogRepository.countBoxesByReportIds(activeIds)
+                        .forEach(row -> boxCountMap.put((Long) row[0], (Long) row[1]));
+                ngLogRepository.countNgQuantityByReportIds(activeIds)
+                        .forEach(row -> ngCountMap.put((Long) row[0], (Long) row[1]));
+            }
+
             List<PcDashboardSummaryDto> results = activeReports.stream()
                     .map(report -> {
                         Long reportId = report.getId();
@@ -263,46 +379,15 @@ public class ProductionService {
                         String productName = report.getProduct() != null ? report.getProduct().getProductName() : "ไม่ระบุ";
                         Integer targetQty = report.getTargetQty() != null ? report.getTargetQty() : 0;
 
-                        // Calculate good quantity = number of packaging logs (boxes) * qtyPerBox (fallback 0 if null)
-                        long boxCount = 0L;
-                        try {
-                            Long counted = packagingLogRepository.countPackagesByReportId(reportId);
-                            boxCount = counted != null ? counted : 0L;
-                            logger.debug("📦 Report {}: box count = {}", reportId, boxCount);
-                        } catch (Exception ex) {
-                            logger.warn("⚠️ Cannot count packaging logs for report {}: {}", reportId, ex.getMessage());
-                        }
-                        
-                        int qtyPerBox = 1; // Default to 1 if null
-                        if (report.getProduct() != null && report.getProduct().getQtyPerBox() != null) {
-                            qtyPerBox = report.getProduct().getQtyPerBox();
-                        }
+                        long boxCount = boxCountMap.getOrDefault(reportId, 0L);
+                        int qtyPerBox = (report.getProduct() != null && report.getProduct().getQtyPerBox() != null)
+                                ? report.getProduct().getQtyPerBox() : 1;
                         long goodQty = boxCount * qtyPerBox;
+                        long ngQty   = ngCountMap.getOrDefault(reportId, 0L);
 
-                        // Calculate NG quantity (sum of ng logs)
-                        long ngQty = 0L;
-                        try {
-                            Long summed = ngLogRepository.sumQuantityByReportId(reportId);
-                            ngQty = summed != null ? summed : 0L;
-                            logger.debug("🔥 Report {}: ng quantity = {}", reportId, ngQty);
-                        } catch (Exception ex) {
-                            logger.warn("⚠️ Cannot sum NG logs for report {}: {}", reportId, ex.getMessage());
-                        }
-
-            PcDashboardSummaryDto dto = new PcDashboardSummaryDto(
-                reportId,
-                machineName,
-                productName,
-                targetQty,
-                goodQty,
-                ngQty
-            );
-            // ใส่เลขที่คำสั่งผลิต
-            dto.setOrderNumber(report.getOrderNumber());
-            // ใส่สถานะตามนโยบายแสดงผล (IN_PROGRESS/ACTIVE/INACTIVE)
-            dto.setStatus(deriveDisplayStatus(report));
-                        
-                        logger.info("✅ Created dashboard summary DTO: {}", dto);
+                        PcDashboardSummaryDto dto = new PcDashboardSummaryDto(reportId, machineName, productName, targetQty, goodQty, ngQty);
+                        dto.setOrderNumber(report.getOrderNumber());
+                        dto.setStatus(deriveDisplayStatus(report));
                         return dto;
                     })
                     .sorted((dto1, dto2) -> {
@@ -599,6 +684,31 @@ public class ProductionService {
         return dto;
     }
 
+    /** Bulk-friendly variant — caller pre-loads has-data sets to avoid 2N individual queries. */
+    private ProductionReportDto convertToProductionReportDtoBulk(
+            ProductionReport report,
+            java.util.Set<Long> withBoxes,
+            java.util.Set<Long> withNg) {
+        ProductionReportDto dto = new ProductionReportDto();
+        dto.setId(report.getId());
+        dto.setOrderNumber(report.getOrderNumber());
+        dto.setStartDate(report.getStartDate());
+        dto.setEndDate(report.getEndDate());
+        dto.setMachineName(report.getMachine() != null ? report.getMachine().getMachineName() : "ไม่ระบุ");
+        dto.setMachineId(report.getMachine() != null ? String.valueOf(report.getMachine().getId()) : null);
+        dto.setProductName(report.getProduct() != null ? report.getProduct().getProductName() : "ไม่ระบุ");
+        dto.setTargetQty(report.getTargetQty());
+        String statusCode = deriveDisplayStatus(report);
+        dto.setStatus(statusCode);
+        boolean hasProductionData = withBoxes.contains(report.getId()) || withNg.contains(report.getId());
+        boolean isInProgress = "IN_PROGRESS".equalsIgnoreCase(statusCode);
+        boolean isActive     = "ACTIVE".equalsIgnoreCase(statusCode);
+        dto.setFinalizable(isInProgress || isActive);
+        dto.setEditable(isInProgress && !hasProductionData);
+        dto.setDeletable(!hasProductionData);
+        return dto;
+    }
+
     // --- New status helpers implementing business rules ---
     private boolean isTerminalStatus(String status) {
         if (status == null) return false;
@@ -620,13 +730,14 @@ public class ProductionService {
     private String deriveDisplayStatus(ProductionReport report) {
         String raw = report.getStatus() != null ? report.getStatus().trim().toUpperCase() : "";
         if (isTerminalStatus(raw)) {
-            return "INACTIVE"; // display as Inactive if closed/completed
+            return "INACTIVE";
         }
         LocalDate start = report.getStartDate();
-        LocalDate end = report.getEndDate();
+        LocalDate end   = report.getEndDate();
         LocalDate today = LocalDate.now();
-        boolean within = (start == null || !today.isBefore(start)) && (end == null || !today.isAfter(end));
-        return within ? "IN_PROGRESS" : "ACTIVE";
+        if (start != null && today.isBefore(start)) return "PENDING";   // future — not yet started
+        if (end   != null && today.isAfter(end))    return "ACTIVE";    // expired — past end date
+        return "IN_PROGRESS";                                            // today within range
     }
 
     @Transactional(readOnly = true)
@@ -675,78 +786,44 @@ public class ProductionService {
     // --- Helpers ---
     private List<ProductionReport> getActiveReportsRobust() {
         logger.info("🔍 Starting getActiveReportsRobust()...");
-        
+
         java.time.LocalDate today = java.time.LocalDate.now();
-        java.util.List<String> activeStatuses = java.util.List.of("IN_PROGRESS", "IN PROGRESS", "IN-PROGRESS", "INPROGRESS", "ACTIVE");
-        java.util.List<String> terminalStatuses = java.util.List.of("COMPLETED", "COMPLETE", "DONE", "FINISHED");
-        
+        // Terminal statuses — reports with these statuses are excluded even if date spans today
+        java.util.List<String> terminalStatuses = java.util.List.of(
+                "COMPLETED", "COMPLETE", "DONE", "FINISHED",
+                "CANCELLED", "CANCELED", "CLOSED", "FINALIZED");
+
         try {
-            // Try the optimized fast query first
+            // Primary query: startDate <= today <= endDate AND status not terminal
             List<ProductionReport> fast = productionReportRepository.findActiveReportsFast(
-                    activeStatuses.stream().map(String::toUpperCase).toList(),
-                    terminalStatuses.stream().map(String::toUpperCase).toList(),
+                    java.util.List.of(), // activeStatuses no longer used in query
+                    terminalStatuses,
                     today
             );
             logger.info("⚡ Fast active detection returned {} record(s)", fast.size());
-            
             if (!fast.isEmpty()) {
                 return fast;
             }
-            
         } catch (Exception ex) {
-            logger.warn("⚠️ Fast active detection failed: {} — falling back to simple search", ex.getMessage());
+            logger.warn("⚠️ Fast active detection failed: {} — falling back", ex.getMessage());
         }
-        
-        // Fallback: Try simple status-based queries
+
+        // Fallback: query last 90 days (never a full-table scan)
+        logger.info("🔍 Fallback: querying last 90 days non-terminal reports for today={}", today);
         java.util.List<ProductionReport> result = new java.util.ArrayList<>();
-        java.util.Set<Long> seen = new java.util.HashSet<>();
-        
-        for (String status : java.util.List.of("IN_PROGRESS", "IN PROGRESS", "ACTIVE", "In Progress")) {
-            try {
-                logger.info("🔍 Trying status: '{}'", status);
-                List<ProductionReport> reports = productionReportRepository.findByStatus(status);
-                logger.info("📊 Found {} reports with status '{}'", reports.size(), status);
-                
-                for (ProductionReport pr : reports) {
-                    if (pr != null && pr.getId() != null && seen.add(pr.getId())) {
-                        result.add(pr);
-                        logger.info("✅ Added report ID: {} (Machine: {}, Product: {})", 
-                            pr.getId(),
-                            pr.getMachine() != null ? pr.getMachine().getMachineName() : "null",
-                            pr.getProduct() != null ? pr.getProduct().getProductName() : "null");
-                    }
-                }
-            } catch (Exception ignore) {
-                logger.warn("⚠️ Failed to query status '{}': {}", status, ignore.getMessage());
+        try {
+            java.time.LocalDate lookback = today.minusDays(90);
+            List<ProductionReport> recent = productionReportRepository
+                    .findRecentNonTerminalWithFetch(lookback, terminalStatuses);
+            for (ProductionReport report : recent) {
+                if (report.getStartDate() == null || report.getEndDate() == null) continue;
+                if (report.getStartDate().isAfter(today) || report.getEndDate().isBefore(today)) continue;
+                result.add(report);
             }
+        } catch (Exception e) {
+            logger.error("❌ Fallback failed: {}", e.getMessage(), e);
         }
-        
-        // Final fallback: get all reports and filter by status
-        if (result.isEmpty()) {
-            logger.info("🔍 Final fallback: querying ALL reports and filtering...");
-            try {
-                List<ProductionReport> allReports = productionReportRepository.findAll();
-                logger.info("📊 Total reports in database: {}", allReports.size());
-                
-                for (ProductionReport report : allReports) {
-                    if (report != null && report.getStatus() != null) {
-                        String status = report.getStatus().trim().toUpperCase();
-                        logger.debug("🔍 Checking report {} with status: '{}'", report.getId(), status);
-                        
-                        if (activeStatuses.stream().anyMatch(s -> s.equals(status)) && seen.add(report.getId())) {
-                            result.add(report);
-                            logger.info("✅ Added report ID: {} (status: '{}', Machine: {}, Product: {})", 
-                                report.getId(), report.getStatus(),
-                                report.getMachine() != null ? report.getMachine().getMachineName() : "null",
-                                report.getProduct() != null ? report.getProduct().getProductName() : "null");
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                logger.error("❌ Final fallback failed: {}", e.getMessage(), e);
-            }
-        }
-        
+
         logger.info("🏁 getActiveReportsRobust() completed - returning {} active reports", result.size());
         return result;
     }
@@ -855,8 +932,7 @@ public class ProductionService {
 
     @Transactional(readOnly = true)
     public List<ProductionReportDto> getTodaysActiveProductionReports() {
-        // For now, return all active reports
-        return getActiveProductionReports();
+        return getActiveProductionReports(); // getActiveReportsRobust() already filters by today
     }
 
     @Transactional(readOnly = true)
@@ -870,69 +946,53 @@ public class ProductionService {
             
             logger.info("📊 Found {} production reports in date range", reports.size());
             
+            // Pre-load all counts in bulk — 3 queries regardless of how many reports
+            List<Long> reportIds = reports.stream().map(ProductionReport::getId).collect(java.util.stream.Collectors.toList());
+            Map<Long, Long> boxCountMap   = new HashMap<>();
+            Map<Long, Long> ngCountMap    = new HashMap<>();
+            Map<Long, java.math.BigDecimal> scrapMap = new HashMap<>();
+            if (!reportIds.isEmpty()) {
+                packagingLogRepository.countBoxesByReportIds(reportIds)
+                        .forEach(row -> boxCountMap.put((Long) row[0], (Long) row[1]));
+                ngLogRepository.countNgQuantityByReportIds(reportIds)
+                        .forEach(row -> ngCountMap.put((Long) row[0], (Long) row[1]));
+                scrapWeightLogRepository.sumScrapWeightByReportIds(reportIds)
+                        .forEach(row -> scrapMap.put((Long) row[0], (java.math.BigDecimal) row[1]));
+            }
+
             List<HistoricalReportSummaryDto> summaries = new ArrayList<>();
-            
             for (ProductionReport report : reports) {
                 try {
+                    Long id = report.getId();
+                    long totalBoxes = boxCountMap.getOrDefault(id, 0L);
+                    long ngQty      = ngCountMap.getOrDefault(id, 0L);
+                    int  qtyPerBox  = (report.getProduct() != null && report.getProduct().getQtyPerBox() != null)
+                                        ? report.getProduct().getQtyPerBox() : 0;
+                    long goodQty    = totalBoxes * qtyPerBox;
+                    java.math.BigDecimal totalScrapWeight = scrapMap.getOrDefault(id, java.math.BigDecimal.ZERO);
+
+                    String yield = "0.00%";
+                    Integer targetQty = report.getTargetQty() != null ? report.getTargetQty() : 0;
+                    if (targetQty > 0 && goodQty > 0) {
+                        double yieldPercent = (Math.max(goodQty - ngQty, 0) / (double) targetQty) * 100.0;
+                        yield = String.format("%.2f%%", yieldPercent);
+                    }
+
                     HistoricalReportSummaryDto dto = new HistoricalReportSummaryDto();
-                    dto.setId(report.getId());
+                    dto.setId(id);
                     dto.setOrderNumber(report.getOrderNumber());
                     dto.setStartDate(report.getStartDate());
                     dto.setEndDate(report.getEndDate());
                     dto.setMachineName(report.getMachine() != null ? report.getMachine().getMachineName() : "-");
                     dto.setProductName(report.getProduct() != null ? report.getProduct().getProductName() : "-");
-                    
-                    // Calculate good quantity from packaging logs
-                    Long goodQty = 0L;
-                    Long totalBoxes = 0L;
-                    try {
-                        Long packageCount = packagingLogRepository.countPackagesByReportId(report.getId());
-                        if (packageCount != null && packageCount > 0) {
-                            totalBoxes = packageCount;
-                            Integer qtyPerBox = (report.getProduct() != null && report.getProduct().getQtyPerBox() != null) 
-                                              ? report.getProduct().getQtyPerBox() : 0;
-                            goodQty = packageCount * qtyPerBox;
-                        }
-                    } catch (Exception ex) {
-                        logger.warn("Cannot calculate good quantity for report {}: {}", report.getId(), ex.getMessage());
-                    }
-                    
-                    // Calculate NG quantity
-                    Long ngQty = 0L;
-                    try {
-                        Long ngSum = ngLogRepository.sumQuantityByReportId(report.getId());
-                        ngQty = ngSum != null ? ngSum : 0L;
-                    } catch (Exception ex) {
-                        logger.warn("Cannot calculate NG quantity for report {}: {}", report.getId(), ex.getMessage());
-                    }
-                    
-                    // Calculate yield
-                    String yield = "0.00%";
-                    Integer targetQty = report.getTargetQty() != null ? report.getTargetQty() : 0;
-                    if (targetQty > 0 && goodQty > 0) {
-                        double actualGoodQty = Math.max(goodQty - ngQty, 0);
-                        double yieldPercent = (actualGoodQty / targetQty) * 100.0;
-                        yield = String.format("%.2f%%", yieldPercent);
-                    }
-                    
-                    // Calculate total scrap weight
-                    java.math.BigDecimal totalScrapWeight = java.math.BigDecimal.ZERO;
-                    try {
-                        java.math.BigDecimal scrapWeight = scrapWeightLogRepository.sumWeightByReportId(report.getId());
-                        totalScrapWeight = scrapWeight != null ? scrapWeight : java.math.BigDecimal.ZERO;
-                    } catch (Exception ex) {
-                        logger.warn("Cannot calculate scrap weight for report {}: {}", report.getId(), ex.getMessage());
-                    }
-                    
                     dto.setGoodQty(goodQty);
                     dto.setNgQty(ngQty);
                     dto.setYield(yield);
                     dto.setTotalBoxes(totalBoxes);
                     dto.setTotalScrapWeight(totalScrapWeight);
                     dto.setStatus(report.getStatus() != null ? report.getStatus() : "Unknown");
-                    
                     summaries.add(dto);
-                    
+
                 } catch (Exception ex) {
                     logger.error("Error processing report {}: {}", report.getId(), ex.getMessage(), ex);
                 }

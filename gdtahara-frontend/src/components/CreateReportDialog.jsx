@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 
 // เพิ่ม prop initialData เพื่อรับข้อมูลเดิมมาแก้ไข
-const CreateReportDialog = ({ open, onClose, onSaveSuccess, onError, activeReports, initialData }) => {
+const CreateReportDialog = ({ open, onClose, _onSaveSuccess, _onError, _activeReports, initialData }) => {
     const [machines, setMachines] = useState([]);
     const [products, setProducts] = useState([]);
     const [formData, setFormData] = useState({});
@@ -50,7 +50,7 @@ const CreateReportDialog = ({ open, onClose, onSaveSuccess, onError, activeRepor
 
     const handleSave = async () => {
     //           VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-    const payload = {
+    const _payload = {
         ...formData,
         targetQty: parseInt(formData.targetQty, 10) || 0,
         machineId: formData.machineId, // ต้องเป็น ID อยู่แล้ว

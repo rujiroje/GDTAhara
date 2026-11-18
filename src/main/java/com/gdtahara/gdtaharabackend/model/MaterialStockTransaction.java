@@ -13,21 +13,28 @@ public class MaterialStockTransaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne @JoinColumn(name = "material_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "material_id", nullable = false)
     private Material material;
 
     private String transactionType; // "IN" or "OUT"
     private BigDecimal quantity;
     private String lotNumber;
 
-    @ManyToOne @JoinColumn(name = "user_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne @JoinColumn(name = "production_report_id")
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "production_report_id")
     private ProductionReport productionReport;
 
     @Column(nullable = false)
     private LocalDateTime timestamp;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "bom_item_id", nullable = true)
+    private BomItem bomItem;
+
+    // V34: remaining_qty added to track lot balance for CM refill picking
+    private BigDecimal remainingQty;
 
     @PrePersist
     protected void onCreate() {

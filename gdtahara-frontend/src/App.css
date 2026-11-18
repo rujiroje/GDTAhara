@@ -118,9 +118,10 @@ body {
 }
 
 .nav-container {
-  max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 1.5rem;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -172,9 +173,10 @@ body {
 }
 
 .dashboard-main {
-  max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
-  padding: 1.5rem 1rem;
+  padding: 1.5rem 1.5rem;
+  box-sizing: border-box;
 }
 
 .dashboard-card {
@@ -962,4 +964,179 @@ body {
     padding: 1.5rem;
     border-radius: 0.5rem;
     margin-bottom: 2rem;
+}
+
+/* =======================================================
+   Mobile Responsive — max-width: 768px
+   ======================================================= */
+@media (max-width: 768px) {
+
+  /* Navbar */
+  .nav-container {
+    height: auto;
+    min-height: 3.5rem;
+    padding: 0.5rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .user-greeting {
+    display: none;
+  }
+
+  .nav-brand {
+    font-size: 1rem;
+  }
+
+  /* Main content */
+  .dashboard-main {
+    padding: 0.75rem;
+  }
+
+  .dashboard-card {
+    padding: 1rem;
+  }
+
+  /* Titles */
+  .sl-title,
+  .pc-dashboard-title {
+    font-size: 1.25rem;
+  }
+
+  .kpi-value {
+    font-size: 1.75rem;
+  }
+
+  /* ── Headers with space-between → stack ── */
+  .sl-header,
+  .pc-dashboard-header,
+  .table-header,
+  .lot-number-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  /* ── 2-column grids → 1 column ── */
+  .task-choice-container,
+  .summary-section-grid,
+  .production-management-content {
+    grid-template-columns: 1fr;
+  }
+
+  .form-section {
+    border-right: none;
+    padding-right: 0;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 1.5rem;
+  }
+
+  /* ── Gauge/Machine grid → 1 column ── */
+  .gauge-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* ── KPI grid → 2 columns max ── */
+  .kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+  }
+
+  /* ── Filter panel → stack ── */
+  .filter-panel {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-panel > * {
+    width: 100%;
+  }
+
+  /* ── Packaging grid → stack ── */
+  .packaging-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* ── Selected report info → stack ── */
+  .selected-report-info {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* ── Notification item → stack ── */
+  .notification-item {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .acknowledge-button {
+    width: 100%;
+  }
+
+  /* ── Form actions → stack, full width ── */
+  .form-actions {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .form-actions .cancel-button,
+  .form-actions .save-button {
+    width: 100%;
+    text-align: center;
+  }
+
+  /* ── Tabs → horizontal scroll ── */
+  .tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tabs button {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
+
+  /* ── Modal → nearly full screen ── */
+  .modal-content {
+    width: 95%;
+    padding: 1rem;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+
+  .modal-body {
+    max-height: 55vh;
+  }
+
+  /* ── Table header buttons → wrap ── */
+  .table-header {
+    gap: 0.5rem;
+  }
+
+  .table-header h3 {
+    font-size: 1rem;
+  }
+
+  /* ── NG buttons → larger touch targets ── */
+  .ng-button {
+    padding: 1.25rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  /* ── Task choice buttons → full padding ── */
+  .task-choice-button {
+    padding: 1.25rem;
+    font-size: 1rem;
+  }
+
+  /* ── SL subtitle block ── */
+  .sl-subtitle {
+    font-size: 0.875rem;
+  }
 }

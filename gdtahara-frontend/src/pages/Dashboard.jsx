@@ -9,11 +9,12 @@ import { useAuth } from "../App";
 import AdminDashboard from "../components/admin/AdminDashboard";
 import ProductionControlDashboard from "../components/pc/ProductionControlDashboard";
 import ShiftLeaderDashboard from "../components/shift-leader/ShiftLeaderDashboard";
-import OperatorDashboard from "../components/operator/OperatorDashboard";
+import OperatorDashboard from "./OperatorDashboard"; // MUI version with Run Card v2
 import TechnicianDashboard from "../components/technician/TechnicianDashboard";
 import QaDashboard from "../components/qa/QaDashboard";
 import CmOperatorDashboard from "../components/cm-operator/CmOperatorDashboard";
-import DocMgmtDashboard from "../components/doc-mgmt/DocMgmtDashboard"; // Kept for backward-compat/import order, not used for now
+import CmOperatorHub from "../components/cm-operator/CmOperatorHub";
+import DocHub from "../components/doc-mgmt/DocHub";
 
 // --- Dashboard Layout ---
 const Dashboard = () => {
@@ -36,10 +37,10 @@ const Dashboard = () => {
         return <AdminDashboard />;
       case "Production Control": 
         return <ProductionControlDashboard />;
-      // Route Document/Management to the same PC dashboard to ensure identical behavior
       case "Management":
-      case "Document":
         return <ProductionControlDashboard />;
+      case "Document":
+        return <DocHub />;
       case "Shift Leader": 
         return <ShiftLeaderDashboard />;
       case "Operator": 
@@ -48,8 +49,8 @@ const Dashboard = () => {
         return <TechnicianDashboard />;
       case "QA": 
         return <QaDashboard />;
-      case "CM Operator": 
-        return <CmOperatorDashboard />;
+      case "CM Operator":
+        return <CmOperatorHub />;
       default:
         return ( <div className="dashboard-card"> <h2>ยินดีต้อนรับ, {user.username}</h2> <p>ยังไม่มีหน้าจอสำหรับบทบาท: {user.role}</p> </div> );
     }

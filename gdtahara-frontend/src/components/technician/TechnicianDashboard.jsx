@@ -4,12 +4,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import _ from 'lodash';
+import { Badge, Box, Tab, Tabs } from '@mui/material';
+import BuildIcon from '@mui/icons-material/Build';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import ParameterChecklistForm from './ParameterChecklistForm';
 import PmSchedulePanel from './PmSchedulePanel';
-import RecipePanel from '../pc/RecipePanel';
+import SetupJobPanel from './SetupJobPanel';
+import MachineSelectGrid from '../common/MachineSelectGrid';
 
 // --- API Service ---
-const API_URL = 'http://localhost:8080/api';
+const API_URL = `${import.meta.env.BASE_URL}api`;
 const api = axios.create({ baseURL: API_URL });
 
 api.interceptors.request.use(config => {
@@ -342,11 +346,13 @@ const ParameterRecordsView = ({ records, onEdit, onAddNew, onBack }) => (
 );
 
 const TechnicianDashboard = () => {
+    const [activeTab, setActiveTab] = useState(0);
+
     const [activeReports, setActiveReports] = useState([]);
     const [selectedReport, setSelectedReport] = useState(null);
     const [error, setError] = useState('');
-    
-    const [currentView, setCurrentView] = useState('reportList'); 
+
+    const [currentView, setCurrentView] = useState('reportList');
     const [parameterRecords, setParameterRecords] = useState([]);
     const [currentRecord, setCurrentRecord] = useState(null); 
     const [formData, setFormData] = useState(_.cloneDeep(initialParameterFormData));
@@ -392,10 +398,11 @@ const TechnicianDashboard = () => {
         setter(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleBackToReportSelection = () => {
+    const _handleBackToReportSelection = () => {
         setSelectedReport(null);
         setCurrentView('reportList');
-        fetchActiveReports(); // Add this line
+        setActiveTab(1);
+        fetchActiveReports();
     };
 
     const handleDowntimeSubmit = async (e) => {
@@ -515,7 +522,7 @@ const TechnicianDashboard = () => {
 
     const renderMainTaskView = () => (
         <>
-            <button onClick={() => {setSelectedReport(null); setCurrentView('reportList');}} className="back-button"> &larr; กลับไปหน้ารายการ</button>
+            <button onClick={_handleBackToReportSelection} className="back-button"> &larr; กลับไปหน้ารายการ</button>
             <h2 className="dashboard-title">บันทึกข้อมูลเทคนิค</h2>
             <div className="selected-report-info">
                 <span><strong>เครื่องจักร:</strong> {selectedReport.machineName}</span>
@@ -593,24 +600,55 @@ const TechnicianDashboard = () => {
     return (
         <div className="dashboard-card">
             <NotificationPanel />
-            <PmSchedulePanel />
-            <RecipePanel />
-            <h2 className="dashboard-title">เลือกใบสั่งผลิตเพื่อบันทึกข้อมูล</h2>
-            {error && <p className="error-message">{error}</p>}
-            {(!activeReports || activeReports.length === 0) && !error && <p>ไม่มีใบสั่งผลิตที่กำลังทำงานอยู่</p>}
-            <div className="report-selection-container">
-                {activeReports && Array.isArray(activeReports) && activeReports.map(report => (
-                    <div key={report.id} className="report-card">
-                        <h3>{report.machineName}</h3>
-                        <p>{report.productName}</p>
-                        {report.orderNumber && <p>Order No.: {report.orderNumber}</p>}
-                        <p>วันที่: {report.startDate} – {report.endDate}</p>
-                        <button className="select-button" onClick={() => setSelectedReport(report)}>
-                            เลือก
-                        </button>
-                    </div>
-                ))}
-            </div>
+
+            {/* ── Tab bar ─────────────────────────────────────────────── */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                <Tabs
+                    value={activeTab}
+                    onChange={(_, v) => setActiveTab(v)}
+                    variant="fullWidth"
+                >
+                    <Tab
+                        icon={<BuildIcon fontSize="small" />}
+                        iconPosition="start"
+                        label="งาน Setup"
+                        sx={{ fontWeight: 700, minHeight: 48 }}
+                    />
+                    <Tab
+                        icon={
+                            <Badge badgeContent={activeReports.length || null} color="warning">
+                                <AssignmentIcon fontSize="small" />
+                            </Badge>
+                        }
+                        iconPosition="start"
+                        label="บันทึกข้อมูลผลิต"
+                        sx={{ fontWeight: 700, minHeight: 48 }}
+                    />
+                </Tabs>
+            </Box>
+
+            {/* ── Tab 0: Setup + PM ───────────────────────────────────── */}
+            {activeTab === 0 && (
+                <>
+                    <SetupJobPanel />
+                    <PmSchedulePanel />
+                </>
+            )}
+
+            {/* ── Tab 1: Production recording ──────────────────────────── */}
+            {activeTab === 1 && (
+                <>
+                    {error && <p className="error-message">{error}</p>}
+                    <MachineSelectGrid
+                        reports={activeReports ?? []}
+                        onSelect={(report) => {
+                            setSelectedReport(report);
+                            setCurrentView('reportList');
+                        }}
+                        title="เลือกใบสั่งผลิตเพื่อบันทึกข้อมูล"
+                    />
+                </>
+            )}
         </div>
     );
 };

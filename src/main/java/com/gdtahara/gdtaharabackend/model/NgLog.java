@@ -30,6 +30,9 @@ public class NgLog {
     private String source;
     private Integer quantity;
 
+    @Column(length = 500)
+    private String note;
+
     @Column(nullable = false)
     private LocalDateTime timestamp;
 

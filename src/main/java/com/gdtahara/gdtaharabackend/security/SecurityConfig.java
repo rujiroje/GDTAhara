@@ -1,8 +1,9 @@
 package com.gdtahara.gdtaharabackend.security;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod; 
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -10,24 +11,37 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.access.AccessDeniedHandlerImpl;
+import com.gdtahara.gdtaharabackend.filter.AuditRequestFilter;
+import com.gdtahara.gdtaharabackend.filter.LoginRateLimitFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
 import java.time.Duration;
 import java.util.Arrays;
+
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:8081,http://localhost:3000}")
+    private String[] allowedOrigins;
+
     private final JwtAuthFilter jwtAuthFilter;
     private final AuthenticationProvider authenticationProvider;
+    private final AuditRequestFilter auditRequestFilter;
+    private final LoginRateLimitFilter loginRateLimitFilter;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter, AuthenticationProvider authenticationProvider) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter, AuthenticationProvider authenticationProvider,
+                          AuditRequestFilter auditRequestFilter,
+                          LoginRateLimitFilter loginRateLimitFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.authenticationProvider = authenticationProvider;
+        this.auditRequestFilter = auditRequestFilter;
+        this.loginRateLimitFilter = loginRateLimitFilter;
     }
 
     @Bean
@@ -39,37 +53,58 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/error", "/error/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/setup-checklist/photos/**").permitAll()
                 .requestMatchers("/test-api.html", "/favicon.ico", "/static/**").permitAll()
                 .requestMatchers("/health", "/").permitAll()
-                
-                // แยก paths ให้ชัดเจน และเพิ่ม production paths
-                .requestMatchers("/api/production/**").authenticated() // สำหรับ ProductionController
-                .requestMatchers("/api/pc/production/**").authenticated() // สำหรับ PC production endpoints
-                .requestMatchers("/api/pc/**").authenticated()         // สำหรับ PC endpoints อื่นๆ
-                .requestMatchers("/api/reports/**").authenticated()    // สำหรับ ReportController
-                .requestMatchers("/api/master-data/**").authenticated() // สำหรับ MasterDataController
-                .requestMatchers("/api/cm-operator/**").authenticated() // สำหรับ CmOperatorController
-                
-                // เพิ่ม /api/technician/** สำหรับ TechnicianController
+                // Swagger UI — must be open so JWT filter does not block the browser UI
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                // Actuator: health for load-balancer; prometheus for Prometheus scraper
+                // Restrict /actuator/prometheus at the network/firewall level in production
+                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                .requestMatchers("/actuator/prometheus").permitAll()
+                .requestMatchers("/actuator/info").permitAll()
+                // All other actuator endpoints require authentication
+                .requestMatchers("/actuator/**").authenticated()
+
+                .requestMatchers("/api/production/**").authenticated()
+                .requestMatchers("/api/pc/production/**").authenticated()
+                .requestMatchers("/api/pc/**").authenticated()
+                .requestMatchers("/api/reports/**").authenticated()
+                .requestMatchers("/api/master-data/**").authenticated()
+                .requestMatchers("/api/cm-operator/**").authenticated()
+
                 .requestMatchers("/api/technician/**").hasAnyAuthority(
-                    "ROLE_Technician", 
+                    "ROLE_Technician",
                     "ROLE_DataAdmin",
                     "ROLE_Production Control"
                 )
-                
+
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authenticationProvider(authenticationProvider)
+            .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(auditRequestFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .anonymous(anonymous -> anonymous.disable())
             .exceptionHandling(exceptions -> exceptions
-                .accessDeniedHandler(accessDeniedHandler())
+                // 401 for unauthenticated / bad token — keeps it distinct from 403
+                .authenticationEntryPoint((request, response, ex) -> {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\":\"Unauthorized\"}");
+                })
+                // 403 for authenticated users lacking the required role
+                .accessDeniedHandler((request, response, ex) -> {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\":\"Forbidden\"}");
+                })
             )
-            .headers(headers -> 
-                headers.frameOptions(frameOptions -> 
+            .headers(headers ->
+                headers.frameOptions(frameOptions ->
                     frameOptions.sameOrigin()
                 )
             );
@@ -78,28 +113,13 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AccessDeniedHandlerImpl accessDeniedHandler() {
-        AccessDeniedHandlerImpl handler = new AccessDeniedHandlerImpl();
-        handler.setErrorPage("/error/403");
-        System.out.println("Access Denied: User does not have the required role or authority.");
-        return handler;
-    }
-
-    @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // อัปเดต ports
-        configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:5173",  // Frontend (Vite)
-            "http://localhost:8081",  // Backend (ตัวเอง)
-            "http://localhost:3000"   // Frontend (React/Next.js)
-        ));
+        configuration.setAllowedOrigins(Arrays.asList(allowedOrigins));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
-        // อนุญาตทุก header (dev) เพื่อหลีกเลี่ยงปัญหา preflight ซ้ำ ๆ
         configuration.addAllowedHeader("*");
         configuration.setExposedHeaders(Arrays.asList("X-Total-Count", "X-Debug-Info", "X-Error-Message"));
         configuration.setAllowCredentials(true);
-        // ลดความถี่ของ preflight
         configuration.setMaxAge(Duration.ofHours(1));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

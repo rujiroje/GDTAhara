@@ -6,7 +6,7 @@ import axios from 'axios';
 import MachineStatusPanel from '../common/MachineStatusPanel';
 
 // --- API Service (ควรย้ายไปไฟล์กลาง) ---
-const API_URL = 'http://localhost:8080/api';
+const API_URL = `${import.meta.env.BASE_URL}api`;
 const api = axios.create({ baseURL: API_URL });
 api.interceptors.request.use(config => {
     const token = localStorage.getItem('token');
@@ -17,7 +17,7 @@ api.interceptors.request.use(config => {
         if (!config.params) config.params = {};
         config.params.lang = lang;
         config.headers['Accept-Language'] = lang;
-    } catch {}
+    } catch { /* intentional: no-op if localStorage/navigator unavailable */ }
     return config;
 }, error => Promise.reject(error));
 
@@ -279,15 +279,13 @@ const OperatorDashboard = () => {
         return ( <div className="dashboard-card"> {activeTask === null && renderTaskChoice()} {activeTask === 'ng' && renderNgRecording()} {activeTask === 'packaging' && renderPackagingRecording()} <Modal isOpen={isAlertModalOpen} onClose={() => setIsAlertModalOpen(false)} title="แจ้งปัญหา"> <form onSubmit={handleAlertSubmit}> <div className="form-group"> <label className="form-label">กรุณาระบุเหตุผล</label> <textarea value={alertReason} onChange={(e) => setAlertReason(e.target.value)} className="form-input" rows="4" required /> </div> <div className="form-actions"> <button type="button" onClick={() => setIsAlertModalOpen(false)} className="cancel-button">ยกเลิก</button> <button type="submit" className="save-button">ยืนยันการแจ้ง</button> </div> </form> </Modal> </div> );
     }
 
-    const machineList = activeReports
+    const _machineList = activeReports
         .filter((r, i, arr) => r.machineId && arr.findIndex(x => x.machineId === r.machineId) === i)
         .map(r => ({ id: parseInt(r.machineId), machineName: r.machineName }))
         .filter(m => !isNaN(m.id));
 
     return ( <div className="dashboard-card">
         <h2 className="dashboard-title">เลือกใบสั่งผลิตเพื่อเริ่มทำงาน</h2>
-        <MachineStatusPanel machines={machineList} />
-        
         {error && <p className="error-message">{error}</p>} 
         {activeReports.length === 0 && !error && <p>ไม่มีใบสั่งผลิตที่กำลังทำงานอยู่</p>} 
         <div className="report-selection-container"> {activeReports.map(report => ( <div key={report.id} className="report-card"> <h3>{report.machineName}</h3> <p>{report.productName}</p> {report.orderNumber && <p>Order No.: {report.orderNumber}</p>} <p>วันที่: {report.startDate} – {report.endDate}</p> <button className="select-button" onClick={() => setSelectedReport(report)}> เลือก </button> </div> ))} </div> </div> );

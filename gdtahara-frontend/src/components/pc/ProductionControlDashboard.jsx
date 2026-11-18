@@ -3,9 +3,15 @@ import Chart from 'react-apexcharts';
 import axios from 'axios';
 import { t, getLang } from '../../i18n/t';
 import { useAuth } from '../../App';
+import PlanImportPanel from './PlanImportPanel';
+import BomUploadPage from './BomUploadPage';
+import BomViewerPage from './BomViewerPage';
+import MaterialRequirementDashboard from './MaterialRequirementDashboard';
+import VarianceReportPage from './VarianceReportPage';
+import BlowDailyReportPage from './BlowDailyReportPage';
 
 // --- API Service ---
-const API_URL = 'http://localhost:8080/api';
+const API_URL = `${import.meta.env.BASE_URL}api`;
 const api = axios.create({
     baseURL: API_URL,
     withCredentials: true, // ส่ง Credentials (เช่น Cookies) ไปกับทุก Request
@@ -22,7 +28,7 @@ api.interceptors.request.use(config => {
         if (!config.params) config.params = {};
         config.params.lang = lang;
         config.headers['Accept-Language'] = lang;
-    } catch {}
+    } catch { /* intentional: no-op if localStorage/navigator unavailable */ }
     return config;
 }, error => Promise.reject(error));
 
@@ -1995,10 +2001,11 @@ const ProductionOrderManagement = ({ onBack, onViewDetail, machines, products, a
                 <h3>{t('productionOverviewTitle')}</h3>
                 <div>
                   <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input" style={{marginRight: '1rem', display: 'inline-block', width: 'auto'}}>
-                    <option value="all">{t('all')}</option>
-                    <option value="IN_PROGRESS">{t('inProgress')}</option>
+                    <option value="all">{getLang() === 'en' ? 'All' : 'ทั้งหมด'}</option>
+                    <option value="IN_PROGRESS">{getLang() === 'en' ? 'In Progress' : 'กำลังดำเนินการ'}</option>
+                    <option value="PENDING">{getLang() === 'en' ? 'Pending (Not started)' : 'พร้อมทำงาน (รอเริ่ม)'}</option>
                     <option value="ACTIVE">{getLang() === 'en' ? 'Expired (Not closed)' : 'หมดเวลา (รอปิดงาน)'}</option>
-                    <option value="INACTIVE">{t('inactive')}</option>
+                    <option value="INACTIVE">{getLang() === 'en' ? 'Closed' : 'ปิดงานแล้ว'}</option>
                   </select>
                   {canManage && <button className="add-button" onClick={handleOpenCreateModal}>{t('createNewOrder') || 'สร้างใบสั่งผลิตใหม่'}</button>}
                 </div>
@@ -2044,7 +2051,7 @@ const ProductionOrderManagement = ({ onBack, onViewDetail, machines, products, a
     );
 };
 
-const HistoricalReports = ({ onBack, onViewDetail, onViewDailyReport, onViewDailyShiftReport, machines, products }) => {
+const HistoricalReports = ({ onBack, onViewDetail, onViewDailyReport, onViewDailyShiftReport, onViewBlowDailyReport, machines, products }) => {
     const [filters, setFilters] = useState({ startDate: new Date().toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0], machineId: 'all', productId: 'all' });
     const [results, setResults] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -2156,6 +2163,7 @@ const HistoricalReports = ({ onBack, onViewDetail, onViewDailyReport, onViewDail
                                     <button className="add-button" onClick={() => onViewDetail(report.id)}>1. {t('orderOverview')}</button>
                                     <button className="edit-button" onClick={() => onViewDailyReport(report)}>2. {t('dailySummary')}</button>
                                     <button className="finalize-button" onClick={() => onViewDailyShiftReport(report)}>3. {t('dailyShiftSummary')}</button>
+                                    <button style={{background:'#1a3a5c',color:'#fff',border:'none',borderRadius:4,padding:'4px 8px',cursor:'pointer',fontSize:'0.78rem',fontWeight:600}} onClick={() => onViewBlowDailyReport && onViewBlowDailyReport(report)}>4. ใบรายงานประจำวัน BLOW</button>
                                 </td></tr>))}
                             </tbody>
                         </table>
@@ -2452,6 +2460,49 @@ const HistoricalReportsSection = () => {
     );
 };
 
+// --- Dropdown Menu Group ---
+const MenuGroup = ({ label, color, isOpen, onToggle, items }) => (
+    <div style={{ position: 'relative' }}>
+        <button
+            onClick={onToggle}
+            style={{
+                background: color, color: '#fff', border: 'none', borderRadius: 6,
+                padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem',
+                display: 'flex', alignItems: 'center', gap: 6,
+                boxShadow: isOpen ? `0 0 0 3px ${color}40` : 'none',
+            }}
+        >
+            {label}
+            <span style={{ fontSize: '0.65rem', opacity: 0.85 }}>{isOpen ? '▲' : '▼'}</span>
+        </button>
+        {isOpen && (
+            <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200,
+                background: '#fff', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.14)',
+                minWidth: 210, overflow: 'hidden', border: '1px solid #e5e7eb',
+            }}>
+                {items.map((item, i) => (
+                    <button
+                        key={i}
+                        onClick={item.onClick}
+                        style={{
+                            display: 'block', width: '100%', textAlign: 'left',
+                            padding: '10px 16px', background: 'none', border: 'none',
+                            cursor: 'pointer', fontSize: '0.875rem', color: '#374151',
+                            borderBottom: i < items.length - 1 ? '1px solid #f3f4f6' : 'none',
+                            transition: 'background 0.1s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#111'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#374151'; }}
+                    >
+                        {item.label}
+                    </button>
+                ))}
+            </div>
+        )}
+    </div>
+);
+
 // --- Main PC Dashboard Component ---
 const ProductionControlDashboard = () => {
     const { user } = useAuth();
@@ -2468,6 +2519,7 @@ const ProductionControlDashboard = () => {
     const [products, setProducts] = useState([]);
     const [allReports, setAllReports] = useState([]);
     const [dashboardData, setDashboardData] = useState([]);
+    const [openMenu, setOpenMenu] = useState(null);
 
     const fetchData = async () => {
         console.log('🔄 fetchData called, loading state:', loading);
@@ -2612,7 +2664,7 @@ const ProductionControlDashboard = () => {
     const changeView = (newView, data = null) => {
         console.log('🔄 ProductionControlDashboard: changeView called with view:', newView, 'data:', data);
         console.log('🔄 Current view:', view, 'Selected date:', selectedDate);
-        
+
         setPreviousView(view);
         if (newView === 'detail') {
             setSelectedReportId(data);
@@ -2622,6 +2674,9 @@ const ProductionControlDashboard = () => {
         } else if (newView === 'dailySelector' || newView === 'dailyShiftSelector') {
             console.log('🗑️ Resetting selectedDate');
             setSelectedDate(null); // Reset when going to selector
+        } else if (newView === 'blowDailyReport' && data) {
+            setSelectedReportId(data.id);
+            setSelectedDate(data.startDate || new Date().toISOString().split('T')[0]);
         }
         console.log('🎯 Setting view to:', newView);
         setView(newView);
@@ -2650,9 +2705,10 @@ const ProductionControlDashboard = () => {
         return <ReportDetailView reportId={selectedReportId} onBack={() => changeView(previousView)} />;
     } else if (view === 'history') {
         return (
-            <HistoricalReports 
-                onBack={() => changeView('dashboard')} 
-                onViewDetail={(id) => changeView('detail', id)} 
+            <HistoricalReports
+                onBack={() => changeView('dashboard')}
+                onViewDetail={(id) => changeView('detail', id)}
+                onViewBlowDailyReport={(report) => changeView('blowDailyReport', report)}
                 onViewDailyReport={(report) => {
                     // สร้าง context จาก report ที่เลือก เพื่อให้ Daily กรองถูกใบสั่ง
                     const machine = Array.isArray(machines) ? machines.find(m => (m.machineName || '').toString() === (report.machineName || '').toString()) : null;
@@ -2742,18 +2798,69 @@ const ProductionControlDashboard = () => {
             productId={dailyContext?.productId || null}
             orderNumber={dailyContext?.orderNumber || null}
         />;
+    } else if (view === 'machineSchedule') {
+        return <MachineScheduleCalendar onBack={() => changeView('dashboard')} allReports={allReports} machines={machines} />;
+    } else if (view === 'import') {
+        return <PlanImportPanel onBack={() => changeView('dashboard')} />;
+    } else if (view === 'bomUpload') {
+        return <BomUploadPage onBack={() => changeView('dashboard')} />;
+    } else if (view === 'bomViewer') {
+        return <BomViewerPage onBack={() => changeView('dashboard')} />;
+    } else if (view === 'materialRequirement') {
+        return <MaterialRequirementDashboard onBack={() => changeView('dashboard')} />;
+    } else if (view === 'variance') {
+        return <VarianceReportPage onBack={() => changeView('dashboard')} />;
+    } else if (view === 'blowDailyReport') {
+        return <BlowDailyReportPage
+            reportId={selectedReportId}
+            initialDate={selectedDate}
+            onBack={() => changeView('history')}
+        />;
     }
 
     // Default view: 'dashboard'
     return (
-        <div className="pc-dashboard-container">
+        <div className="pc-dashboard-container" onClick={() => openMenu && setOpenMenu(null)}>
+            {/* Backdrop to close dropdown when clicking outside */}
+            {openMenu && (
+                <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 100 }}
+                    onClick={e => { e.stopPropagation(); setOpenMenu(null); }}
+                />
+            )}
             <div className="pc-dashboard-header">
                 <h2 className="pc-dashboard-title">{t('productionOverviewTitle')}</h2>
-                <div>
-                    <button className="manage-reports-button" onClick={() => changeView('history')} style={{ marginRight: '1rem' }}>{t('viewHistoricalReports')}</button>
-                                        {canManage && (
-                      <button className="manage-reports-button" onClick={() => changeView('manage')}>{t('manageProductionOrders')}</button>
-                    )}
+                <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap', alignItems: 'center', position: 'relative', zIndex: 101 }}>
+                    {/* แผนการผลิต group */}
+                    <MenuGroup
+                        label="📋 แผนการผลิต"
+                        color="#6f42c1"
+                        isOpen={openMenu === 'plan'}
+                        onToggle={e => { e.stopPropagation(); setOpenMenu(openMenu === 'plan' ? null : 'plan'); }}
+                        items={[
+                            { label: '📊 ดูรายงานย้อนหลัง', onClick: () => { changeView('history'); setOpenMenu(null); } },
+                            { label: '📅 ตารางแผนการผลิต', onClick: () => { changeView('machineSchedule'); setOpenMenu(null); } },
+                            ...(canManage ? [
+                                { label: '📥 นำเข้าแผน Excel', onClick: () => { changeView('import'); setOpenMenu(null); } },
+                                { label: '⚙️ จัดการใบสั่งผลิต', onClick: () => { changeView('manage'); setOpenMenu(null); } },
+                            ] : []),
+                        ]}
+                    />
+                    {/* BOM group */}
+                    <MenuGroup
+                        label="🗂️ BOM"
+                        color="#0891b2"
+                        isOpen={openMenu === 'bom'}
+                        onToggle={e => { e.stopPropagation(); setOpenMenu(openMenu === 'bom' ? null : 'bom'); }}
+                        items={[
+                            { label: '🔍 ดู BOM (สูตรผลิต)', onClick: () => { changeView('bomViewer'); setOpenMenu(null); } },
+                            { label: '📦 ความต้องการ RM', onClick: () => { changeView('materialRequirement'); setOpenMenu(null); } },
+                            { label: '📊 รายงาน Variance', onClick: () => { changeView('variance'); setOpenMenu(null); } },
+                            ...(canManage ? [
+                                { label: '📤 นำเข้า BOM', onClick: () => { changeView('bomUpload'); setOpenMenu(null); } },
+                            ] : []),
+                        ]}
+                    />
                 </div>
             </div>
             {error && <p className="error-message">{error}</p>}
@@ -2777,6 +2884,227 @@ const ProductionControlDashboard = () => {
                         />
                     </div>
                 ))}
+            </div>
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Machine Schedule Calendar — monthly grid: rows = machines, columns = days
+// ─────────────────────────────────────────────────────────────────────────────
+const MachineScheduleCalendar = ({ onBack, allReports, machines }) => {
+    const today = new Date();
+    const [year, setYear]   = React.useState(today.getFullYear());
+    const [month, setMonth] = React.useState(today.getMonth()); // 0-indexed
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    const monthNames = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                        'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const monthNamesEn = ['January','February','March','April','May','June',
+                          'July','August','September','October','November','December'];
+
+    const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y-1); } else setMonth(m => m-1); };
+    const nextMonth = () => { if (month === 11) { setMonth(0);  setYear(y => y+1); } else setMonth(m => m+1); };
+
+    // Build lookup: machineName → list of reports active in this month
+    const reports = Array.isArray(allReports) ? allReports : [];
+
+    // Get unique machine names (from reports + master list)
+    const machineNames = React.useMemo(() => {
+        const fromReports = reports.map(r => r.machineName).filter(Boolean);
+        const fromMasters = Array.isArray(machines) ? machines.map(m => m.machineName || m.name).filter(Boolean) : [];
+        return [...new Set([...fromMasters, ...fromReports])].sort();
+    }, [reports, machines]);
+
+    // Color per status
+    const statusColor = (status) => {
+        if (!status) return '#adb5bd';
+        const s = status.toUpperCase();
+        if (s === 'IN_PROGRESS') return '#28a745';
+        if (s === 'PENDING')     return '#007bff';
+        if (s === 'ACTIVE')      return '#fd7e14';
+        if (s === 'INACTIVE')    return '#6c757d';
+        return '#adb5bd';
+    };
+    const statusLabel = (status) => {
+        if (!status) return '';
+        const s = status.toUpperCase();
+        if (s === 'IN_PROGRESS') return 'กำลังผลิต';
+        if (s === 'PENDING')     return 'รอเริ่ม';
+        if (s === 'ACTIVE')      return 'หมดเวลา';
+        if (s === 'INACTIVE')    return 'ปิดแล้ว';
+        return status;
+    };
+
+    // Check if a report covers a specific day in this month
+    const reportsForCell = (machineName, day) => {
+        const cellDate = new Date(year, month, day);
+        return reports.filter(r => {
+            if ((r.machineName || '') !== machineName) return false;
+            if (!r.startDate || !r.endDate) return false;
+            const start = new Date(r.startDate);
+            const end   = new Date(r.endDate);
+            return start <= cellDate && cellDate <= end;
+        });
+    };
+
+    const isToday = (day) => {
+        return today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+    };
+
+    // ยอดผลิต/วัน = targetQty ÷ จำนวนวันของ WO (ป้องกันเข้าใจผิดว่าต้องผลิตยอดรวม)
+    const calcDailyQty = (r) => {
+        if (r.targetQty == null || !r.startDate || !r.endDate) return null;
+        const spanDays = Math.max(1,
+            Math.round((new Date(r.endDate) - new Date(r.startDate)) / 86400000) + 1);
+        return Math.round(r.targetQty / spanDays);
+    };
+
+    const lang = typeof getLang === 'function' ? getLang() : 'th';
+
+    return (
+        <div style={{ padding: '1.5rem' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
+                <button onClick={onBack} className="back-button">&larr; {lang === 'en' ? 'Back' : 'กลับ'}</button>
+                <h2 style={{ margin: 0, flexGrow: 1 }}>
+                    📅 {lang === 'en' ? 'Machine Production Schedule' : 'ตารางแผนการผลิตตามเครื่องจักร'}
+                </h2>
+                {/* Month navigator */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button onClick={prevMonth} style={{ padding: '0.3rem 0.8rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc' }}>◀</button>
+                    <span style={{ fontWeight: 'bold', minWidth: '160px', textAlign: 'center', fontSize: '1rem' }}>
+                        {lang === 'en' ? monthNamesEn[month] : monthNames[month]} {year}
+                    </span>
+                    <button onClick={nextMonth} style={{ padding: '0.3rem 0.8rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc' }}>▶</button>
+                </div>
+            </div>
+
+            {/* Legend */}
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap', fontSize: '0.8rem' }}>
+                {[['IN_PROGRESS','กำลังผลิต'],['PENDING','รอเริ่ม'],['ACTIVE','หมดเวลา'],['INACTIVE','ปิดแล้ว']].map(([s,label]) => (
+                    <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: statusColor(s), display: 'inline-block' }}/>
+                        {label}
+                    </span>
+                ))}
+            </div>
+
+            {/* Calendar table */}
+            <div style={{ overflowX: 'auto' }}>
+                <table style={{ borderCollapse: 'collapse', minWidth: '900px', width: '100%', fontSize: '0.78rem' }}>
+                    <thead>
+                        <tr style={{ backgroundColor: '#343a40', color: '#fff' }}>
+                            <th style={{ padding: '8px 12px', textAlign: 'left', minWidth: '110px', position: 'sticky', left: 0, backgroundColor: '#343a40', zIndex: 2 }}>
+                                {lang === 'en' ? 'Machine' : 'เครื่องจักร'}
+                            </th>
+                            {days.map(d => (
+                                <th key={d} style={{
+                                    padding: '6px 2px', textAlign: 'center', minWidth: '28px',
+                                    backgroundColor: isToday(d) ? '#ffc107' : '#343a40',
+                                    color: isToday(d) ? '#000' : '#fff',
+                                    fontWeight: isToday(d) ? 'bold' : 'normal'
+                                }}>{d}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {machineNames.map((machineName, rowIdx) => (
+                            <tr key={machineName} style={{ backgroundColor: rowIdx % 2 === 0 ? '#f8f9fa' : '#fff' }}>
+                                <td style={{
+                                    padding: '6px 10px', fontWeight: 600, fontSize: '0.8rem',
+                                    position: 'sticky', left: 0, backgroundColor: rowIdx % 2 === 0 ? '#f8f9fa' : '#fff',
+                                    borderRight: '2px solid #dee2e6', zIndex: 1
+                                }}>{machineName}</td>
+                                {days.map(d => {
+                                    const cellReports = reportsForCell(machineName, d);
+                                    return (
+                                        <td key={d} style={{
+                                            padding: '2px', textAlign: 'center', verticalAlign: 'middle',
+                                            border: '1px solid #dee2e6',
+                                            backgroundColor: isToday(d) ? '#fff9e6' : 'transparent'
+                                        }}>
+                                            {cellReports.map(r => (
+                                                <div key={r.id}
+                                                     title={`${r.orderNumber}\n${r.productName || ''}\nยอด/วัน: ${calcDailyQty(r) != null ? calcDailyQty(r).toLocaleString() : '-'}\nยอดรวม WO: ${r.targetQty != null ? r.targetQty.toLocaleString() : '-'}\n${r.startDate} – ${r.endDate}\n${statusLabel(r.status)}`}
+                                                     style={{
+                                                         backgroundColor: statusColor(r.status),
+                                                         color: '#fff', borderRadius: '3px',
+                                                         padding: '2px 3px', fontSize: '0.62rem',
+                                                         marginBottom: '1px', cursor: 'default',
+                                                         overflow: 'hidden', maxWidth: '100%',
+                                                         lineHeight: 1.3,
+                                                     }}>
+                                                    <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.orderNumber}</div>
+                                                    {r.productName && (
+                                                        <div style={{ opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.58rem' }}>
+                                                            {r.productName}
+                                                        </div>
+                                                    )}
+                                                    {r.targetQty != null && (
+                                                        <div style={{ opacity: 0.85, fontSize: '0.58rem', whiteSpace: 'nowrap' }}>
+                                                            {(calcDailyQty(r) ?? 0).toLocaleString()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        ))}
+                        {machineNames.length === 0 && (
+                            <tr><td colSpan={daysInMonth + 1} style={{ textAlign: 'center', padding: '2rem', color: '#6c757d' }}>
+                                {lang === 'en' ? 'No data' : 'ไม่มีข้อมูล'}
+                            </td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Summary list for this month */}
+            <div style={{ marginTop: '2rem' }}>
+                <h4 style={{ marginBottom: '0.75rem' }}>
+                    {lang === 'en' ? 'Production Orders This Month' : `รายการใบสั่งผลิตในเดือน ${monthNames[month]} ${year}`}
+                </h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                        <tr style={{ backgroundColor: '#e9ecef' }}>
+                            {['เลขที่คำสั่ง','เครื่องจักร','ผลิตภัณฑ์','เป้าผลิต (Qty)','วันเริ่ม','วันสิ้นสุด','สถานะ'].map(h => (
+                                <th key={h} style={{ padding: '8px 10px', textAlign: h === 'เป้าผลิต (Qty)' ? 'right' : 'left', border: '1px solid #dee2e6' }}>{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {reports.filter(r => {
+                            if (!r.startDate || !r.endDate) return false;
+                            const start = new Date(r.startDate);
+                            const end   = new Date(r.endDate);
+                            const mStart = new Date(year, month, 1);
+                            const mEnd   = new Date(year, month + 1, 0);
+                            return start <= mEnd && end >= mStart;
+                        }).sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+                        .map(r => (
+                            <tr key={r.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                                <td style={{ padding: '6px 10px', fontWeight: 600 }}>{r.orderNumber}</td>
+                                <td style={{ padding: '6px 10px' }}>{r.machineName}</td>
+                                <td style={{ padding: '6px 10px' }}>{r.productName}</td>
+                                <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: '#374151' }}>
+                                    {r.targetQty != null ? r.targetQty.toLocaleString() : '-'}
+                                </td>
+                                <td style={{ padding: '6px 10px' }}>{r.startDate}</td>
+                                <td style={{ padding: '6px 10px' }}>{r.endDate}</td>
+                                <td style={{ padding: '6px 10px' }}>
+                                    <span style={{ backgroundColor: statusColor(r.status), color: '#fff', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+                                        {statusLabel(r.status)}
+                                    </span>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );

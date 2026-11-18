@@ -31,3 +31,18 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Environment secrets — never commit
+.env
+deploy/.env.deploy
+
+# Node.js dev utilities (root-level scripts — not part of Spring Boot app)
+node_modules/
+
+# Screenshot outputs
+screenshots-*/
+test-screenshots/
+screenshots-manual/
+
+# Claude Code worktrees
+.claude/worktrees/

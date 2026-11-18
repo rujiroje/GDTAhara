@@ -4,6 +4,9 @@ import com.gdtahara.gdtaharabackend.dto.*;
 import com.gdtahara.gdtaharabackend.model.*;
 import com.gdtahara.gdtaharabackend.repository.*;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
@@ -13,6 +16,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -35,9 +39,9 @@ public class ShiftLeaderService {
     private final ProductRepository productRepository;
     private final LabelStockRepository labelStockRepository;
     private final MachineRepository machineRepository;
+    private final AuditLogService auditLogService;
 
-
-    public ShiftLeaderService(ProductionReportRepository productionReportRepository, PackagingLogRepository packagingLogRepository, NgLogRepository ngLogRepository, DowntimeEventRepository downtimeEventRepository, MaterialRepository materialRepository, MaterialStockTransactionRepository transactionRepository, NgTypeRepository ngTypeRepository, UserRepository userRepository, MaterialUsageLogRepository materialUsageLogRepository, ScrapWeightLogRepository scrapWeightLogRepository, ProductRepository productRepository, LabelStockRepository labelStockRepository, MachineRepository machineRepository) {
+    public ShiftLeaderService(ProductionReportRepository productionReportRepository, PackagingLogRepository packagingLogRepository, NgLogRepository ngLogRepository, DowntimeEventRepository downtimeEventRepository, MaterialRepository materialRepository, MaterialStockTransactionRepository transactionRepository, NgTypeRepository ngTypeRepository, UserRepository userRepository, MaterialUsageLogRepository materialUsageLogRepository, ScrapWeightLogRepository scrapWeightLogRepository, ProductRepository productRepository, LabelStockRepository labelStockRepository, MachineRepository machineRepository, AuditLogService auditLogService) {
         this.productionReportRepository = productionReportRepository;
         this.packagingLogRepository = packagingLogRepository;
         this.ngLogRepository = ngLogRepository;
@@ -51,6 +55,7 @@ public class ShiftLeaderService {
         this.productRepository = productRepository;
         this.labelStockRepository = labelStockRepository;
         this.machineRepository = machineRepository;
+        this.auditLogService = auditLogService;
     }
 
     public List<ProductionReportSimpleViewDto> getActiveReportsForShiftLeader() {
@@ -168,22 +173,40 @@ public class ShiftLeaderService {
             transaction.setProductionReport(report);
         }
 
-        return transactionRepository.save(transaction);
+        MaterialStockTransaction saved = transactionRepository.save(transaction);
+        auditLogService.log("CREATE", "MaterialStockTransaction", saved.getId(), null,
+                java.util.Map.of("materialId", String.valueOf(request.getMaterialId()),
+                        "transactionType", String.valueOf(request.getTransactionType()),
+                        "quantity", String.valueOf(request.getQuantity()),
+                        "createdBy", username));
+        return saved;
     }
 
     @Transactional
-    public MaterialStockTransaction updateStockTransaction(Long transactionId, StockTransactionRequestDto request) {
+    public MaterialStockTransaction updateStockTransaction(Long transactionId, StockTransactionRequestDto request, String username) {
         MaterialStockTransaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new EntityNotFoundException("Transaction not found with id: " + transactionId));
 
+        if (!isAdminOrOwner(transaction, username)) {
+            throw new AccessDeniedException("Access denied: you do not own this transaction");
+        }
+
         Material material = materialRepository.findById(request.getMaterialId())
                 .orElseThrow(() -> new EntityNotFoundException("Material not found"));
+
+        BigDecimal oldQty = transaction.getQuantity();
+        String oldLot = transaction.getLotNumber();
 
         transaction.setMaterial(material);
         transaction.setQuantity(request.getQuantity());
         transaction.setLotNumber(request.getLotNumber());
 
-        return transactionRepository.save(transaction);
+        MaterialStockTransaction saved = transactionRepository.save(transaction);
+        auditLogService.log("UPDATE", "MaterialStockTransaction", transactionId,
+                java.util.Map.of("id", transactionId, "quantity", String.valueOf(oldQty), "lotNumber", String.valueOf(oldLot)),
+                java.util.Map.of("id", transactionId, "quantity", String.valueOf(request.getQuantity()),
+                        "lotNumber", String.valueOf(request.getLotNumber())));
+        return saved;
     }
 
     @Transactional
@@ -199,7 +222,12 @@ public class ShiftLeaderService {
         ngLog.setQuantity(request.getQuantity());
         ngLog.setSource("ShiftLeader");
 
-        return ngLogRepository.save(ngLog);
+        NgLog savedLog = ngLogRepository.save(ngLog);
+        auditLogService.log("CREATE", "NgLog", savedLog.getId(), null,
+                java.util.Map.of("id", savedLog.getId(), "reportId", String.valueOf(reportId),
+                        "ngTypeId", String.valueOf(request.getNgTypeId()),
+                        "quantity", String.valueOf(request.getQuantity()), "source", "ShiftLeader"));
+        return savedLog;
     }
 
     private ShiftDataDto calculateShiftData(ProductionReport report, LocalDateTime startTime, LocalDateTime endTime) {
@@ -233,7 +261,7 @@ public class ShiftLeaderService {
                     return new DowntimeEventSummaryDto(startTimeStr, endTimeStr, durationStr, reason, technician, event.getSolution() != null ? event.getSolution() : "");
                 }).collect(Collectors.toList());
             } catch (Exception e) {
-                System.out.println("Warning: Cannot fetch downtime events: " + e.getMessage());
+                logger.warn("Cannot fetch downtime events: {}", e.getMessage());
             }
 
             List<MaterialUsageLog> materialUsageLogsRaw = materialUsageLogRepository.findByReportIdAndTimestampBetween(reportId, startTime, endTime);
@@ -284,8 +312,7 @@ public class ShiftLeaderService {
             shiftData.setTotalScrapWeight(totalScrapWeight);
             return shiftData;
         } catch (Exception e) {
-            System.out.println("Error calculating shift data: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error calculating shift data: {}", e.getMessage(), e);
             return createEmptyShiftData();
         }
     }
@@ -314,22 +341,54 @@ public class ShiftLeaderService {
         labelStockRepository.save(stock);
     }
 
+    /** Lightweight summary — 2 SQL queries total regardless of material count */
+    @Transactional(readOnly = true)
+    public List<StockSummaryDto> getStockSummaries() {
+        Map<Long, BigDecimal> balanceMap = transactionRepository.findBalancesForAllMaterials()
+                .stream()
+                .collect(Collectors.toMap(
+                    row -> (Long) row[0],
+                    row -> (BigDecimal) row[1]
+                ));
+        return materialRepository.findAll().stream()
+                .map(m -> new StockSummaryDto(
+                    m.getId(), m.getMaterialCode(), m.getMaterialName(), m.getUnit(),
+                    balanceMap.getOrDefault(m.getId(), BigDecimal.ZERO)
+                ))
+                .sorted(Comparator.comparing(StockSummaryDto::getMaterialCode))
+                .collect(Collectors.toList());
+    }
+
+    /** Per-material history with JOIN FETCH — no N+1 */
+    @Transactional(readOnly = true)
+    public MaterialStockCardDto getStockCardForMaterial(Long materialId) {
+        Material material = materialRepository.findById(materialId)
+                .orElseThrow(() -> new EntityNotFoundException("ไม่พบวัตถุดิบ"));
+        List<MaterialStockTransactionDto> history = transactionRepository
+                .findByMaterialIdWithDetailsOrderByTimestampDesc(materialId)
+                .stream()
+                .map(this::convertToTransactionDto)
+                .collect(Collectors.toList());
+        BigDecimal balance = transactionRepository.getStockBalanceByMaterialId(materialId);
+        return new MaterialStockCardDto(
+                material.getId(), material.getMaterialCode(), material.getMaterialName(),
+                balance != null ? balance.doubleValue() : 0.0,
+                history
+        );
+    }
+
+    /** @deprecated ใช้ getStockSummaries() + getStockCardForMaterial() แทน */
     public List<MaterialStockCardDto> getMaterialStocks() {
         return materialRepository.findAll().stream().map(material -> {
-            List<MaterialStockTransactionDto> history = transactionRepository.findByMaterialIdOrderByTimestampDesc(material.getId())
-                    .stream()
+            List<MaterialStockTransaction> txList = transactionRepository.findByMaterialIdOrderByTimestampDesc(material.getId());
+            List<MaterialStockTransactionDto> history = txList.stream()
                     .map(this::convertToTransactionDto)
                     .collect(Collectors.toList());
-
-            Double currentStock = calculateCurrentStock(material.getId());
-
-            return new MaterialStockCardDto(
-                material.getId(),
-                material.getMaterialCode(),
-                material.getMaterialName(),
-                currentStock,
-                history
-            );
+            BigDecimal stock = txList.stream().reduce(BigDecimal.ZERO, (acc, t) ->
+                "IN".equals(t.getTransactionType()) ? acc.add(t.getQuantity()) : acc.subtract(t.getQuantity()),
+                BigDecimal::add);
+            return new MaterialStockCardDto(material.getId(), material.getMaterialCode(), material.getMaterialName(),
+                    stock.doubleValue(), history);
         }).collect(Collectors.toList());
     }
 
@@ -347,19 +406,6 @@ public class ShiftLeaderService {
             productionInfo,
             transaction.getUser().getUsername()
         );
-    }
-
-    private Double calculateCurrentStock(Long materialId) {
-        List<MaterialStockTransaction> transactions = transactionRepository.findByMaterialIdOrderByTimestampDesc(materialId);
-        BigDecimal stock = BigDecimal.ZERO;
-        for (MaterialStockTransaction transaction : transactions) {
-            if ("IN".equals(transaction.getTransactionType())) {
-                stock = stock.add(transaction.getQuantity());
-            } else if ("OUT".equals(transaction.getTransactionType())) {
-                stock = stock.subtract(transaction.getQuantity());
-            }
-        }
-        return stock.doubleValue();
     }
 
     private ShiftDataDto createEmptyShiftData() {
@@ -386,7 +432,7 @@ public class ShiftLeaderService {
                 "Size Error", "Shape Error", "Other"
             );
         } catch (Exception e) {
-            System.out.println("Error getting NG types: " + e.getMessage());
+            logger.error("Error getting NG types: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
@@ -401,7 +447,7 @@ public class ShiftLeaderService {
                     .map(Machine::getMachineName)
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            System.out.println("Error getting machines: " + e.getMessage());
+            logger.error("Error getting machines: {}", e.getMessage(), e);
             return Arrays.asList("Machine 1", "Machine 2", "Machine 3");
         }
     }
@@ -411,7 +457,7 @@ public class ShiftLeaderService {
             createSampleDataForTestingInternal();
             return "Sample data created successfully with test machines, products, and production reports.";
         } catch (Exception e) {
-            System.out.println("Error creating sample data: " + e.getMessage());
+            logger.error("Error creating sample data: {}", e.getMessage(), e);
             return "Error creating sample data: " + e.getMessage();
         }
     }
@@ -421,7 +467,7 @@ public class ShiftLeaderService {
             createSampleNgTypes();
             createSampleProductionReport();
         } catch (Exception e) {
-            System.out.println("Warning: Could not create sample data - " + e.getMessage());
+            logger.warn("Could not create sample data: {}", e.getMessage());
         }
     }
 
@@ -457,5 +503,14 @@ public class ShiftLeaderService {
 
             productionReportRepository.save(report);
         }
+    }
+
+    private boolean isAdminOrOwner(MaterialStockTransaction transaction, String username) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_DataAdmin"));
+        if (isAdmin) return true;
+        return transaction.getUser() != null
+                && username.equals(transaction.getUser().getUsername());
     }
 }

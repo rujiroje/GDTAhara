@@ -12,9 +12,11 @@ import java.util.Optional; // เพิ่ม import
 
 @Repository
 public interface NgTypeRepository extends JpaRepository<NgType, Long> {
-    Optional<NgType> findByNgCode(String ngCode); // เพิ่มเมธอดนี้
-    
-    // เพิ่มเมธอดสำหรับค้นหา NG Types ตาม Type
+    Optional<NgType> findByNgCode(String ngCode);
+
     List<NgType> findByNgType(String ngType);
     List<NgType> findByNgTypeIgnoreCase(String ngType);
+
+    List<NgType> findByMachineTypeAndNgType(String machineType, String ngType);
+    List<NgType> findByMachineType(String machineType);
 }

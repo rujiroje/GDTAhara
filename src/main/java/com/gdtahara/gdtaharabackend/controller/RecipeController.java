@@ -10,12 +10,14 @@ import com.gdtahara.gdtaharabackend.repository.MachineRepository;
 import com.gdtahara.gdtaharabackend.repository.ProductRepository;
 import com.gdtahara.gdtaharabackend.repository.RecipeRepository;
 import com.gdtahara.gdtaharabackend.repository.UserRepository;
+import com.gdtahara.gdtaharabackend.service.AuditLogService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -26,13 +28,16 @@ public class RecipeController {
     private final ProductRepository productRepo;
     private final MachineRepository machineRepo;
     private final UserRepository userRepo;
+    private final AuditLogService auditLogService;
 
     public RecipeController(RecipeRepository recipeRepo, ProductRepository productRepo,
-                            MachineRepository machineRepo, UserRepository userRepo) {
+                            MachineRepository machineRepo, UserRepository userRepo,
+                            AuditLogService auditLogService) {
         this.recipeRepo = recipeRepo;
         this.productRepo = productRepo;
         this.machineRepo = machineRepo;
         this.userRepo = userRepo;
+        this.auditLogService = auditLogService;
     }
 
     // GET /api/recipes — ดึงทั้งหมด (active)
@@ -69,7 +74,10 @@ public class RecipeController {
     public ResponseEntity<RecipeDto> create(@RequestBody RecipeDto req, Principal principal) {
         Recipe recipe = new Recipe();
         mapFromDto(req, recipe, principal.getName());
-        return ResponseEntity.ok(toDto(recipeRepo.save(recipe)));
+        RecipeDto saved = toDto(recipeRepo.save(recipe));
+        auditLogService.log("CREATE", "Recipe", saved.getId(), null,
+                Map.of("id", saved.getId(), "code", String.valueOf(saved.getRecipeCode())));
+        return ResponseEntity.ok(saved);
     }
 
     // PUT /api/recipes/{id} — แก้ไข
@@ -81,17 +89,21 @@ public class RecipeController {
         Recipe recipe = recipeRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Recipe not found: " + id));
         mapFromDto(req, recipe, principal.getName());
-        return ResponseEntity.ok(toDto(recipeRepo.save(recipe)));
+        RecipeDto saved = toDto(recipeRepo.save(recipe));
+        auditLogService.log("UPDATE", "Recipe", id, Map.of("id", id),
+                Map.of("id", saved.getId(), "code", String.valueOf(saved.getRecipeCode())));
+        return ResponseEntity.ok(saved);
     }
 
     // DELETE /api/recipes/{id} — soft delete
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('Production Control','DataAdmin','Technician')")
-    public ResponseEntity<Void> deactivate(@PathVariable Long id) {
+    public ResponseEntity<Void> deactivate(@PathVariable Long id, Principal principal) {
         Recipe recipe = recipeRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Recipe not found: " + id));
         recipe.setIsActive(false);
         recipeRepo.save(recipe);
+        auditLogService.log("DEACTIVATE", "Recipe", id, Map.of("id", id), null);
         return ResponseEntity.noContent().build();
     }
 

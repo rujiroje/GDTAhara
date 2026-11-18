@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -25,13 +26,16 @@ public class MachineStatusService {
     private final MachineStatusLogRepository statusLogRepo;
     private final MachineRepository machineRepo;
     private final UserRepository userRepo;
+    private final AuditLogService auditLogService;
 
     public MachineStatusService(MachineStatusLogRepository statusLogRepo,
                                 MachineRepository machineRepo,
-                                UserRepository userRepo) {
+                                UserRepository userRepo,
+                                AuditLogService auditLogService) {
         this.statusLogRepo = statusLogRepo;
         this.machineRepo = machineRepo;
         this.userRepo = userRepo;
+        this.auditLogService = auditLogService;
     }
 
     // Operator กดเปลี่ยนสถานะเครื่อง — ปิด record เดิม + เปิด record ใหม่
@@ -60,6 +64,10 @@ public class MachineStatusService {
         newLog.setSource("MANUAL");
         newLog.setRecordedBy(user);
         statusLogRepo.save(newLog);
+
+        auditLogService.log("UPDATE", "MachineStatus", machine.getId(),
+                Map.of("machineId", machine.getId(), "previousStatus", active.map(MachineStatusLog::getStatus).orElse("NONE")),
+                Map.of("machineId", machine.getId(), "newStatus", req.getStatus(), "reason", String.valueOf(req.getReason())));
 
         return toDto(newLog);
     }

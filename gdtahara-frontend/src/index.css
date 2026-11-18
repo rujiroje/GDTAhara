@@ -1,1 +1,203 @@
 
+/* ── Packaging label styles (screen preview in dialog) ────────────────── */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LABEL CONTAINER  96mm square (4in − 6mm margin)
+───────────────────────────────────────────────────────────────────────── */
+.pkg-label {
+    font-family: 'Angsana New', 'TH SarabunPSK', Arial, sans-serif;
+    font-size: 8pt;
+    width: 4in;
+    padding: 2mm;
+    border: 1px solid #555;
+    box-sizing: border-box;
+    color: #000;
+    line-height: 1.2;
+}
+
+/* ── Logo ─────────────────────────────────────────────────────────────── */
+.pkg-logo-wrap {
+    width: 100%;
+    height: 9mm;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1mm;
+}
+
+.pkg-logo {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+.pkg-hr {
+    border: none;
+    border-top: 1px solid #555;
+    margin: 1.5px 0;
+}
+
+/* ── Body: data+barcode left | compliance right ──────────────────── */
+.pkg-body {
+    display: flex;
+    gap: 2mm;
+    align-items: stretch;   /* ทั้ง 2 column สูงเท่ากัน */
+    margin-top: 1.5mm;
+}
+
+.pkg-col-makok {
+    flex: 0 0 20mm;
+    display: flex;
+    flex-direction: column;
+    /* stretch to match data table height */
+}
+
+/* มอก. circle image — fills column width, auto height */
+.pkg-makok-icon-solo {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+/* Empty bordered rectangle — fills remaining height to align with data table bottom */
+.pkg-makok-empty-box {
+    flex: 1;
+    min-height: 0;
+    border: 1px solid #555;
+    box-sizing: border-box;
+}
+
+.pkg-col-data {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Data table ──────────────────────────────────────────────────────── */
+.pkg-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #888;
+}
+
+.pkg-table tr:not(:last-child) td {
+    border-bottom: 0.5px solid #bbb;
+}
+
+.pkg-fl {
+    font-size: 6pt;
+    color: #444;
+    white-space: nowrap;
+    width: 40%;
+    border-right: 0.5px solid #bbb;
+    padding: 0.6mm 1mm;
+    vertical-align: middle;
+}
+
+/* Large/bold label variant for important fields */
+.pkg-fl-big {
+    font-size: 8pt;
+    font-weight: 700;
+    color: #000;
+}
+
+/* Compact shift label (4-cell date+shift row) */
+.pkg-fl-sm {
+    font-size: 6pt;
+    color: #444;
+    white-space: nowrap;
+    border-left: 0.5px solid #bbb;
+    border-right: 0.5px solid #bbb;
+    padding: 0.6mm 0.8mm;
+    vertical-align: middle;
+}
+
+.pkg-fv {
+    font-size: 7.5pt;
+    padding: 0.6mm 1mm;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pkg-fv-bold  { font-weight: 700; }
+.pkg-fv-mono  { font-family: monospace; font-size: 7pt; }
+.pkg-fv-small { font-size: 6pt; white-space: normal; word-break: break-all; line-height: 1.15; }
+.pkg-fv-boxno { font-size: 13pt; font-weight: 900; font-family: monospace; line-height: 1; }
+
+/* ── Barcode (full-width, between logo and body) ─────────────────────── */
+.pkg-barcode-wrap {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0.5mm 0;
+}
+
+.pkg-barcode-wrap svg {
+    width: 100%;
+    height: 14mm;
+    display: block;
+}
+
+/* ── Dialog preview wrapper ──────────────────────────────────────────── */
+.pkg-label-preview-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 0 8px;
+}
+
+/* ── Export GOODS section ────────────────────────────────────────────── */
+.pkg-export-section {
+    border: 1px solid #555;
+    margin-top: 2mm;
+    padding: 1.5mm 2mm;
+    font-family: Arial, sans-serif;
+    font-size: 8pt;
+}
+.pkg-export-title {
+    text-align: center;
+    font-weight: 900;
+    font-size: 12pt;
+    letter-spacing: 3px;
+    margin-bottom: 0.5mm;
+}
+.pkg-export-subtitle {
+    text-align: center;
+    font-size: 7.5pt;
+    margin-bottom: 2mm;
+}
+.pkg-export-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pkg-exp-no {
+    width: 5mm;
+    font-weight: 700;
+    vertical-align: top;
+    padding: 0.5mm 0.5mm;
+    white-space: nowrap;
+}
+.pkg-exp-label {
+    width: 27mm;
+    vertical-align: top;
+    padding: 0.5mm 0.5mm;
+    white-space: nowrap;
+}
+.pkg-exp-sep {
+    width: 3mm;
+    vertical-align: top;
+    padding: 0.5mm 0;
+}
+.pkg-exp-val {
+    vertical-align: top;
+    padding: 0.5mm 0.5mm;
+    font-weight: 700;
+}

@@ -8,6 +8,8 @@ import com.gdtahara.gdtaharabackend.dto.NgLogRequestDto;
 import com.gdtahara.gdtaharabackend.dto.ProductionReportSimpleViewDto;
 import com.gdtahara.gdtaharabackend.model.NgType;
 import com.gdtahara.gdtaharabackend.service.QaService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,8 +21,10 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/qa")
-@PreAuthorize("hasAnyAuthority('ROLE_QA', 'ROLE_DataAdmin')")
+@PreAuthorize("hasAnyRole('QA','DataAdmin')")
 public class QaController {
+
+    private static final Logger logger = LoggerFactory.getLogger(QaController.class);
 
     @Autowired
     private QaService qaService;
@@ -29,12 +33,11 @@ public class QaController {
     @GetMapping("/reports/active")
     public ResponseEntity<List<ProductionReportSimpleViewDto>> getActiveReports() {
         try {
-            System.out.println("🔍 QA getting active reports...");
             List<ProductionReportSimpleViewDto> reports = qaService.getActiveReportsForQa();
-            System.out.println("📊 Found " + reports.size() + " active reports for QA");
+            logger.debug("Found {} active reports for QA", reports.size());
             return ResponseEntity.ok(reports);
         } catch (Exception e) {
-            System.out.println("❌ Error getting active reports for QA: " + e.getMessage());
+            logger.error("Error getting active reports for QA: {}", e.getMessage(), e);
             return ResponseEntity.status(500).build();
         }
     }
@@ -43,12 +46,11 @@ public class QaController {
     @GetMapping("/ng-types")
     public ResponseEntity<List<NgType>> getNgTypesForQa() {
         try {
-            System.out.println("🔍 QA getting NG Types...");
             List<NgType> ngTypes = qaService.getQaNgTypes();
-            System.out.println("📊 Found " + ngTypes.size() + " NG Types for QA");
+            logger.debug("Found {} NG Types for QA", ngTypes.size());
             return ResponseEntity.ok(ngTypes);
         } catch (Exception e) {
-            System.out.println("❌ Error getting NG Types for QA: " + e.getMessage());
+            logger.error("Error getting NG Types for QA: {}", e.getMessage(), e);
             return ResponseEntity.status(500).build();
         }
     }
@@ -57,12 +59,11 @@ public class QaController {
     @GetMapping("/reports/{reportId}/qa-history")
     public ResponseEntity<?> getQaHistory(@PathVariable Long reportId) {
         try {
-            System.out.println("🔍 QA getting history for report " + reportId);
             var history = qaService.getQaHistoryForReport(reportId);
-            System.out.println("📊 Found " + history.size() + " QA history records");
+            logger.debug("Found {} QA history records for report {}", history.size(), reportId);
             return ResponseEntity.ok(history);
         } catch (Exception e) {
-            System.out.println("❌ Error getting QA history: " + e.getMessage());
+            logger.error("Error getting QA history for report {}: {}", reportId, e.getMessage(), e);
             return ResponseEntity.status(500).body("Error fetching QA history: " + e.getMessage());
         }
     }
@@ -75,16 +76,13 @@ public class QaController {
             if (newQuantity == null || newQuantity < 0) {
                 return ResponseEntity.badRequest().body("จำนวนต้องเป็นตัวเลขที่ไม่ติดลบ");
             }
-            
-            System.out.println("🔄 QA updating NG log " + ngLogId + " with quantity " + newQuantity + " by " + principal.getName());
-            
             qaService.updateQaNgLog(ngLogId, newQuantity, principal.getName());
             return ResponseEntity.ok().build();
         } catch (SecurityException e) {
-            System.out.println("🚫 Security error: " + e.getMessage());
+            logger.warn("Security error updating QA NG log {}: {}", ngLogId, e.getMessage());
             return ResponseEntity.status(403).body(e.getMessage());
         } catch (Exception e) {
-            System.out.println("❌ Error updating QA NG log: " + e.getMessage());
+            logger.error("Error updating QA NG log {}: {}", ngLogId, e.getMessage(), e);
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
@@ -92,11 +90,10 @@ public class QaController {
     @PostMapping("/reports/{reportId}/ng-logs")
     public ResponseEntity<?> recordQaNgLog(@PathVariable Long reportId, @RequestBody NgLogRequestDto ngLogRequest, Principal principal) {
         try {
-            System.out.println("💾 QA recording NG log for report " + reportId + " by " + principal.getName());
             qaService.recordQaNg(reportId, ngLogRequest, principal.getName());
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            System.out.println("❌ Error recording QA NG log: " + e.getMessage());
+            logger.error("Error recording QA NG log for report {}: {}", reportId, e.getMessage(), e);
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }

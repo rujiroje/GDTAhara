@@ -339,14 +339,14 @@ export const getLang = () => {
   try {
     const stored = localStorage.getItem('lang');
     if (stored === 'th' || stored === 'en') return stored;
-  } catch {}
+  } catch { /* intentional: fallback to navigator.language */ }
   const nav = (navigator.language || 'th').toLowerCase();
   return nav.startsWith('th') ? 'th' : 'en';
 };
 
 export const setLang = (lang) => {
-  try { localStorage.setItem('lang', lang); } catch {}
-  try { document.documentElement.lang = lang; } catch {}
+  try { localStorage.setItem('lang', lang); } catch { /* intentional */ }
+  try { document.documentElement.lang = lang; } catch { /* intentional */ }
 };
 
 export const t = (key) => {

@@ -1,10 +1,8 @@
 package com.gdtahara.gdtaharabackend.security;
 
 import com.gdtahara.gdtaharabackend.repository.UserRepository;
-import com.gdtahara.gdtaharabackend.util.EntityMethodsChecker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -56,20 +54,4 @@ public class ApplicationConfig {
         return new BCryptPasswordEncoder();
     }
 
-    @Bean
-    public CommandLineRunner debugEntityMethods(EntityMethodsChecker checker) {
-        return args -> {
-            // แสดงเมธอดที่มีใน ParameterRecord เมื่อ start application
-            try {
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Starting Entity Methods Check...");
-                    checker.printParameterRecordMethods();
-                } else {
-                    logger.info("Entity Methods Checker is available (enable DEBUG logging to see details)");
-                }
-            } catch (Exception e) {
-                logger.warn("Could not run entity methods check: {}", e.getMessage());
-            }
-        };
-    }
 }

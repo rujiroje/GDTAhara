@@ -7,6 +7,8 @@ import com.gdtahara.gdtaharabackend.dto.NgLogRequestDto;
 import com.gdtahara.gdtaharabackend.dto.ProductionReportSimpleViewDto;
 import com.gdtahara.gdtaharabackend.model.*;
 import com.gdtahara.gdtaharabackend.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -20,54 +22,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@SuppressWarnings("unused")
+
 @Service
 public class QaService {
+
+    private static final Logger logger = LoggerFactory.getLogger(QaService.class);
+
     @Autowired private ProductionReportRepository reportRepository;
     @Autowired private NgTypeRepository ngTypeRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private NgLogRepository ngLogRepository;
+    @Autowired private AuditLogService auditLogService;
 
     @Transactional(readOnly = true)
     public List<ProductionReportSimpleViewDto> getActiveReportsForQa() {
         try {
+            // Only return reports whose date range spans TODAY
             LocalDate today = LocalDate.now();
-            var activeStatuses = java.util.List.of("IN PROGRESS", "IN_PROGRESS", "ACTIVE");
-            var terminalStatuses = java.util.List.of("COMPLETED", "COMPLETE", "DONE", "FINISHED", "CLOSED", "INACTIVE");
-
+            var terminalStatuses = java.util.List.of(
+                    "COMPLETED","COMPLETE","DONE","FINISHED","CANCELLED","CANCELED","CLOSED","FINALIZED","INACTIVE");
             List<ProductionReport> active = reportRepository.findActiveReportsFast(
-                    activeStatuses.stream().map(String::toUpperCase).toList(),
-                    terminalStatuses.stream().map(String::toUpperCase).toList(),
-                    today
-            );
-
-            if (!active.isEmpty()) {
-                return active.stream().map(this::convertToSimpleDto).collect(Collectors.toList());
-            }
-
-            List<ProductionReport> byStatuses = reportRepository.findByStatusIn(java.util.List.of("In Progress", "IN_PROGRESS", "ACTIVE"));
-            if (!byStatuses.isEmpty()) {
-                return byStatuses.stream().map(this::convertToSimpleDto).collect(Collectors.toList());
-            }
-
-            List<ProductionReport> todayReports = reportRepository.findByStartDate(today);
-            if (!todayReports.isEmpty()) {
-                return todayReports.stream().map(this::convertToSimpleDto).collect(Collectors.toList());
-            }
-
-            return reportRepository.findLatest5Raw().stream()
-                    .map(r -> new ProductionReportSimpleViewDto(
-                            (Long) r[0],
-                            r[1] != null ? r[1].toString() : null,
-                            toLocalDate(r[2]),
-                            toLocalDate(r[3]),
-                            (String) r[5],
-                            (String) r[6],
-                            null
-                    ))
-                    .collect(Collectors.toList());
-
+                    java.util.List.of(), terminalStatuses, today);
+            return active.stream().map(this::convertToSimpleDto).collect(Collectors.toList());
         } catch (Exception e) {
-            System.out.println("Error fetching active reports for QA: " + e.getMessage());
+            logger.error("Error fetching active reports for QA: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
@@ -92,34 +71,32 @@ public class QaService {
 
     @Transactional(readOnly = true)
     public List<NgType> getQaNgTypes() {
-        System.out.println("🔍 Getting NG Types for QA...");
-
         List<NgType> allNgTypes = ngTypeRepository.findAll();
-        System.out.println("📊 Total NG Types in database: " + allNgTypes.size());
+        logger.debug("Total NG Types in database: {}", allNgTypes.size());
 
         List<NgType> qaNgTypes = allNgTypes.stream()
             .filter(ng -> ng.getNgType() != null && ng.getNgType().trim().equalsIgnoreCase("QA"))
             .collect(Collectors.toList());
 
         if (qaNgTypes.isEmpty()) {
-            System.out.println("⚠️ No specific QA NG Types found, returning all NG Types");
+            logger.debug("No specific QA NG Types found, returning all NG Types");
             return allNgTypes;
         }
 
-        System.out.println("🎯 Final QA NG Types count: " + qaNgTypes.size());
+        logger.debug("Final QA NG Types count: {}", qaNgTypes.size());
         return qaNgTypes;
     }
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getQaHistoryForReport(Long reportId) {
-        System.out.println("🔍 Getting QA history for report " + reportId);
+        logger.debug("Getting QA history for report {}", reportId);
 
         List<NgLog> qaLogs = ngLogRepository.findByReportId(reportId)
                 .stream()
                 .filter(log -> "QA_Process".equals(log.getSource()))
                 .collect(Collectors.toList());
 
-        System.out.println("📊 Found " + qaLogs.size() + " QA logs for report " + reportId);
+        logger.debug("Found {} QA logs for report {}", qaLogs.size(), reportId);
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
@@ -151,9 +128,13 @@ public class QaService {
             throw new SecurityException("สามารถแก้ไขได้เฉพาะรายการ QA เท่านั้น");
         }
 
+        Integer oldQty = ngLog.getQuantity();
         ngLog.setQuantity(newQuantity);
         ngLogRepository.save(ngLog);
-        System.out.println("✅ QA NG log updated successfully");
+        logger.info("QA NG log {} updated successfully", ngLogId);
+        auditLogService.log("UPDATE", "NgLog", ngLogId,
+                Map.of("id", ngLogId, "quantity", String.valueOf(oldQty)),
+                Map.of("id", ngLogId, "quantity", String.valueOf(newQuantity), "source", "QA_Process"));
     }
 
     @Transactional
@@ -172,7 +153,11 @@ public class QaService {
         ngLog.setQuantity(ngLogRequest.getQuantity());
         ngLog.setSource("QA_Process");
 
-        ngLogRepository.save(ngLog);
-        System.out.println("✅ QA NG log recorded: " + ngType.getNgDescriptionTh() + " x" + ngLogRequest.getQuantity());
+        NgLog saved = ngLogRepository.save(ngLog);
+        logger.info("QA NG log recorded: {} x{}", ngType.getNgDescriptionTh(), ngLogRequest.getQuantity());
+        auditLogService.log("CREATE", "NgLog", saved.getId(), null,
+                Map.of("id", saved.getId(), "reportId", String.valueOf(reportId),
+                        "ngTypeId", String.valueOf(ngLogRequest.getNgTypeId()),
+                        "quantity", String.valueOf(ngLogRequest.getQuantity()), "source", "QA_Process"));
     }
 }

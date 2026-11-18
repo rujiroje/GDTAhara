@@ -59,9 +59,10 @@ public class DataImportService {
                 
                 String machineCode = line[0].trim();
                 String machineName = line.length > 1 ? line[1].trim() : "";
-                
-                logger.debug("Machine data - Code: '{}', Name: '{}'", machineCode, machineName);
-                
+                String machineType = line.length > 2 ? line[2].trim() : "";
+
+                logger.debug("Machine data - Code: '{}', Name: '{}', Type: '{}'", machineCode, machineName, machineType);
+
                 // **[แก้ไข]** ตรวจสอบว่าเคยเจอ Code นี้ในไฟล์หรือยัง และมีใน DB หรือยัง
                 if (!machineCode.isEmpty() && !processedCodes.contains(machineCode)) {
                     // Check if already exists in database
@@ -70,14 +71,16 @@ public class DataImportService {
                         logger.info("Machine code '{}' already exists in database, skipping", machineCode);
                         continue;
                     }
-                    
+
                     Machine machine = new Machine();
                     machine.setMachineCode(machineCode);
                     machine.setMachineName(machineName);
-                    // Removed setMachineType since it's not in the database schema
+                    if (!machineType.isEmpty()) {
+                        machine.setMachineType(machineType.toUpperCase());
+                    }
                     machinesToSave.add(machine);
                     processedCodes.add(machineCode);
-                    logger.debug("Added machine to save list: Code='{}', Name='{}'", machineCode, machineName);
+                    logger.debug("Added machine to save list: Code='{}', Name='{}', Type='{}'", machineCode, machineName, machineType);
                 } else {
                     logger.warn("Skipping machine - Code: '{}' (empty={}, duplicate={})", 
                                machineCode, machineCode.isEmpty(), processedCodes.contains(machineCode));
@@ -161,30 +164,30 @@ public class DataImportService {
         if (!productsToSave.isEmpty()) productRepository.saveAll(productsToSave);
     }
     
- // **[ใหม่]** เพิ่มเมธอดสำหรับนำเข้าข้อมูลวัตถุดิบ
     @Transactional
     public void importMaterials(MultipartFile file) throws IOException, CsvValidationException {
-        List<Material> materialsToSave = new ArrayList<>();
+        List<Material> toSave = new ArrayList<>();
         Set<String> processedCodes = new HashSet<>();
 
         try (CSVReader reader = new CSVReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String[] line;
-            reader.readNext(); // Skip Header
+            reader.readNext(); // skip header
             while ((line = reader.readNext()) != null) {
                 if (line.length < 4) continue;
                 String materialCode = line[0].trim();
-                if (!materialCode.isEmpty() && !processedCodes.contains(materialCode) && materialRepository.findByMaterialCode(materialCode).isEmpty()) {
-                    Material material = new Material();
-                    material.setMaterialCode(materialCode);
-                    material.setMaterialName(line[1].trim());
-                    material.setMaterialType(line[2].trim());
-                    material.setUnit(line[3].trim());
-                    materialsToSave.add(material);
-                    processedCodes.add(materialCode);
-                }
+                if (materialCode.isEmpty() || processedCodes.contains(materialCode)) continue;
+                processedCodes.add(materialCode);
+                // UPSERT: update existing row if code already exists (fixes corrupted Thai names)
+                Material material = materialRepository.findByMaterialCode(materialCode)
+                        .orElse(new Material());
+                material.setMaterialCode(materialCode);
+                material.setMaterialName(line[1].trim());
+                material.setMaterialType(line[2].trim());
+                material.setUnit(line[3].trim());
+                toSave.add(material);
             }
         }
-        if (!materialsToSave.isEmpty()) materialRepository.saveAll(materialsToSave);
+        if (!toSave.isEmpty()) materialRepository.saveAll(toSave);
     }
     
     private BigDecimal safeParseBigDecimal(String value) {

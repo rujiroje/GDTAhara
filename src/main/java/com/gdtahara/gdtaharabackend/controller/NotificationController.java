@@ -7,11 +7,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/notifications")
-@PreAuthorize("hasAnyAuthority('ROLE_Shift Leader', 'ROLE_Technician', 'ROLE_DataAdmin')")
+@PreAuthorize("hasAnyRole('Shift Leader','Technician','DataAdmin')")
 public class NotificationController {
 
     @Autowired
@@ -23,9 +24,9 @@ public class NotificationController {
     }
 
     @PostMapping("/alerts/{id}/acknowledge")
-    public ResponseEntity<?> acknowledgeAlert(@PathVariable Long id) {
+    public ResponseEntity<?> acknowledgeAlert(@PathVariable Long id, Principal principal) {
         try {
-            notificationService.acknowledgeAlert(id);
+            notificationService.acknowledgeAlert(id, principal.getName());
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
