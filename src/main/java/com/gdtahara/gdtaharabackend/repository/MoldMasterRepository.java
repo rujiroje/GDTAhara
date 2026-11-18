@@ -12,4 +12,5 @@ public interface MoldMasterRepository extends JpaRepository<MoldMaster, Long> {
     Optional<MoldMaster> findByMoldCode(String moldCode);
     List<MoldMaster> findByIsActiveTrueOrderByMoldCodeAsc();
     List<MoldMaster> findByMachineTypeAndIsActiveTrue(String machineType);
+    List<MoldMaster> findByProductIdAndIsActiveTrueOrderByMoldCodeAsc(Long productId);
 }

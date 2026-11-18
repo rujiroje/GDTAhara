@@ -188,6 +188,13 @@ public class MachineSetupJobService {
         MachineSetupJob saved = machineSetupJobRepository.save(job);
 
         if (moldChanged && moldCodeTo != null && !moldCodeTo.isBlank()) {
+            MoldMaster selectedMold = moldMasterRepository.findByMoldCode(moldCodeTo)
+                    .orElseThrow(() -> new EntityNotFoundException("Mold not found: " + moldCodeTo));
+            if (selectedMold.getProductId() != null && job.getToProduct() != null
+                    && !selectedMold.getProductId().equals(job.getToProduct().getId())) {
+                throw new IllegalStateException(
+                        "Mold " + moldCodeTo + " belongs to a different product — cannot use for this setup job");
+            }
             updateCurrentMold(job.getMachine().getId(), moldCodeTo, saved.getId(), username, completedAt);
         }
 
@@ -276,6 +283,14 @@ public class MachineSetupJobService {
 
     @Transactional(readOnly = true)
     public List<MoldMaster> getActiveMoldsByMachineType(String machineType) {
+        return getActiveMolds(machineType, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MoldMaster> getActiveMolds(String machineType, Long productId) {
+        if (productId != null) {
+            return moldMasterRepository.findByProductIdAndIsActiveTrueOrderByMoldCodeAsc(productId);
+        }
         if (machineType != null && !machineType.isBlank()) {
             return moldMasterRepository.findByMachineTypeAndIsActiveTrue(machineType);
         }

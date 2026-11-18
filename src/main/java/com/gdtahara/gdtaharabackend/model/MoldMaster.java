@@ -32,7 +32,30 @@ public class MoldMaster {
     @Column(length = 50)
     private String machineType;
 
-    /** JSON array of compatible product codes, e.g. ["NBRZS0500","NBRZS1000"] */
+    /** Strict 1:1 mold-product — references products.id */
+    @Column(name = "product_id")
+    private Long productId;
+
+    @Column(name = "mold_type", length = 50)
+    private String moldType;
+
+    /** Original design cavity count */
+    @Column(name = "standard_cavity_count")
+    private Integer standardCavityCount;
+
+    /** Physical cavity labels as printed on the mold, e.g. "1,2,3,4" or "7,8,9,10" */
+    @Column(name = "standard_cavity_no", length = 200)
+    private String standardCavityNo;
+
+    /** Currently active cavities (may be fewer than standard due to defects) */
+    @Column(name = "work_cavity_count")
+    private Integer workCavityCount;
+
+    @Column(name = "work_cavity_no", length = 200)
+    private String workCavityNo;
+
+    /** @deprecated use productId; kept for backward compatibility */
+    @Deprecated
     @Column(columnDefinition = "NVARCHAR(MAX)")
     private String compatibleProducts;
 

@@ -177,7 +177,7 @@ const SetupTimeLogDialog = ({ job, open, onClose, onCompleted }) => {
       setNotes(job?.notes || '');
       setMoldCodeTo('');
       load();
-      getMoldsForSetup(job?.machineType).then(setAvailableMolds).catch(() => setAvailableMolds([]));
+      getMoldsForSetup(job?.machineType, job?.toProductId).then(setAvailableMolds).catch(() => setAvailableMolds([]));
       getCurrentMoldForJob(job?.id).then(res => setMoldCodeFrom(res?.moldCode || '')).catch(() => setMoldCodeFrom(''));
     }
   }, [open, job]);

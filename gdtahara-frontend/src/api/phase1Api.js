@@ -288,9 +288,11 @@ export const endAllTimeLogs = async (jobId) => {
 
 // ── Mold ──────────────────────────────────────────────────────────
 
-/** Active molds, optionally filtered by machineType. */
-export const getMoldsForSetup = async (machineType) => {
-  const params = machineType ? { machineType } : {};
+/** Active molds filtered by productId (strict 1:1), falling back to machineType. */
+export const getMoldsForSetup = async (machineType, productId) => {
+  const params = {};
+  if (productId) params.productId = productId;
+  else if (machineType) params.machineType = machineType;
   const response = await axiosInstance.get('/setup-jobs/molds', { params });
   return response.data;
 };

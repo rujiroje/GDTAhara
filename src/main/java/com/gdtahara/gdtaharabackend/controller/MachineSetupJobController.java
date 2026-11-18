@@ -101,8 +101,9 @@ public class MachineSetupJobController {
 
     @GetMapping("/molds")
     public ResponseEntity<List<MoldMaster>> getMolds(
-            @RequestParam(required = false) String machineType) {
-        return ResponseEntity.ok(machineSetupJobService.getActiveMoldsByMachineType(machineType));
+            @RequestParam(required = false) String machineType,
+            @RequestParam(required = false) Long productId) {
+        return ResponseEntity.ok(machineSetupJobService.getActiveMolds(machineType, productId));
     }
 
     @GetMapping("/{jobId}/current-mold")
