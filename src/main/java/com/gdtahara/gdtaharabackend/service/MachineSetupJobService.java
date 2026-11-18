@@ -1,13 +1,17 @@
 package com.gdtahara.gdtaharabackend.service;
 
 import com.gdtahara.gdtaharabackend.model.DowntimeEvent;
+import com.gdtahara.gdtaharabackend.model.MachineCurrentMold;
 import com.gdtahara.gdtaharabackend.model.MachineSetupJob;
+import com.gdtahara.gdtaharabackend.model.MoldMaster;
 import com.gdtahara.gdtaharabackend.model.Product;
 import com.gdtahara.gdtaharabackend.model.ProductionPlan;
 import com.gdtahara.gdtaharabackend.model.User;
 import com.gdtahara.gdtaharabackend.repository.DowntimeEventRepository;
+import com.gdtahara.gdtaharabackend.repository.MachineCurrentMoldRepository;
 import com.gdtahara.gdtaharabackend.repository.MachineRepository;
 import com.gdtahara.gdtaharabackend.repository.MachineSetupJobRepository;
+import com.gdtahara.gdtaharabackend.repository.MoldMasterRepository;
 import com.gdtahara.gdtaharabackend.repository.ProductRepository;
 import com.gdtahara.gdtaharabackend.repository.ProductionPlanRepository;
 import com.gdtahara.gdtaharabackend.repository.UserRepository;
@@ -41,6 +45,8 @@ public class MachineSetupJobService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
+    private final MoldMasterRepository moldMasterRepository;
+    private final MachineCurrentMoldRepository machineCurrentMoldRepository;
 
     public MachineSetupJobService(MachineSetupJobRepository machineSetupJobRepository,
                                    ProductionPlanRepository productionPlanRepository,
@@ -48,7 +54,9 @@ public class MachineSetupJobService {
                                    MachineRepository machineRepository,
                                    ProductRepository productRepository,
                                    UserRepository userRepository,
-                                   AuditLogService auditLogService) {
+                                   AuditLogService auditLogService,
+                                   MoldMasterRepository moldMasterRepository,
+                                   MachineCurrentMoldRepository machineCurrentMoldRepository) {
         this.machineSetupJobRepository = machineSetupJobRepository;
         this.productionPlanRepository = productionPlanRepository;
         this.downtimeEventRepository = downtimeEventRepository;
@@ -56,6 +64,8 @@ public class MachineSetupJobService {
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.auditLogService = auditLogService;
+        this.moldMasterRepository = moldMasterRepository;
+        this.machineCurrentMoldRepository = machineCurrentMoldRepository;
     }
 
     /**
@@ -177,6 +187,10 @@ public class MachineSetupJobService {
 
         MachineSetupJob saved = machineSetupJobRepository.save(job);
 
+        if (moldChanged && moldCodeTo != null && !moldCodeTo.isBlank()) {
+            updateCurrentMold(job.getMachine().getId(), moldCodeTo, saved.getId(), username, completedAt);
+        }
+
         auditLogService.log("UPDATE", "MachineSetupJob", jobId,
                 Map.of("status", "IN_PROGRESS"),
                 Map.of("status", "COMPLETED",
@@ -261,12 +275,44 @@ public class MachineSetupJobService {
     }
 
     @Transactional(readOnly = true)
+    public List<MoldMaster> getActiveMoldsByMachineType(String machineType) {
+        if (machineType != null && !machineType.isBlank()) {
+            return moldMasterRepository.findByMachineTypeAndIsActiveTrue(machineType);
+        }
+        return moldMasterRepository.findByIsActiveTrueOrderByMoldCodeAsc();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<MoldMaster> getCurrentMoldForJob(Long jobId) {
+        MachineSetupJob job = machineSetupJobRepository.findById(jobId)
+                .orElseThrow(() -> new EntityNotFoundException("MachineSetupJob not found: " + jobId));
+        if (job.getMachine() == null) return Optional.empty();
+        return machineCurrentMoldRepository.findByMachineId(job.getMachine().getId())
+                .map(mcm -> mcm.getMold());
+    }
+
+    @Transactional(readOnly = true)
     public Optional<MachineSetupJob> getJobForPlan(Long planId) {
         return machineSetupJobRepository.findFirstByProductionPlanIdAndStatusIn(
                 planId, List.of("PENDING", "IN_PROGRESS", "COMPLETED"));
     }
 
     // --- private helpers ---
+
+    private void updateCurrentMold(Long machineId, String moldCode, Long jobId,
+                                    String username, LocalDateTime installedAt) {
+        MoldMaster mold = moldMasterRepository.findByMoldCode(moldCode)
+                .orElseThrow(() -> new EntityNotFoundException("Mold not found: " + moldCode));
+        MachineCurrentMold current = machineCurrentMoldRepository.findByMachineId(machineId)
+                .orElse(new MachineCurrentMold());
+        current.setMachineId(machineId);
+        current.setMold(mold);
+        current.setSetupJobId(jobId);
+        current.setInstalledBy(username);
+        current.setInstalledAt(installedAt);
+        machineCurrentMoldRepository.save(current);
+        logger.info("Updated machine_current_mold for machine {} → mold {}", machineId, moldCode);
+    }
 
     private MachineSetupJob createSetupJobIfNeeded(ProductionPlan plan, Long fromProductId) {
         Optional<MachineSetupJob> existingOpt = machineSetupJobRepository

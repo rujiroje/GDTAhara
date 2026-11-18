@@ -39,6 +39,8 @@ import {
   deleteTimeLog,
   endAllTimeLogs,
   completeSetup,
+  getMoldsForSetup,
+  getCurrentMoldForJob,
 } from '../../api/phase1Api';
 
 // ── Gantt chart (SVG) ─────────────────────────────────────────────────────────
@@ -143,6 +145,9 @@ const SetupTimeLogDialog = ({ job, open, onClose, onCompleted }) => {
   const [endingAll, setEndingAll] = useState(false);
   const [error, setError] = useState('');
   const [notes, setNotes] = useState('');
+  const [moldCodeFrom, setMoldCodeFrom] = useState('');
+  const [moldCodeTo, setMoldCodeTo] = useState('');
+  const [availableMolds, setAvailableMolds] = useState([]);
 
   const running = timeLogs.filter(l => !l.endTime);
   const finished = timeLogs.filter(l => l.endTime);
@@ -167,7 +172,14 @@ const SetupTimeLogDialog = ({ job, open, onClose, onCompleted }) => {
   }, [job, selectedCodeId]);
 
   useEffect(() => {
-    if (open) { setError(''); setNotes(job?.notes || ''); load(); }
+    if (open) {
+      setError('');
+      setNotes(job?.notes || '');
+      setMoldCodeTo('');
+      load();
+      getMoldsForSetup(job?.machineType).then(setAvailableMolds).catch(() => setAvailableMolds([]));
+      getCurrentMoldForJob(job?.id).then(res => setMoldCodeFrom(res?.moldCode || '')).catch(() => setMoldCodeFrom(''));
+    }
   }, [open, job]);
 
   const handleAdd = async () => {
@@ -226,16 +238,21 @@ const SetupTimeLogDialog = ({ job, open, onClose, onCompleted }) => {
       setError('กรุณาบันทึก Activity Q (ตรวจคุณภาพ / FPI) ให้เสร็จก่อน จึงจะกด Setup เสร็จสิ้นได้');
       return;
     }
+    const hasMoldActivity = finished.some(l => l.activityCode === 'M');
+    if (hasMoldActivity && !moldCodeTo) {
+      setError('กรุณาเลือก Mold ใหม่ที่จะติดตั้ง (Mold To) ก่อนบันทึก Setup เสร็จสิ้น');
+      return;
+    }
     setCompleting(true); setError('');
     try {
       await completeSetup(job.id, {
-        moldChanged: finished.some(l => l.activityCode === 'M'),
-        moldCodeFrom: '',
-        moldCodeTo: '',
+        moldChanged: hasMoldActivity,
+        moldCodeFrom: hasMoldActivity ? moldCodeFrom : '',
+        moldCodeTo: hasMoldActivity ? moldCodeTo : '',
         tempAdjusted: finished.some(l => l.activityCode === 'A'),
         cycleAdjusted: finished.some(l => l.activityCode === 'C'),
         blowPinAligned: false,
-        fpiPassed: true,   // Q activity = FPI ผ่าน
+        fpiPassed: true,
         notes,
       });
       onCompleted?.();
@@ -466,6 +483,49 @@ const SetupTimeLogDialog = ({ job, open, onClose, onCompleted }) => {
               <Alert severity="info" sx={{ mb: 1.5 }}>
                 ยังไม่มี Activity — กดปุ่ม "เริ่มจับเวลา" เพื่อเพิ่ม Activity แรก
               </Alert>
+            )}
+
+            {/* ── Mold Selection (shows only when Activity M is finished) ── */}
+            {finished.some(l => l.activityCode === 'M') && (
+              <Box sx={{
+                mb: 2, p: 1.5, borderRadius: 1,
+                border: '1px solid', borderColor: 'warning.light',
+                bgcolor: 'rgba(237, 108, 2, 0.05)',
+              }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  เปลี่ยน Mold (Activity M)
+                </Typography>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                  <TextField
+                    size="small"
+                    label="Mold ปัจจุบัน (From)"
+                    value={moldCodeFrom || '— ไม่มีข้อมูล —'}
+                    InputProps={{ readOnly: true }}
+                    sx={{ flex: 1 }}
+                    helperText="Mold ที่ติดตั้งอยู่ก่อนเปลี่ยน"
+                  />
+                  <FormControl size="small" sx={{ flex: 1 }} required>
+                    <InputLabel>Mold ใหม่ (To) *</InputLabel>
+                    <Select
+                      value={moldCodeTo}
+                      label="Mold ใหม่ (To) *"
+                      onChange={(e) => setMoldCodeTo(e.target.value)}
+                      error={!moldCodeTo}
+                    >
+                      {availableMolds.map((m) => (
+                        <MenuItem key={m.id} value={m.moldCode}>
+                          <strong>{m.moldCode}</strong>&nbsp;—&nbsp;{m.moldName}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {!moldCodeTo && (
+                      <Typography variant="caption" color="error.main" sx={{ mt: 0.5, ml: 1.5 }}>
+                        กรุณาเลือก Mold ที่จะติดตั้ง
+                      </Typography>
+                    )}
+                  </FormControl>
+                </Stack>
+              </Box>
             )}
 
             {/* ── Notes ────────────────────────────────────────────────── */}

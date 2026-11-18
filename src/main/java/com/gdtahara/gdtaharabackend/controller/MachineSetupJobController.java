@@ -2,6 +2,7 @@ package com.gdtahara.gdtaharabackend.controller;
 
 import com.gdtahara.gdtaharabackend.dto.*;
 import com.gdtahara.gdtaharabackend.model.MachineSetupJob;
+import com.gdtahara.gdtaharabackend.model.MoldMaster;
 import com.gdtahara.gdtaharabackend.service.MachineSetupJobService;
 import com.gdtahara.gdtaharabackend.service.SetupTimeLogService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,6 +18,8 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/setup-jobs")
@@ -94,6 +97,24 @@ public class MachineSetupJobController {
     public ResponseEntity<List<SetupJobResponse>> allPending() {
         return ResponseEntity.ok(machineSetupJobService.getAllPendingJobs().stream()
                 .map(SetupJobResponse::from).toList());
+    }
+
+    @GetMapping("/molds")
+    public ResponseEntity<List<MoldMaster>> getMolds(
+            @RequestParam(required = false) String machineType) {
+        return ResponseEntity.ok(machineSetupJobService.getActiveMoldsByMachineType(machineType));
+    }
+
+    @GetMapping("/{jobId}/current-mold")
+    public ResponseEntity<Object> getCurrentMold(@PathVariable Long jobId) {
+        Optional<MoldMaster> mold = machineSetupJobService.getCurrentMoldForJob(jobId);
+        if (mold.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(Map.of(
+                "moldCode", mold.get().getMoldCode(),
+                "moldName", mold.get().getMoldName()
+        ));
     }
 
     @GetMapping("/plan/{planId}")

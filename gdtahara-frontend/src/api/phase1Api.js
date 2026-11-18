@@ -285,3 +285,22 @@ export const endAllTimeLogs = async (jobId) => {
   const response = await axiosInstance.put(`/setup-jobs/${jobId}/time-logs/end-all`);
   return response.data;
 };
+
+// ── Mold ──────────────────────────────────────────────────────────
+
+/** Active molds, optionally filtered by machineType. */
+export const getMoldsForSetup = async (machineType) => {
+  const params = machineType ? { machineType } : {};
+  const response = await axiosInstance.get('/setup-jobs/molds', { params });
+  return response.data;
+};
+
+/** Current mold installed on the machine linked to a setup job. Returns null if none. */
+export const getCurrentMoldForJob = async (jobId) => {
+  try {
+    const response = await axiosInstance.get(`/setup-jobs/${jobId}/current-mold`);
+    return response.status === 204 ? null : response.data;
+  } catch {
+    return null;
+  }
+};
