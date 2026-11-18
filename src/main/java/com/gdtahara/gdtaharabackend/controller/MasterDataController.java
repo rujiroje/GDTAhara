@@ -36,7 +36,11 @@ public class MasterDataController {
     }
 
     @GetMapping("/materials")
-    public ResponseEntity<List<Material>> getAllMaterials() {
+    public ResponseEntity<List<Material>> getAllMaterials(
+            @RequestParam(required = false) String tankRole) {
+        if (tankRole != null && !tankRole.isBlank()) {
+            return ResponseEntity.ok(masterDataService.getMaterialsByTankRole(tankRole));
+        }
         return ResponseEntity.ok(masterDataService.getAllMaterials());
     }
 

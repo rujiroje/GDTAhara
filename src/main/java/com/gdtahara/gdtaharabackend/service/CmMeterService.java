@@ -3,6 +3,7 @@ package com.gdtahara.gdtaharabackend.service;
 import com.gdtahara.gdtaharabackend.dto.*;
 import com.gdtahara.gdtaharabackend.dto.MachineRefillHistoryDto;
 import com.gdtahara.gdtaharabackend.model.*;
+import com.gdtahara.gdtaharabackend.service.MasterDataService;
 import com.gdtahara.gdtaharabackend.repository.*;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -186,6 +187,23 @@ public class CmMeterService {
 
         if (dto.getQtyKg() == null || dto.getQtyKg().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("qtyKg ต้องมากกว่า 0");
+        }
+
+        // C-04: validate material type matches tank role (skip when operator explicitly overrides)
+        if (tank.getTankRole() != null && !Boolean.TRUE.equals(dto.getMaterialTypeOverride())) {
+            Material material = materialRepo.findByMaterialCode(dto.getMaterialCode())
+                    .orElseThrow(() -> new EntityNotFoundException(
+                            "ไม่พบวัตถุดิบ code=" + dto.getMaterialCode()));
+            String expectedRole = tank.getTankRole();
+            String actualRole = MasterDataService.MAT_TYPE_TO_TANK_ROLE.get(material.getMaterialType());
+            if (!expectedRole.equals(actualRole)) {
+                throw new IllegalStateException(
+                        "วัตถุดิบ " + dto.getMaterialCode() +
+                        " (type=" + material.getMaterialType() + ")" +
+                        " ไม่ตรงกับถัง " + tank.getTankCode() +
+                        " (role=" + expectedRole + ")" +
+                        " — ถ้าต้องการเติมข้ามประเภทให้เปิด materialTypeOverride=true");
+            }
         }
 
         // deduct from material stock lot when stockId is provided
@@ -402,12 +420,13 @@ public class CmMeterService {
         Map<String, BomSuggestedMaterialDto> result = new LinkedHashMap<>();
         for (BomItem item : items) {
             materialRepo.findByMaterialCode(item.getRmCode()).ifPresent(mat -> {
-                if (mat.getTankRole() != null && !result.containsKey(mat.getTankRole())) {
+                String derivedRole = MasterDataService.MAT_TYPE_TO_TANK_ROLE.get(mat.getMaterialType());
+                if (derivedRole != null && !result.containsKey(derivedRole)) {
                     BomSuggestedMaterialDto suggestion = new BomSuggestedMaterialDto();
                     suggestion.setMaterialCode(mat.getMaterialCode());
                     suggestion.setMaterialName(mat.getMaterialName());
-                    suggestion.setTankRole(mat.getTankRole());
-                    result.put(mat.getTankRole(), suggestion);
+                    suggestion.setTankRole(derivedRole);
+                    result.put(derivedRole, suggestion);
                 }
             });
         }

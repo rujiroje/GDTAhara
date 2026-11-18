@@ -20,9 +20,25 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class MasterDataService {
+
+    /** materialType (from master data) → tank role used for filtering and validation */
+    public static final Map<String, String> MAT_TYPE_TO_TANK_ROLE = Map.of(
+        "Virgin",  "RESIN_100",
+        "EVOH",    "EVOH",
+        "Admers",  "ADMER",
+        "Mix",     "BLEND"
+    );
+
+    private static final Map<String, String> TANK_ROLE_TO_MAT_TYPE = Map.of(
+        "RESIN_100", "Virgin",
+        "EVOH",      "EVOH",
+        "ADMER",     "Admers",
+        "BLEND",     "Mix"
+    );
 
     private static final Logger logger = LoggerFactory.getLogger(MasterDataService.class);
 
@@ -55,7 +71,7 @@ public class MasterDataService {
     public ParameterChecklist saveParameterChecklist(ParameterChecklist item) { return parameterChecklistRepository.save(item); }
     public void deleteParameterChecklist(Long id) { parameterChecklistRepository.deleteById(id); }
 
-    // Material methods [ใหม่]
+    // Material methods
     public List<Material> getAllMaterials() {
         List<Material> materials = materialRepository.findAll();
         logger.debug("getAllMaterials() found {} materials", materials.size());
@@ -63,6 +79,13 @@ public class MasterDataService {
     }
     public Material saveMaterial(Material material) { return materialRepository.save(material); }
     public void deleteMaterial(Long id) { materialRepository.deleteById(id); }
+
+    /** Returns materials whose materialType maps to the given tankRole. Empty list if role unknown. */
+    public List<Material> getMaterialsByTankRole(String tankRole) {
+        String matType = TANK_ROLE_TO_MAT_TYPE.get(tankRole);
+        if (matType == null) return List.of();
+        return materialRepository.findByMaterialType(matType);
+    }
 
     /** C-04 Phase D: update tankRole only (null = clear tag) */
     public Material updateMaterialTankRole(Long id, String tankRole) {

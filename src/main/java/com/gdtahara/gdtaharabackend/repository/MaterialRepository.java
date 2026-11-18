@@ -14,4 +14,6 @@ public interface MaterialRepository extends JpaRepository<Material, Long> {
 
     // **[ใหม่]** เพิ่มเมธอดสำหรับค้นหาวัตถุดิบด้วยรหัส
     Optional<Material> findByMaterialCode(String materialCode);
+
+    List<Material> findByMaterialType(String materialType);
 }

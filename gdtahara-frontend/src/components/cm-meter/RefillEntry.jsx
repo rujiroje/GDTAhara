@@ -34,14 +34,14 @@ const RefillEntry = ({ machine, tanks, onBack }) => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (step === 1 && machine) {
+    if (step === 1 && form.tank) {
       setMatLoading(true);
-      getCmMaterials(machine.machineId)
+      getCmMaterials(form.tank.tankRole)
         .then(setMaterials)
         .catch(() => setError('โหลดวัตถุดิบไม่สำเร็จ'))
         .finally(() => setMatLoading(false));
     }
-  }, [step, machine]);
+  }, [step, form.tank]);
 
   const next = () => { setError(''); setStep(s => s + 1); };
   const back = () => { setError(''); setStep(s => s - 1); };
@@ -137,7 +137,12 @@ const RefillEntry = ({ machine, tanks, onBack }) => {
       {/* Step 1: เลือกวัตถุดิบ */}
       {step === 1 && (
         <Box>
-          <Typography variant="subtitle1" sx={{ mb: 1.5 }}>เลือกวัตถุดิบ</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+            <Typography variant="subtitle1">เลือกวัตถุดิบ</Typography>
+            {form.tank?.tankRole && (
+              <Chip label={`ถัง: ${form.tank.tankRole}`} size="small" color="primary" variant="outlined" />
+            )}
+          </Box>
           {matLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />

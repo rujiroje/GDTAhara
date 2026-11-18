@@ -65,9 +65,11 @@ export const getCmTanks = async (machineId) => {
   return getCmTanksByMachine(machineId);
 };
 
-// GET /api/master-data/materials — all materials (for refill material picker)
-export const getCmMaterials = async (_machineId) => {
-  const res = await axiosInstance.get('/master-data/materials');
+// GET /api/master-data/materials?tankRole=X — materials for a specific tank role
+// tankRole: RESIN_100 | EVOH | ADMER | BLEND | undefined (all)
+export const getCmMaterials = async (tankRole) => {
+  const params = tankRole ? { tankRole } : {};
+  const res = await axiosInstance.get('/master-data/materials', { params });
   return res.data;
 };
 
