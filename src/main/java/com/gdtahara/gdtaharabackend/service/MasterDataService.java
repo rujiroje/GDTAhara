@@ -86,12 +86,4 @@ public class MasterDataService {
         if (matType == null) return List.of();
         return materialRepository.findByMaterialType(matType);
     }
-
-    /** C-04 Phase D: update tankRole only (null = clear tag) */
-    public Material updateMaterialTankRole(Long id, String tankRole) {
-        Material mat = materialRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("ไม่พบ material id=" + id));
-        mat.setTankRole(tankRole);
-        return materialRepository.save(mat);
-    }
 }

@@ -195,20 +195,6 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
-    /** C-04 Phase D: tag tankRole for a single material (null body value = clear) */
-    @PatchMapping("/materials/{id}/tank-role")
-    public ResponseEntity<Material> patchMaterialTankRole(
-            @PathVariable Long id,
-            @RequestBody Map<String, String> body,
-            Principal principal) {
-        String tankRole = body.get("tankRole");
-        Material updated = masterDataService.updateMaterialTankRole(id, tankRole);
-        auditLogService.log("PATCH", "Material", id,
-                Map.of("id", id),
-                Map.of("tankRole", tankRole == null ? "null" : tankRole));
-        return ResponseEntity.ok(updated);
-    }
-
     // --- Available Roles (for FE dropdown) ---
     @GetMapping("/roles")
     public ResponseEntity<List<String>> getAvailableRoles() {
